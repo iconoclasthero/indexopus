@@ -5,6 +5,7 @@
 #     Chapter #0:0: start 0.000000, end 1290.013333
 #       first   _     _     start    _     end
 
+outputdir="/dev/shm/cache/convert"
 START=1
 edit=0
 scriptname="$(realpath $0)"
@@ -38,7 +39,7 @@ echo "this is the value of $1"
 
 editscript "$1"
 
-mkdir -p /dev/shm/cache/convert
+mkdir -p "$outputdir"
 
 while [ $# -gt 0 ]; do
 
