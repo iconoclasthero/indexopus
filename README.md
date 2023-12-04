@@ -8,9 +8,9 @@ Presumably, however, this script could easily be changed out for another codec, 
 Tthat said, the author feels that this satisfices for the purposes at hand and if/when the codec changes, that bridge will be burnt when it is arrived upon.
 
 ### Usage:
-From the directory containing your opus chapter files named in the correct format:
+From the directory containing your opus chapter files named in the correct format (takes no options):
 
-$ indexopus (no options)
+`$ indexopus` 
 
 ### Future improvements: 
 Would like to make it so that the files do not need a chapter name and are iterated with 000, 001, 002, .... for Chapter Title
