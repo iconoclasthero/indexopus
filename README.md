@@ -9,6 +9,7 @@ Tthat said, the author feels that this satisfices for the purposes at hand and i
 
 ### Usage:
 From the directory containing your opus chapter files named in the correct format:
+
 $ indexopus (no options)
 
 ### Future improvements: 
