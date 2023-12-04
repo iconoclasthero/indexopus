@@ -1,0 +1,153 @@
+#!/bin/bash
+
+editdate="Sat Dec 24 12:56:22 PM EST 2022"
+
+shopt -s extglob
+scriptname="$(realpath $0)"
+pidfile="/tmp/.opus.book.pids"
+threads=4
+
+function editscript(){
+if [[ "$1" == "edit" ]] || [[ "$1" == "e" ]]; then
+ (/usr/bin/nano "$scriptname")
+ exit 1
+fi
+}
+
+function pause(){
+   read -p "$*"
+}
+
+
+function threadno(){
+ filenum=$(ls *.@(flac|mp3|wav|m4?|ogg|MP4|mp4|wma)|wc -l)
+ if [[ "$filenum" -lt 4 ]]; then threads="$filenum"; fi
+}
+
+
+function ffmpegs(){
+   ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$1" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -frame_duration:a 60 "${1%.*}.opus"
+}
+
+function ffmpeg2(){
+    for file in *.@(flac|mp3|wav|m4?|ogg|MP4|mp4|wma) #2022.12.23 added MP4|mp4 support #2023.09.06 added wma support
+     do
+#     ffmpegs "$file"
+#      touch "$PWD/${file%.*}.opus"
+#      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -acodec libopus -b:a 64k "${file%.*}.opus"&
+#      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -frame_duration:a 60 "/dev/shm/cache/${file%.*}.opus"
+      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -ar 24k -frame_duration:a 60 -ar 24000 "${file%.*}.opus"
+#      mv "/dev/shm/cache/${file%.*}.opus" "$PWD"
+     done
+}
+
+
+function stats(){
+if [ -n "$1" ];
+ then
+  echo mediaduration "${1#*.}" `mediaduration "${1#*.}"`
+  echo mediaduration opus `mediaduration opus`
+ else
+#  for g in *@(flac|mp3|wav|m4?|ogg);do startext="${g#*.}"; done
+  startbitrate=$(mediainfo "$g"|grep "Overall bit rate")
+  printf '\n\nConverstion statistics:\n'
+  printf '\nFor %s:\n%s\n' "$g" "$startbitrate"
+  printf 'mediaduration %s: %s\n' "$startext" "$(mediaduration "$startext")"
+  printf 'mediaduration opus: %s\n' "$(mediaduration opus)"
+fi
+
+elapsed=$SECONDS
+elmin="$((elapsed/60))"
+elsec="$((elapsed-elmin*60))"
+printf 'Script runtime: %ss / %s:%s mm:ss\n' "$SECONDS" "$elmin" "$elsec"
+
+#printf 'Elapsed time: %s m:%s s\n' "$elmin" "$elsec"
+startsize="$(\du -bcs *@(flac|mp3|wav|m4?|ogg|wma) |tail -1)"
+startsize="${startsize%$'\t'*}"
+startsizehr="$(\du -hcs *@(flac|mp3|wav|m4?|ogg|wma) |tail -1)"
+startsizehr="${startsizehr%$'\t'*}"
+opussize="$(\du -bcs *opus|tail -1)"
+opussize="${opussize%$'\t'*}"
+opussizehr="$(\du -hcs *opus|tail -1)"
+opussizehr="${opussizehr%$'\t'*}"
+d=$((startsize-opussize))
+r="$((d*100 / startsize))"
+printf 'Initial size (%s) = %s bytes/ %s\n' "$startext" "$startsize" "$startsizehr"
+printf 'Final size (opus) = %s bytes / %s\n' "$opussize" "$opussizehr"
+printf '%s%% file size reduction\n' "$r"
+}
+
+
+
+script="${0#*\/}"
+
+if [ -f ".opus.book.pids" ]
+ then
+  rm ".opus.book.pids"
+ fi
+#if [ -f ".$script.pids" ]
+# then
+#  rm ".$script.pids"
+# fi
+
+
+function breakout(){
+while IFS= read -r pid
+ do
+  if [[ "$pid" == *$script* ]] || [[ "$pid" == *ffmpeg* ]]
+   then
+    echo "${pid% pts*}" >> "$pidfile"
+  fi
+  done< <(ps --tty $(tty) Sf)
+  opusbook4ka
+}
+
+trap '{ breakout; exit 1; }' INT
+
+#printf "\n\n\n\nInterrupt caught: killall %s killall ffmpeg \n\n\n\n" "${0#*\/}"
+#rm pids;while IFS= read -r pid; do if [[ "$pid" == *ffmpeg* ]] || [[ "$pid" == *opus.book.* ]]; then echo "${pid% pts*}">>pids; fi; done < <(ps --tty $(tty) Sf)
+#exec "killall $script ffmpeg"; killall ffmpeg; exec "killall $script"; killall $script; killall $script; killall ffmpeg; exit 1; }' INT
+
+editscript "$1"
+
+for g in *@(flac|mp3|wav|m4?|ogg|wma);
+ do
+  startext="${g#*.}"
+ done
+
+threadno
+echo
+
+printf '%s\nDuration of %s %s file(s) to convert: %s\n' "$(pwd)" "$filenum" "$startext" "$(mediaduration "$startext")"
+echo
+echo
+i=1
+while [ $i -le $threads ]
+ do
+  if [ -n "$1" ];
+   then
+#    ffmpegs "$1"&
+#    ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$1" -acodec libopus -b:a 17k "${1%.*}.opus"&
+#   ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$1"  -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -frame_duration:a 60 "${1%.*}".opus&
+#   ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$1"  -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -frame_duration:a 60 "${1%.*}".opus&
+      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -ar 24k -frame_duration:a 60 -ar 24000 "${file%.*}.opus"
+
+   else
+    echo "Calling ffmpeg-$i"
+    ffmpeg2&
+  fi
+   i=$(( $i + 1 ))
+   \sleep 0.5s
+ done
+
+
+wait
+
+#stats
+
+
+if [ -f ".opus.book.pids" ]
+ then
+  rm ".opus.book.pids"
+ fi
+
