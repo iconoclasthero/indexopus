@@ -1,0 +1,91 @@
+#!/bin/bash
+# Original code from: http://crunchbang.org/forums/viewtopic.php?id=38748#p414992
+# m4bronto
+
+#     Chapter #0:0: start 0.000000, end 1290.013333
+#       first   _     _     start    _     end
+
+START=1
+edit=0
+scriptname="$(realpath $0)"
+basename "$PWD"
+title="Devil-Land"
+inext="mp3"
+outext="mp3"
+#inext="opus"
+#outext="opus"
+inext="m4?"
+outext="m4a"
+stamp=$(date +%s)
+#compgen -A file "*$inext"
+
+function editscript(){
+if (("$edit")); then
+ (/usr/bin/nano "$scriptname")
+ exit
+fi
+}
+
+function pause(){
+   read -p "$*"
+}
+
+if [[ $# -eq 0 ]] || [[ "$1" == "edit" ]]; then
+ edit="1"
+fi
+
+echo "this is the value of $1"
+
+editscript "$1"
+
+mkdir -p /dev/shm/cache/convert
+
+while [ $# -gt 0 ]; do
+
+ffmpeg -i "$1" 2> ".tmp$stamp"
+n="$START"
+while read -r first _ _ start _ end; do
+  if [[ $first = Chapter ]]; then
+    read  # discard line with Metadata:
+    read _ _ chapter
+
+    if [[ "$n" -lt 10 ]]; then partnum="0$n"; else partnum="$n"; fi
+
+#    ffmpeg -nostdin -activation_bytes a0737c04 -vsync 2 -i "$1" -ss "${start%?}" -to "$end" -vn -b:a 17k -acodec libopus "$title -- $chapter.opus" </dev/null
+#    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -i "$1" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -ss "${start%?}" -to "$end" -vn -b:a 17k -acodec libopus "$title -- $chapter.opus" </dev/null
+###copy:
+#    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "$title -- $chapter.$outext" </dev/null
+
+
+    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "/dev/shm/cache/convert/$title -- Part $partnum: $chapter.$outext" </dev/null
+
+
+
+###convert:
+#ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -ss "${start%?}" -to "$end" -i "$1" -vn -b:a 17k -acodec libopus "/dev/shm/cache/$title -- $chapter.opus" </dev/null
+### convert audible: ffmpeg -n -nostdin -activation_bytes a0737c04 -hide_banner -stats -vsync 2 -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -ss "${start%?}" -to "$end" -i "$1" -vn -b:a 17k -acodec libopus "/dev/shm/cache/$title -- $chapter.opus" </dev/null
+
+
+    (( n=n+1 ))
+  fi
+done <".tmp$stamp"
+
+rm ".tmp$stamp"
+
+shift
+done
+
+for i in "$title -- Chapter "?.opus;
+ do
+  mv "$i" "${i/Chapter /Chapter 0}";
+ done
+
+if [ -n "$1" ];
+ then
+  echo mediaduration "${1#*.}" `mediaduration "${1#*.}"`
+  echo mediaduration opus `mediaduration opus`
+ else
+  echo mediaduration "${file#*.}" `mediaduration "${file#*.}"`
+  echo mediaduration opus `mediaduration opus`
+fi
+
