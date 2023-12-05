@@ -113,7 +113,7 @@ fi
 duration=$(find -type f -name "$title -- Part ??:*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
 
 printf '\n%sGenerating the index for %s from...\n\n' "$elipsis" "$ititle"
-ls "$title -- Part "*
+ls "$title -- Part "*.opus
 printf '\n'
 
 for i in "$title -- Part "*.opus
@@ -134,36 +134,58 @@ for i in "$title -- Part "*.opus
 
       d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
       t=$(echo "$d + $t" | bc)
-
 done
-   printf '\n...Concatenating %s -- Part ??\: *.opus...\n\n' "$ititle"
-   for f in "$title -- Part "??\:\ *.opus; do echo "file '$PWD/$f'" >> ./tmp/opusfiles; done
-   ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "./tmp/opusfiles" -n -acodec copy "./tmp/$output"
 
-   printf '\n\n...Incorporating index into %s -- Audiobook.opus...\n\n' "$ititle"
-   mv "./tmp/$output" "./$output"
+printf '\n...Concatenating %s -- Part ??: *.opus...\n\n' "$ititle"
 
-   while read -r chaptag
-    do
-      opustag -i -a "$chaptag" "$output"
-    done < "./tmp/opusindex"
-
-   printf '...Chapter info added...\n\n'
-
-   if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null;
+for f in "$title -- Part "??\:\ *.opus
+ do
+   if [[ "$f" == *\'* ]]
     then
-      printf '...Checking output from mediainfo...\n\n'
-      mediainfo "$output"
-    elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null ;
-     then
-       printf 'Checking the output from ffprobe...\n\n'
-       ffprobe "$output"
-   fi
+	   ff="${f//\'/\'\\\'\'}"
+       echo "$ff"
+#      pause
+#      ff="${f//\'}"
+#      mv "$f" "$ff"
+       echo "file '$PWD/$ff'" >> ./tmp/opusfiles
+#       echo "mv \"$ff\" \"$f\"" >> ./tmp/apostfile
+    else
+      echo "file '$PWD/$f'" >> ./tmp/opusfiles
+    fi
+done
 
-   printf 'The duration if the %s -- Part *opus is %s\n\n' "$ititle" "$duration"
+#ffmpeg will not take filenames with ' in them, they must be quoted:
+#sed -i "s/'/\"\'\"/g" ./tmp/opusfiles
 
 
-   rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
-   rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ ??:*.opus
+pause
+ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "./tmp/opusfiles" -n -acodec copy "./tmp/$output"
 
-   printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
+
+printf '\n\n...Incorporating index into %s -- Audiobook.opus...\n\n' "$ititle"
+mv "./tmp/$output" "./$output"
+
+while read -r chaptag
+ do
+   opustag -i -a "$chaptag" "$output"
+ done < "./tmp/opusindex"
+
+printf '...Chapter info added...\n\n'
+
+if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null;
+ then
+   printf '...Checking output from mediainfo...\n\n'
+   mediainfo "$output"
+ elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null ;
+  then
+    printf 'Checking the output from ffprobe...\n\n'
+    ffprobe "$output"
+fi
+
+printf 'The duration if the %s -- Part *opus is %s\n\n' "$ititle" "$duration"
+
+rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
+rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ ??:*.opus
+
+printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
+
