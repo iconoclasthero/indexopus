@@ -6,6 +6,11 @@
 # that said, the author feels that this satisfices for the purposes at hand and if/when the codec changes, that bridge will be burnt when it is arrived upon.
 # Would like to make it so that the files do not need a chapter name and are iterated with 000, 001, 002, .... for Chapter Title
 # ffmpeg could presumably take over for opustags to eliminate that dependency and then all that would be required is ffmpeg
+# Promlem with colons in the part description:
+# That could still indicate a problem if the code is later attempting to do shell arithmetic on the value, in which case you got lucky by having printf throw an error. You could fix that by adding a test and failing early, because printf won't cause the script to exit.
+# https://mywiki.wooledge.org/BashFAQ/054 -- How can I tell whether a variable contains a valid number?
+
+
 
 scriptname=$(realpath "$0")
 ulon=$(tput smul)  #underline on
@@ -62,11 +67,33 @@ for title in *Part\ 01*.opus
    ext="$title##*."
    title="${title% -- Part 01*}"
  done
-
 ititle="${ulon}$title${uloff}"
 output="$title -- Audiobook.opus"
 ioutput="$ititle -- Audiobook.opus"
 }
+
+createindex() {
+for i in "$title -- Part "*.opus
+ do
+   chno="${i#*Part }"; chno="${chno%.*}"; chno="${chno%%:*}"
+   chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna:4}"
+   if [[ "$t" != 0 ]]
+    then
+      ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
+      printf "CHAPTER%03d=%s\n" "${chno#0}" "$ts"|tee -a ./tmp/opusindex
+      printf "CHAPTER%03dNAME=%s\n" "${chno#0}" "$chna"|tee -a ./tmp/opusindex
+    else
+      ts="00:00:00.000"
+      printf "CHAPTER%03d=%s\n" "${chno#0}" "$ts"|tee -a ./tmp/opusindex
+      printf "CHAPTER%03dNAME=%s\n" "${chno#0}" "$chna"|tee -a ./tmp/opusindex
+   fi
+      d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
+
+#      d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
+      t=$(echo "$d + $t" | bc)
+done
+}
+
 
 
 #### ---- Main Code ---- ####
@@ -93,8 +120,6 @@ fi
 
 gettitle
 
-#if [[ -f ./"$output" ]] ; then printf 'This directory already contains %s%s%s -- Audiobook.opus.\n\n' "${ulon}" "$title" "${uloff}"; fi
-
 if [[ -f ./"$output" ]]
  then
    printf 'This directory already contains %s\n' "$ioutput"
@@ -107,34 +132,13 @@ if [[ -f ./"$output" ]]
    fi
 fi
 
-#printf '[Enter] enter to overwrite %s -- Audiobook.opus or Ctrl-C to exit.\n' "$ititle"
-#pause "[Enter] enter to overwrite $ititle -- Audiobook.opus or Ctrl-C to exit. "
-
 duration=$(find -type f -name "$title -- Part ??:*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
 
 printf '\n%sGenerating the index for %s from...\n\n' "$elipsis" "$ititle"
 ls "$title -- Part "*.opus
 printf '\n'
 
-for i in "$title -- Part "*.opus
- do
-   chno="${i#*Part }"; chno="${chno%.*}"; chno="${chno%:*}"
-   chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna:4}"
-   if [[ "$t" != 0 ]]
-    then
-      ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
-      printf "CHAPTER%03d=%s\n" "${chno#0}" "$ts"|tee -a ./tmp/opusindex
-      printf "CHAPTER%03dNAME=%s\n" "${chno#0}" "$chna"|tee -a ./tmp/opusindex
-    else
-      ts="00:00:00.000"
-      printf "CHAPTER%03d=%s\n" "${chno#0}" "$ts"|tee -a ./tmp/opusindex
-      printf "CHAPTER%03dNAME=%s\n" "${chno#0}" "$chna"|tee -a ./tmp/opusindex
-   fi
-      d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
-
-      d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
-      t=$(echo "$d + $t" | bc)
-done
+createindex
 
 printf '\n...Concatenating %s -- Part ??: *.opus...\n\n' "$ititle"
 
@@ -142,26 +146,20 @@ for f in "$title -- Part "??\:\ *.opus
  do
    if [[ "$f" == *\'* ]]
     then
-	   ff="${f//\'/\'\\\'\'}"
+	   ff="${f//\'/\'\\\'\'}"  #ffmpeg will not take filenames with ' in them, they must be quoted:
        echo "$ff"
        echo "file '$PWD/$ff'" >> ./tmp/opusfiles
-    elif [[ "$f" == *\:* ]]
-     then
-	   ff="${f//\:/\'\\\:\'}"
-       echo "$ff"
-       echo "file '$PWD/$ff'" >> ./tmp/opusfiles
+#    elif [[ "$f" == *\:* ]]
+#     then
+#	   ff="${f//\:/\'\\\:\'}"
+#       echo "$ff"
+#       echo "file '$PWD/$ff'" >> ./tmp/opusfiles
     else
       echo "file '$PWD/$f'" >> ./tmp/opusfiles
     fi
 done
 
-#ffmpeg will not take filenames with ' in them, they must be quoted:
-#sed -i "s/'/\"\'\"/g" ./tmp/opusfiles
-
-
-pause
 ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "./tmp/opusfiles" -n -acodec copy "./tmp/$output"
-
 
 printf '\n\n...Incorporating index into %s -- Audiobook.opus...\n\n' "$ititle"
 mv "./tmp/$output" "./$output"
