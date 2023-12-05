@@ -1,11 +1,11 @@
 #!/bin/bash
-# depends: opustag, ffmpeg/ffprobe
+# depends: opustags, ffmpeg/ffprobe
 # optional: mediainfo
 # files must be in the format of Title -- Part ##: Chapter Title.opus and present ONLY works for .opus; there are other tools for e.g., m4b: use them.
-# presumably, this script could easily be changed out for another codec, however opustag would need to change to something else that can write metadata, e.g, ffmpeg which should be able to do any format.
+# presumably, this script could easily be changed out for another codec, however opustags would need to change to something else that can write metadata, e.g, ffmpeg which should be able to do any format.
 # that said, the author feels that this satisfices for the purposes at hand and if/when the codec changes, that bridge will be burnt when it is arrived upon.
 # Would like to make it so that the files do not need a chapter name and are iterated with 000, 001, 002, .... for Chapter Title
-# ffmpeg could presumably take over for opustag to eliminate that dependency and then all that would be required is ffmpeg
+# ffmpeg could presumably take over for opustags to eliminate that dependency and then all that would be required is ffmpeg
 
 scriptname=$(realpath "$0")
 ulon=$(tput smul)  #underline on
@@ -144,11 +144,12 @@ for f in "$title -- Part "??\:\ *.opus
     then
 	   ff="${f//\'/\'\\\'\'}"
        echo "$ff"
-#      pause
-#      ff="${f//\'}"
-#      mv "$f" "$ff"
        echo "file '$PWD/$ff'" >> ./tmp/opusfiles
-#       echo "mv \"$ff\" \"$f\"" >> ./tmp/apostfile
+    elif [[ "$f" == *\:* ]]
+     then
+	   ff="${f//\:/\'\\\:\'}"
+       echo "$ff"
+       echo "file '$PWD/$ff'" >> ./tmp/opusfiles
     else
       echo "file '$PWD/$f'" >> ./tmp/opusfiles
     fi
@@ -167,7 +168,7 @@ mv "./tmp/$output" "./$output"
 
 while read -r chaptag
  do
-   opustag -i -a "$chaptag" "$output"
+   opustags -i -a "$chaptag" "$output"
  done < "./tmp/opusindex"
 
 printf '...Chapter info added...\n\n'
