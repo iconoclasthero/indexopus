@@ -104,6 +104,8 @@ cd "$CACHE/convert"
 
 screen sh -c 'cd $CACHE/convert; bash'
 
+pause "Resume from screen...?"
+
 opus.book.4
 
 [[ ! -d "$CACHE/convert/m4a" ]] && mkdir "$CACHE/convert/m4a"
@@ -304,9 +306,7 @@ done
 
 printf '\n\n...Incorporating index into %s -- Audiobook.opus...\n\n' "$ititle"
 
-pause before chaptag
-   mv "./tmp/$output" "$output"
-
+mv "./tmp/$output" "$output"
 
 while read -r chaptag
  do
