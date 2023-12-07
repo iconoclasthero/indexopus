@@ -1,0 +1,229 @@
+#!/bin/bash
+# depends: opustags, ffmpeg/ffprobe
+# optional: mediainfo
+# files must be in the format of Title -- Part ##: Chapter Title.opus and present ONLY works for .opus; there are other tools for e.g., m4b: use them.
+# presumably, this script could easily be changed out for another codec, however opustags would need to change to something else that can write metadata, e.g, ffmpeg which should be able to do any format.
+# that said, the author feels that this satisfices for the purposes at hand and if/when the codec changes, that bridge will be burnt when it is arrived upon.
+# Would like to make it so that the files do not need a chapter name and are iterated with 000, 001, 002, .... for Chapter Title
+# ffmpeg could presumably take over for opustags to eliminate that dependency and then all that would be required is ffmpeg
+# Also, given that tagging is being done, it might be useful to tag at least the tracknumber and the track title in this script rather than doing it after.
+#
+# Promlem with colons in the part description:
+# That could still indicate a problem if the code is later attempting to do shell arithmetic on the value, in which case you got lucky by having printf throw an error. You could fix that by adding a test and failing early, because printf won't cause the script to exit.
+# https://mywiki.wooledge.org/BashFAQ/054 -- How can I tell whether a variable contains a valid number?
+
+
+title="$1"
+scriptname=$(realpath "$0")
+ulon=$(tput smul)  #underline on
+uloff=$(tput rmul) #underline off
+
+function editscript(){
+  local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
+     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
+     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
+  fi; }
+
+pause(){ read -p "$*" ; }
+
+confirm(){
+ local ans IFS=
+ while
+  printf '%s' "$1"
+  read -rp " " -n1 ans
+   do
+     printf '\n'
+     case $ans in [Yy]) return 0;; [Nn]) return 1;;
+     esac
+   done
+}
+
+
+rmyn(){
+  while true
+  read -rp "$1" rmyn
+   do
+     case "$rmyn" in
+       [yY] ) "${@:3}"; break;;
+       [nN] ) printf '%s\n' "$2"; break;;
+          * ) printf "Invalid response...\n";;
+     esac
+   done
+}
+
+yn(){
+  while true
+  read -p "$1" yn
+   do
+     case "$yn" in
+       [yY] ) "$2"; break;;
+       [nN] ) "$3"; break;;
+          * ) printf "Invalid response...\n";;
+     esac
+   done
+}
+
+
+gettitle(){
+  ext="$title##*."
+  title="${title% -- Part*}"
+  ititle="${ulon}$title${uloff}"
+  output="$title -- Audiobook.opus"
+  ioutput="$ititle -- Audiobook.opus"
+}
+
+createindex(){
+for i in "$title -- Part "*.opus
+ do
+   chno="${i#*Part }"; chno="${chno%.*}"; chno="${chno%%:*}"
+   chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna:4}"
+   if [[ "$t" != 0 ]]
+    then
+      ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
+      printf "CHAPTER%03d=%s\n" "${chno#0}" "$ts"|tee -a ./tmp/opusindex
+      printf "CHAPTER%03dNAME=%s\n" "${chno#0}" "$chna"|tee -a ./tmp/opusindex
+    else
+      ts="00:00:00.000"
+      printf "CHAPTER%03d=%s\n" "${chno#0}" "$ts"|tee -a ./tmp/opusindex
+      printf "CHAPTER%03dNAME=%s\n" "${chno#0}" "$chna"|tee -a ./tmp/opusindex
+   fi
+      d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
+
+#      d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
+      t=$(echo "$d + $t" | bc)
+done
+}
+
+
+
+#### ---- Main Code ---- ####
+
+if [[ "$1" == @(edit|e|nano) ]]; then editscript; fi
+
+if ! compgen -G ./*\ --\ Part\ ??\:\ *.opus > /dev/null
+ then
+   printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
+   exit
+elif compgen -G ./*\ --\ Part\ ???\:\ *.opus > /dev/null
+ then
+   printf 'It appears that the book you are trying to index has three-digit part numbers. You will have to edit the script to make them work...\n'
+   exit
+fi
+
+#ffprobe -sexagesimal -> "00:00:00.00"
+d=0
+t=0
+
+if [[ -d ./tmp ]]
+ then
+   rm -r ./tmp && mkdir ./tmp
+ else
+   mkdir ./tmp
+fi
+
+
+gettitle "$1"
+#pause "title=$1"
+#title="$1"
+echo "$title"
+echo "$ititle"
+echo "$output"
+echo "$ioutput"
+
+
+if [[ -f ./"$output" ]]
+ then
+   printf 'This directory already contains %s\n' "$ioutput"
+   if confirm "Overwrite the existing file? (y/n)"
+    then
+      printf '\n...Overwriting %s -- Audiobook.opus...\n' "$ititle"
+      elipsis="..."
+    else
+      exit
+   fi
+fi
+
+duration=$(find -type f -name "$title -- Part ??:*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+
+printf '\n%sGenerating the index for %s from...\n\n' "$elipsis" "$ititle"
+ls "$title -- Part "*.opus
+printf '\n'
+
+createindex
+
+printf '\n...Concatenating %s -- Part ??: *.opus...\n\n' "$ititle"
+
+for f in "$title -- Part "??\:\ *.opus
+ do
+   echo "$f"
+   if [[ "$f" == *\'* ]]
+    then
+	   ff="${f//\'/\'\\\'\'}"  #ffmpeg will not take filenames with ' in them, they must be quoted:
+       echo "$ff"
+       echo "file '$PWD/$ff'" >> ./tmp/opusfiles
+#    elif [[ "$f" == *\:* ]]
+#     then
+#	   ff="${f//\:/\'\\\:\'}"
+#       echo "$ff"
+#       echo "file '$PWD/$ff'" >> ./tmp/opusfiles
+    else
+      echo "file '$PWD/$f'" >> ./tmp/opusfiles
+    fi
+done
+
+#if [[ -f "./$output" ]]
+# then
+#  if ! confirm "Skip overwrite?"
+#   then
+
+pwd
+echo ffmpeg:
+pause
+echo "./tmp/opusfiles"
+echo "./tmp/$output"
+pause
+
+ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "./tmp/opusfiles" -n -acodec copy "./tmp/$output"
+
+
+
+#   else
+#     mv "$output" ./tmp
+#  fi
+#fi
+
+printf '\n\n...Incorporating index into %s -- Audiobook.opus...\n\n' "$ititle"
+
+pause before chaptag
+   mv "./tmp/$output" "$output"
+
+
+while read -r chaptag
+ do
+   opustags -i -a "$chaptag" "$output"
+#   ffmpeg -i "$output" -metadata "\"$chaptag\"" -acodec copy "./tmp/$output"
+ done < "./tmp/opusindex"
+
+printf '...Chapter info added...\n\n'
+
+if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null;
+ then
+   printf '...Checking output from mediainfo...\n\n'
+   mediainfo "$output"
+ elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null ;
+  then
+    printf 'Checking the output from ffprobe...\n\n'
+    ffprobe "$output"
+fi
+
+printf 'The duration if the %s -- Part *opus is %s\n\n' "$ititle" "$duration"
+
+rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
+rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ ??:*.opus
+
+printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
+
+exit
+
+
+
