@@ -1,0 +1,355 @@
+#!/bin/bash
+#depends opustags, ffmpeg, index-opus, opus.book.4
+
+scriptname=$(realpath "$0")
+
+function editscript(){
+  local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
+     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
+     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
+  fi; }
+
+function pause(){ read -p "$*" ; }
+
+
+
+#################################################################################
+
+checkdur(){
+  printf "\nDuration of .m4a files : "
+  find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+  printf "\nDuration of .m4b files : "
+  find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+  printf "\nDuration of .opus files: "
+  find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+}
+
+#################################################################################
+
+
+
+
+
+
+
+#################################################################################
+
+m4bsplit(){
+# Original code from: http://crunchbang.org/forums/viewtopic.php?id=38748#p414992
+# m4bronto
+
+#     Chapter #0:0: start 0.000000, end 1290.013333
+#       first   _     _     start    _     end
+
+outputdir="$CACHE/convert"
+START=1
+edit=0
+scriptname="$(realpath $0)"
+basename "$PWD"
+inext="mp3"
+outext="mp3"
+inext="opus"
+outext="opus"
+inext="m4?"
+outext="m4a"
+stamp=$(date +%s)
+#compgen -A file "*$inext"
+
+mkdir -p "$outputdir"
+
+while [ "$#" -gt 0 ]; do
+
+ffmpeg -i "$1" 2> ".tmp$stamp"
+n="$START"
+while read -r first _ _ start _ end; do
+  if [[ "$first" = Chapter ]]; then
+    read  # discard line with Metadata:
+    read _ _ chapter
+
+    if [[ "$n" -lt 10 ]]; then partnum="0$n"; else partnum="$n"; fi
+    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "/dev/shm/cache/convert/$title -- Part $partnum: $chapter.$outext" </dev/null
+    (( n=n+1 ))
+  fi
+done <".tmp$stamp"
+
+rm ".tmp$stamp"
+
+shift
+done
+}
+
+#End of m4bsplit ###############################################################
+
+
+
+if [[ "$1" == @(edit|e|nano) ]]; then editscript; fi
+
+[[ ! "$1" =~ .+\ --\ Audiobook\.m4b ]] && exit
+
+m4bin="$1"
+
+duration=$(mediainfo "$m4bin" |grep -E ^Duration|uniq)
+
+title="${m4bin% -- *}"
+
+swd="$PWD"
+
+echo "$m4bin"
+
+echo "$duration"
+
+m4bsplit "$m4bin"
+
+cd "$CACHE/convert"
+
+screen sh -c 'cd $CACHE/convert; bash'
+
+pause "Resume from screen...?"
+
+opus.book.4
+
+[[ ! -d "$CACHE/convert/m4a" ]] && mkdir "$CACHE/convert/m4a"
+
+mv *.m4a ./m4a
+
+clear
+
+~/bin/opusdur
+
+echo "$1 $duration"
+
+[[ -d ./tmp ]] && ls ./tmp && rm -ri m4a
+
+index-opus "$title"
+
+mv "$title -- Audiobook.opus" "$swd"
+
+cd "$swd"
+
+checkdur
+
+rmr *m4b
+
+exit
+
+
+
+indexopus(){
+
+ulon=$(tput smul)  #underline on
+uloff=$(tput rmul) #underline off
+
+confirm(){
+ local ans IFS=
+ while
+  printf '%s' "$1"
+  read -rp " " -n1 ans
+   do
+     printf '\n'
+     case $ans in [Yy]) return 0;; [Nn]) return 1;;
+     esac
+   done
+}
+
+
+#unused
+tagtt(){
+for i in *\ --\ Part\ ??\:\ *opus
+ do
+   title="${i%.opus}"
+   title="${title#* -- }"
+   tracknumber="${i%:*}"
+   tracknumber="${tracknumber#*Part }"
+   opustags -i "$i" -s title="$title" -s tracknumber="$tracknumber"
+done
+}
+
+
+rmyn(){
+  while true
+  read -rp "$1" rmyn
+   do
+     case "$rmyn" in
+       [yY] ) "${@:3}"; break;;
+       [nN] ) printf '%s\n' "$2"; break;;
+          * ) printf "Invalid response...\n";;
+     esac
+   done
+}
+
+yn(){
+  while true
+  read -p "$1" yn
+   do
+     case "$yn" in
+       [yY] ) "$2"; break;;
+       [nN] ) "$3"; break;;
+          * ) printf "Invalid response...\n";;
+     esac
+   done
+}
+
+
+gettitle(){
+for title in *Part\ 0*.opus
+ do
+   ext="$title##*."
+   title="${title% -- Part*}"
+ done
+ititle="${ulon}$title${uloff}"
+output="$title -- Audiobook.opus"
+ioutput="$ititle -- Audiobook.opus"
+}
+
+createindex(){
+for i in "$title -- Part "*.opus
+ do
+   chno="${i#*Part }"; chno="${chno%.*}"; chno="${chno%%:*}"
+   chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna:4}"
+   if [[ "$t" != 0 ]]
+    then
+      ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
+      printf "CHAPTER%03d=%s\n" "${chno#0}" "$ts"|tee -a ./tmp/opusindex
+      printf "CHAPTER%03dNAME=%s\n" "${chno#0}" "$chna"|tee -a ./tmp/opusindex
+    else
+      ts="00:00:00.000"
+      printf "CHAPTER%03d=%s\n" "${chno#0}" "$ts"|tee -a ./tmp/opusindex
+      printf "CHAPTER%03dNAME=%s\n" "${chno#0}" "$chna"|tee -a ./tmp/opusindex
+   fi
+      d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
+
+#      d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
+      t=$(echo "$d + $t" | bc)
+done
+}
+
+
+
+#### ---- Main Code ---- ####
+
+if [[ "$1" == @(edit|e|nano) ]]; then editscript; fi
+
+if ! compgen -G ./*\ --\ Part\ ??\:\ *.opus > /dev/null
+ then
+   printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
+   exit
+elif compgen -G ./*\ --\ Part\ ???\:\ *.opus > /dev/null
+ then
+   printf 'It appears that the book you are trying to index has three-digit part numbers. You will have to edit the script to make them work...\n'
+   exit
+fi
+
+#ffprobe -sexagesimal -> "00:00:00.00"
+d=0
+t=0
+
+if [[ -d ./tmp ]]
+ then
+   rm -r ./tmp && mkdir ./tmp
+ else
+   mkdir ./tmp
+fi
+
+
+####################gettitle
+
+title="$1"
+
+if [[ -f ./"$output" ]]
+ then
+   printf 'This directory already contains %s\n' "$ioutput"
+   if confirm "Overwrite the existing file? (y/n)"
+    then
+      printf '\n...Overwriting %s -- Audiobook.opus...\n' "$ititle"
+      elipsis="..."
+    else
+      exit
+   fi
+fi
+
+duration=$(find -type f -name "$title -- Part ??:*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+
+printf '\n%sGenerating the index for %s from...\n\n' "$elipsis" "$ititle"
+ls "$title -- Part "*.opus
+printf '\n'
+
+createindex
+
+printf '\n...Concatenating %s -- Part ??: *.opus...\n\n' "$ititle"
+
+for f in "$title -- Part "??\:\ *.opus
+ do
+   if [[ "$f" == *\'* ]]
+    then
+	   ff="${f//\'/\'\\\'\'}"  #ffmpeg will not take filenames with ' in them, they must be quoted:
+       echo "$ff"
+       echo "file '$PWD/$ff'" >> ./tmp/opusfiles
+#    elif [[ "$f" == *\:* ]]
+#     then
+#	   ff="${f//\:/\'\\\:\'}"
+#       echo "$ff"
+#       echo "file '$PWD/$ff'" >> ./tmp/opusfiles
+    else
+      echo "file '$PWD/$f'" >> ./tmp/opusfiles
+    fi
+done
+
+#if [[ -f "./$output" ]]
+# then
+#  if ! confirm "Skip overwrite?"
+#   then
+     ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "./tmp/opusfiles" -n -acodec copy "./tmp/$output"
+#   else
+#     mv "$output" ./tmp
+#  fi
+#fi
+
+printf '\n\n...Incorporating index into %s -- Audiobook.opus...\n\n' "$ititle"
+
+mv "./tmp/$output" "$output"
+
+while read -r chaptag
+ do
+   opustags -i -a "$chaptag" "$output"
+#   ffmpeg -i "$output" -metadata "\"$chaptag\"" -acodec copy "./tmp/$output"
+ done < "./tmp/opusindex"
+
+printf '...Chapter info added...\n\n'
+
+if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null;
+ then
+   printf '...Checking output from mediainfo...\n\n'
+   mediainfo "$output"
+ elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null ;
+  then
+    printf 'Checking the output from ffprobe...\n\n'
+    ffprobe "$output"
+fi
+
+printf 'The duration if the %s -- Part *opus is %s\n\n' "$ititle" "$duration"
+
+rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
+rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ ??:*.opus
+
+printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
