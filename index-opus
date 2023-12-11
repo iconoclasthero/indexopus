@@ -127,7 +127,6 @@ echo "$title"
 echo "$ititle"
 echo "$output"
 echo "$ioutput"
-pause
 
 
 if [[ -f ./"$output" ]]
@@ -179,10 +178,9 @@ done
 
 pwd
 #echo ffmpeg:
-#pause
+
 #echo "./tmp/opusfiles"
 #echo "./tmp/$output"
-#pause
 
 ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "./tmp/opusfiles" -n -acodec copy "./tmp/$output"
 
@@ -195,15 +193,25 @@ ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i
 
 printf '\n\n...Incorporating index into %s -- Audiobook.opus...\n\n' "$ititle"
 
-pause before chaptag
+#pause before chaptag
    mv "./tmp/$output" "$output"
 
+#while read -r line; do args+=(-a "$line"); done < tmp/opusindex; opustags -i Fire\ --\ Audiobook.opus "${args[@]}"
+
+###while read -r chaptag
+### do
+###   opustags -i -a "$chaptag" "$output"
+####   ffmpeg -i "$output" -metadata "\"$chaptag\"" -acodec copy "./tmp/$output"
+### done < "./tmp/opusindex"
 
 while read -r chaptag
  do
-   opustags -i -a "$chaptag" "$output"
-#   ffmpeg -i "$output" -metadata "\"$chaptag\"" -acodec copy "./tmp/$output"
+   args+=(-a "$chaptag")
  done < "./tmp/opusindex"
+
+opustags -i "$output" "${args[@]}"
+
+
 
 printf '...Chapter info added...\n\n'
 
