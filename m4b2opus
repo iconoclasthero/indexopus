@@ -41,7 +41,7 @@ m4bsplit(){
 #     Chapter #0:0: start 0.000000, end 1290.013333
 #       first   _     _     start    _     end
 
-outputdir="$CACHE/convert"
+outputdir="$CACHE/convert-$title"
 START=1
 edit=0
 scriptname="$(realpath $0)"
@@ -67,7 +67,7 @@ while read -r first _ _ start _ end; do
     read _ _ chapter
 
     if [[ "$n" -lt 10 ]]; then partnum="0$n"; else partnum="$n"; fi
-    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "/dev/shm/cache/convert/$title -- Part $partnum: $chapter.$outext" </dev/null
+    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "/dev/shm/cache/convert-$title/$title -- Part $partnum: $chapter.$outext" </dev/null
     (( n=n+1 ))
   fi
 done <".tmp$stamp"
@@ -100,15 +100,24 @@ echo "$duration"
 
 m4bsplit "$m4bin"
 
-cd "$CACHE/convert"
+convertdir="$CACHE/convert-$title"
 
-screen sh -c 'cd $CACHE/convert; bash'
+cd "$convertdir"
+
+#for m4afile in *m4a; do [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][. ] ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"; done
+for m4afile in *m4a; do [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\.\ ] ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"; done
+
+#screen sh -c 'cd $CACHE/convert-$title; bash'
+#screen sh -c "cd $convertdir; bash; pwd; read -p x"
+screencmd+="cd \"$convertdir\"; "
+screencmd+="bash"
+screen sh -c "${screencmd[@]}"
 
 pause "Resume from screen...?"
 
 opus.book.4
 
-[[ ! -d "$CACHE/convert/m4a" ]] && mkdir "$CACHE/convert/m4a"
+[[ ! -d "$CACHE/convert-$title/m4a" ]] && mkdir "$CACHE/convert-$title/m4a"
 
 mv *.m4a ./m4a
 
