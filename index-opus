@@ -17,6 +17,8 @@ title="$1"
 scriptname=$(realpath "$0")
 ulon=$(tput smul)  #underline on
 uloff=$(tput rmul) #underline off
+shopt -s extglob
+
 
 function editscript(){
   local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
@@ -98,15 +100,11 @@ done
 
 #### ---- Main Code ---- ####
 
-if [[ "$1" == @(edit|e|nano) ]]; then editscript; fi
-
-if ! compgen -G ./*\ --\ Part\ ??\:\ *.opus > /dev/null
+[[ "$1" == @(edit|e|nano) ]] && editscript
+#if compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) > /dev/null; then echo yes; fi
+if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) > /dev/null
  then
    printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
-   exit
-elif compgen -G ./*\ --\ Part\ ???\:\ *.opus > /dev/null
- then
-   printf 'It appears that the book you are trying to index has three-digit part numbers. You will have to edit the script to make them work...\n'
    exit
 fi
 
@@ -129,6 +127,7 @@ echo "$title"
 echo "$ititle"
 echo "$output"
 echo "$ioutput"
+pause
 
 
 if [[ -f ./"$output" ]]
@@ -143,7 +142,9 @@ if [[ -f ./"$output" ]]
    fi
 fi
 
-duration=$(find -type f -name "$title -- Part ??:*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+#duration=$(find -type f -name "$title -- Part ??:*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+duration=$(find -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+
 
 printf '\n%sGenerating the index for %s from...\n\n' "$elipsis" "$ititle"
 ls "$title -- Part "*.opus
@@ -153,7 +154,7 @@ createindex
 
 printf '\n...Concatenating %s -- Part ??: *.opus...\n\n' "$ititle"
 
-for f in "$title -- Part "??\:\ *.opus
+for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus)
  do
    echo "$f"
    if [[ "$f" == *\'* ]]
@@ -177,11 +178,11 @@ done
 #   then
 
 pwd
-echo ffmpeg:
-pause
-echo "./tmp/opusfiles"
-echo "./tmp/$output"
-pause
+#echo ffmpeg:
+#pause
+#echo "./tmp/opusfiles"
+#echo "./tmp/$output"
+#pause
 
 ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "./tmp/opusfiles" -n -acodec copy "./tmp/$output"
 

@@ -13,7 +13,7 @@
 # https://mywiki.wooledge.org/BashFAQ/054 -- How can I tell whether a variable contains a valid number?
 
 
-
+shopt -s extglob
 scriptname=$(realpath "$0")
 ulon=$(tput smul)  #underline on
 uloff=$(tput rmul) #underline off
@@ -114,15 +114,17 @@ done
 
 #### ---- Main Code ---- ####
 
-if [[ "$1" == @(edit|e|nano) ]]; then editscript; fi
+[[ "$1" == @(edit|e|nano) ]] && editscript
 
-if ! compgen -G ./*\ --\ Part\ ??\:\ *.opus > /dev/null
+#if [[ "$1" == @(edit|e|nano) ]]; then editscript; fi
+
+#if ! compgen -G ./*\ --\ Part\ ??\:\ *.opus > /dev/null
+# then
+#   printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
+#   exit
+if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) > /dev/null
  then
    printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
-   exit
-elif compgen -G ./*\ --\ Part\ ???\:\ *.opus > /dev/null
- then
-   printf 'It appears that the book you are trying to index has three-digit part numbers. You will have to edit the script to make them work...\n'
    exit
 fi
 
@@ -138,9 +140,9 @@ if [[ -d ./tmp ]]
 fi
 
 
-####################gettitle
+gettitle
 
-title="$1"
+#title="$1"
 
 if [[ -f ./"$output" ]]
  then
@@ -154,7 +156,8 @@ if [[ -f ./"$output" ]]
    fi
 fi
 
-duration=$(find -type f -name "$title -- Part ??:*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+#duration=$(find -type f -name "$title -- Part ??:*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+duration=$(find -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
 
 printf '\n%sGenerating the index for %s from...\n\n' "$elipsis" "$ititle"
 ls "$title -- Part "*.opus
@@ -164,7 +167,7 @@ createindex
 
 printf '\n...Concatenating %s -- Part ??: *.opus...\n\n' "$ititle"
 
-for f in "$title -- Part "??\:\ *.opus
+for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus)
  do
    if [[ "$f" == *\'* ]]
     then
@@ -193,9 +196,8 @@ done
 
 printf '\n\n...Incorporating index into %s -- Audiobook.opus...\n\n' "$ititle"
 
-pause before chaptag
+pause "Press any key to begin adding the index to $ioutput..."
    mv "./tmp/$output" "$output"
-
 
 while read -r chaptag
  do
