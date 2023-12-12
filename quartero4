@@ -1,17 +1,19 @@
 #!/bin/bash
 
+tmp=tmp
+
 scriptname=$(realpath "$0")
 
-function editscript(){
+editscript(){
   local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
      if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
      else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
   fi; }
 
-function pause(){ read -p "$*" ; }
+pause(){ read -p "$*" ; }
 
 
-function calculatetime(){
+calculatetime(){
 echo "this is \$1 $1"
 duration=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
 hours=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' | tail -n 1)
@@ -49,15 +51,17 @@ totalsec=$(( "$seconds" + "$secmin" ))
 echo "$totalsec"
 divsec=$(python3 -c "print($totalsec/4)")
 echo "$divsec"
-}
+
+}  #calculatetime()
 
 #####################################################
-# Main
+# Main                                              #
 #####################################################
 
 [[ "$1" == @(edit|e|nano) ]] && editscript
 
 inext="$1"; inext="${inext##*.}"
+title="${1%% -- *}"
 
 if [[ "$inext" == "m4b" ]]
  then
@@ -72,10 +76,11 @@ elif [ "$inext" = "mp3" ] || [ "$inext" = "opus" ] || [[ "$inext" == "m4a" ]] ||
 fi
 
 printf ' inext=%s\noutext=%s\n   ext=%s' "$inext" "$outext" "$ext"
-pause
-
 
 count=1
+
+[[ ! -d "$tmp" ]] && mkdir "$tmp"
+
 for i in *"$ext"
 do
   wholefile="$i"
@@ -83,30 +88,44 @@ do
 #  calculatetime "$(basename $wholefile)"
   calculatetime "$wholefile"
 
-pause
-
-  while [[ "$count" -lt 5 ]]
+while [[ "$count" -lt 5 ]]
   do
     echo "$count"
 #echo '>>>>>       ffmpeg -i "$wholefile" -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -acodec copy "${wholefile%.*} -- Part 0$count.$ext" '
 #    ffmpeg -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$whilefile" -acodec copy "${wholefile%.*} -- Part 0$count.$ext"
-    ffmpeg -n -nostdin -hide_banner -stats -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$wholefile" -vn -acodec copy "${wholefile%.*} -- Part 0$count.$outext"
+    ffmpeg -n -nostdin -hide_banner -stats -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$wholefile" -vn -acodec copy "$tmp/${wholefile%% -- *} -- Part 0$count.$outext"
     ((count++))
   done
 done
 
+cd "$tmp"
+
 for i in First Second Third Fourth
  do
    ((n++))
-   for f in *" -- Part 0$n.opus"
+   for f in *\ --\ Part\ 0"$n".*
     do
       mv "$f" "${f/./: $i Quarter.}"
-    done;
+    done
  done
 
 opus.book.4
-md
+
+mediaduration
+
+index-opus "$title"
+
+printf '%s\n%s\n' "$(ls *\ Audiobook.opus)" "$(mediainfo *\ Audiobook.opus|grep ^Duration\ |uniq)"
+
+mv *\ Audiobook.opus ..
+
+cd -
+printf '%s\n%s\n' "$(ls *\ Audiobook.m4?)" "$(mediainfo *\ Audiobook.m4?|grep ^Duration\ |uniq)"
+
 rm -i *m4?
+
+rmr "$tmp"
+
 
 
 

@@ -2,18 +2,28 @@
 #depends opustags, ffmpeg, index-opus, opus.book.4
 
 scriptname=$(realpath "$0")
+ulon=$(tput smul)  #underline on
+uloff=$(tput rmul) #underline off
 
-function editscript(){
+
+#################################################################################
+
+
+editscript(){
   local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
      if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
      else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
   fi; }
 
-function pause(){ read -p "$*" ; }
 
+#################################################################################
+
+
+pause(){ read -p "$*" ; }
 
 
 #################################################################################
+
 
 checkdur(){
   printf "\nDuration of .m4a files : "
@@ -24,15 +34,9 @@ checkdur(){
   find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
 }
 
-#################################################################################
-
-
-
-
-
-
 
 #################################################################################
+
 
 m4bsplit(){
 # Original code from: http://crunchbang.org/forums/viewtopic.php?id=38748#p414992
@@ -41,34 +45,39 @@ m4bsplit(){
 #     Chapter #0:0: start 0.000000, end 1290.013333
 #       first   _     _     start    _     end
 
-outputdir="$CACHE/convert-$title"
+outputdir="$2"
 START=1
 edit=0
 scriptname="$(realpath $0)"
 basename "$PWD"
-inext="mp3"
-outext="mp3"
-inext="opus"
-outext="opus"
+#inext="mp3"
+#outext="mp3"
+#inext="opus"
+#outext="opus"
 inext="m4?"
 outext="m4a"
 stamp=$(date +%s)
 #compgen -A file "*$inext"
 
-mkdir -p "$outputdir"
+#mkdir -p "$outputdir"
 
 while [ "$#" -gt 0 ]; do
 
 ffmpeg -i "$1" 2> ".tmp$stamp"
+
 n="$START"
+
 while read -r first _ _ start _ end; do
   if [[ "$first" = Chapter ]]; then
     read  # discard line with Metadata:
     read _ _ chapter
 
     if [[ "$n" -lt 10 ]]; then partnum="0$n"; else partnum="$n"; fi
-    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "/dev/shm/cache/convert-$title/$title -- Part $partnum: $chapter.$outext" </dev/null
-    (( n=n+1 ))
+
+    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "$outputdir/$title -- Part $partnum: $chapter.$outext" </dev/null
+
+    ((n++))
+
   fi
 done <".tmp$stamp"
 
@@ -78,75 +87,9 @@ shift
 done
 }
 
+
 #End of m4bsplit ###############################################################
 
-
-
-if [[ "$1" == @(edit|e|nano) ]]; then editscript; fi
-
-[[ ! "$1" =~ .+\ --\ Audiobook\.m4b ]] && exit
-
-m4bin="$1"
-
-duration=$(mediainfo "$m4bin" |grep -E ^Duration|uniq)
-
-title="${m4bin% -- *}"
-
-swd="$PWD"
-
-echo "$m4bin"
-
-echo "$duration"
-
-m4bsplit "$m4bin"
-
-convertdir="$CACHE/convert-$title"
-
-cd "$convertdir"
-
-#for m4afile in *m4a; do [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][. ] ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"; done
-for m4afile in *m4a; do [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\.\ ] ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"; done
-
-#screen sh -c 'cd $CACHE/convert-$title; bash'
-#screen sh -c "cd $convertdir; bash; pwd; read -p x"
-screencmd+="cd \"$convertdir\"; "
-screencmd+="bash"
-screen sh -c "${screencmd[@]}"
-
-pause "Resume from screen...?"
-
-opus.book.4
-
-[[ ! -d "$CACHE/convert-$title/m4a" ]] && mkdir "$CACHE/convert-$title/m4a"
-
-mv *.m4a ./m4a
-
-clear
-
-~/bin/opusdur
-
-echo "$1 $duration"
-
-[[ -d ./tmp ]] && ls ./tmp && rm -ri m4a
-
-index-opus "$title"
-
-mv "$title -- Audiobook.opus" "$swd"
-
-cd "$swd"
-
-checkdur
-
-rmr *m4b
-
-exit
-
-
-
-indexopus(){
-
-ulon=$(tput smul)  #underline on
-uloff=$(tput rmul) #underline off
 
 confirm(){
  local ans IFS=
@@ -199,6 +142,7 @@ yn(){
 }
 
 
+
 gettitle(){
 for title in *Part\ 0*.opus
  do
@@ -232,6 +176,99 @@ for i in "$title -- Part "*.opus
 done
 }
 
+####################################
+#start
+
+
+[[ "$1" == @(edit|e|nano) ]] && editscript
+
+[[ ! "$1" =~ .+\ --\ Audiobook\.m4b ]] && echo "No file name give..." && exit
+
+m4bin="$1"
+
+duration=$(mediainfo "$m4bin" |grep -E ^Duration\ |uniq)
+
+title="${m4bin% -- *}"
+
+swd="$PWD"
+
+echo "$m4bin"
+
+echo "$duration"
+
+convertdir="$CACHE/convert-$title"
+
+[[ $convertdir == *\'* ]] && convertdir="${convertdir//\'}"  #check $convertdir for \'s and remove them
+
+mkdir "$convertdir"
+
+m4bsplit "$m4bin" "$convertdir"
+
+cd "$convertdir"
+
+rexexexp='.*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\ |\.]'
+#for m4afile in *m4a; do [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][. ] ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"; done
+
+for m4afile in *m4a
+ do
+   [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\.\ ] ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"
+ done
+
+#for m4afile in *m4a
+# do
+#   [[ "$m4afila" =~ "$regexexp" ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"
+# done
+
+#screen sh -c 'cd $CACHE/convert-$title; bash'
+#screen sh -c "cd $convertdir; bash; pwd; read -p x"
+screencmd+="cd \"$convertdir\"; "
+screencmd+="bash"
+screen sh -c "${screencmd[@]}"
+
+pause "Resume from screen...?"
+
+printf '\nDuration of the original m4b file: %s' "$duration"
+
+opus.book.4
+
+[[ ! -d "$convertdir/m4a" ]] && mkdir "$convertdir/m4a"
+
+mv *.m4a ./m4a
+
+#clear
+
+~/bin/opusdur
+
+printf '%s Duration: %s\n' "$1" "${duration#*: }"
+
+[[ -d ./tmp ]] && ls ./tmp && rm -ri m4a
+
+index-opus "$title"
+
+mv "$title -- Audiobook.opus" "$swd"
+
+cd "$swd"
+
+checkdur
+
+rmr *m4b "$convertdir"
+
+exit
+
+
+
+
+
+
+
+
+
+
+
+
+all of this is extra...
+
+##################################################################################
 
 
 #### ---- Main Code ---- ####
@@ -260,7 +297,7 @@ if [[ -d ./tmp ]]
 fi
 
 
-####################gettitle
+#gettitle
 
 title="$1"
 
@@ -285,6 +322,10 @@ printf '\n'
 createindex
 
 printf '\n...Concatenating %s -- Part ??: *.opus...\n\n' "$ititle"
+
+
+pause "before concat----------------------------------------------------------"
+
 
 for f in "$title -- Part "??\:\ *.opus
  do
@@ -343,22 +384,4 @@ rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus 
 printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
