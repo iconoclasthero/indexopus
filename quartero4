@@ -12,6 +12,7 @@ editscript(){
 
 pause(){ read -p "$*" ; }
 
+cd-(){ cd - >/dev/null ; }
 
 calculatetime(){
 echo "this is \$1 $1"
@@ -119,7 +120,8 @@ printf '%s\n%s\n' "$(ls *\ Audiobook.opus)" "$(mediainfo *\ Audiobook.opus|grep 
 
 mv *\ Audiobook.opus ..
 
-cd -
+cd-
+
 printf '%s\n%s\n' "$(ls *\ Audiobook.m4?)" "$(mediainfo *\ Audiobook.m4?|grep ^Duration\ |uniq)"
 
 rm -i *m4?
