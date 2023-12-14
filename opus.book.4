@@ -32,11 +32,9 @@ function ffmpegs(){
 function ffmpeg2(){
     for file in *.@(flac|mp3|wav|m4?|ogg|MP4|mp4|wma) #2022.12.23 added MP4|mp4 support #2023.09.06 added wma support
      do
-#     ffmpegs "$file"
-#      touch "$PWD/${file%.*}.opus"
+      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -ar 24k -frame_duration:a 60 -ar 24000 "${file%.*}.opus"
 #      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -acodec libopus -b:a 64k "${file%.*}.opus"&
 #      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -frame_duration:a 60 "/dev/shm/cache/${file%.*}.opus"
-      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -ar 24k -frame_duration:a 60 -ar 24000 "${file%.*}.opus"
 #      mv "/dev/shm/cache/${file%.*}.opus" "$PWD"
      done
 }

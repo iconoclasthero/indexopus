@@ -1,5 +1,5 @@
 #!/bin/bash
-#depends opustags, ffmpeg, index-opus, opus.book.4
+#depends opustags, ffmpeg, index-opus, opus.book.
 
 scriptname=$(realpath "$0")
 ulon=$(tput smul)  #underline on
@@ -179,12 +179,17 @@ done
 ####################################
 #start
 
-
 [[ "$1" == @(edit|e|nano) ]] && editscript
 
-[[ ! "$1" =~ .+\ --\ Audiobook\.m4b ]] && echo "No file name give..." && exit
-
+#[[ ! $1 =~ .+\ --\ Audiobook.m4b ]] && echo "No file name give..." && exit
+if [[ "$1" != *\ --\ Audiobook.m4b ]]; then echo "Improper file name give..." && exit; fi
 m4bin="$1"
+echo "$m4bin"
+mediainfo "$m4bin"
+#mediainfo "$m4bin"|grep Menu; pause
+
+[[ ! $(mediainfo "$m4bin"|grep Menu) =~ ^Menu ]] && echo quartero4 && quartero4 "$1" && exit
+
 
 duration=$(mediainfo "$m4bin" |grep -E ^Duration\ |uniq)
 
@@ -248,6 +253,14 @@ index-opus "$title"
 mv "$title -- Audiobook.opus" "$swd"
 
 cd "$swd"
+
+printf 'The duration if the %s -- Part *opus is %s\n\n' "$ititle" "$duration"
+
+rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
+rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ ??:*.opus
+
+
+printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 
 checkdur
 

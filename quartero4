@@ -61,6 +61,8 @@ echo "$divsec"
 
 [[ "$1" == @(edit|e|nano) ]] && editscript
 
+[[ "$1" != *\ --\ Audiobook.@(mp3|m4b) ]] && echo "No file name give..." && exit
+
 inext="$1"; inext="${inext##*.}"
 title="${1%% -- *}"
 
@@ -116,10 +118,16 @@ mediaduration
 
 index-opus "$title"
 
+printf 'The duration if the %s -- Part *opus is %s\n\n' "$ititle" "$duration"
+
+printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
+
 printf '%s\n%s\n' "$(ls *\ Audiobook.opus)" "$(mediainfo *\ Audiobook.opus|grep ^Duration\ |uniq)"
 
 mv *\ Audiobook.opus ..
 
+rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
+rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ ->
 cd-
 
 printf '%s\n%s\n' "$(ls *\ Audiobook.m4?)" "$(mediainfo *\ Audiobook.m4?|grep ^Duration\ |uniq)"

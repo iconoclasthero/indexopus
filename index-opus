@@ -225,12 +225,12 @@ if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null;
     ffprobe "$output"
 fi
 
-printf 'The duration if the %s -- Part *opus is %s\n\n' "$ititle" "$duration"
-
-rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
-rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ ??:*.opus
-
-printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
+#printf 'The duration if the %s -- Part *opus is %s\n\n' "$ititle" "$duration"
+#
+#rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
+#rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ ??:*.opus
+#
+#printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 
 exit
 
