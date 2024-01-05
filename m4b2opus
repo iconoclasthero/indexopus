@@ -265,7 +265,7 @@ printf '\n'
 ls "$convertdir"
 printf '\n'
 
-pause "$ulonControl-Z to suspend to change to $convertdir and adjust chapter names?$uloff"
+pause "${ulon}Control-Z to suspend to change to $convertdir and adjust chapter names?${uloff} "
 
 
 printf '\nDuration of the original m4b file: %s' "$duration"
@@ -292,7 +292,6 @@ cd "$swd"
 
 printf 'The duration of the %s -- Part *opus:\n%s\n\n' "$ititle" "$duration"
 
-cd 
 rmyn "Remove $convertdir/tmp? " "...Leaving $convertdir/tmp" rm -r "$convertdir"/tmp
 rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
 
