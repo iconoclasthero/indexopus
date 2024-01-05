@@ -20,7 +20,7 @@ function pause(){
 
 
 function threadno(){
- filenum=$(ls *.@(flac|mp3|wav|m4?|ogg|MP4|mp4|wma)|wc -l)
+ filenum=$(ls *.@(flac|mp3|MP3|wav|m4?|ogg|MP4|mp4|wma)|wc -l)
  if [[ "$filenum" -lt 4 ]]; then threads="$filenum"; fi
 }
 
@@ -30,7 +30,7 @@ function ffmpegs(){
 }
 
 function ffmpeg2(){
-    for file in *.@(flac|mp3|wav|m4?|ogg|MP4|mp4|wma) #2022.12.23 added MP4|mp4 support #2023.09.06 added wma support
+    for file in *.@(flac|mp3|MP3|wav|m4?|ogg|MP4|mp4|wma) #2022.12.23 added MP4|mp4 support #2023.09.06 added wma support
      do
       ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -ar 24k -frame_duration:a 60 -ar 24000 "${file%.*}.opus"
 #      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -acodec libopus -b:a 64k "${file%.*}.opus"&
@@ -46,7 +46,7 @@ if [ -n "$1" ];
   echo mediaduration "${1#*.}" `mediaduration "${1#*.}"`
   echo mediaduration opus `mediaduration opus`
  else
-#  for g in *@(flac|mp3|wav|m4?|ogg);do startext="${g#*.}"; done
+#  for g in *@(flac|mp3|MP3|wav|m4?|ogg);do startext="${g#*.}"; done
   startbitrate=$(mediainfo "$g"|grep "Overall bit rate")
   printf '\n\nConverstion statistics:\n'
   printf '\nFor %s:\n%s\n' "$g" "$startbitrate"
@@ -60,9 +60,9 @@ elsec="$((elapsed-elmin*60))"
 printf 'Script runtime: %ss / %s:%s mm:ss\n' "$SECONDS" "$elmin" "$elsec"
 
 #printf 'Elapsed time: %s m:%s s\n' "$elmin" "$elsec"
-startsize="$(\du -bcs *@(flac|mp3|wav|m4?|ogg|wma) |tail -1)"
+startsize="$(\du -bcs *@(flac|mp3|MP3|wav|m4?|ogg|wma) |tail -1)"
 startsize="${startsize%$'\t'*}"
-startsizehr="$(\du -hcs *@(flac|mp3|wav|m4?|ogg|wma) |tail -1)"
+startsizehr="$(\du -hcs *@(flac|mp3|MP3|wav|m4?|ogg|wma) |tail -1)"
 startsizehr="${startsizehr%$'\t'*}"
 opussize="$(\du -bcs *opus|tail -1)"
 opussize="${opussize%$'\t'*}"
@@ -108,7 +108,7 @@ trap '{ breakout; exit 1; }' INT
 
 editscript "$1"
 
-for g in *@(flac|mp3|wav|m4?|ogg|wma);
+for g in *@(flac|mp3|MP3|wav|m4?|ogg|wma);
  do
   startext="${g#*.}"
  done

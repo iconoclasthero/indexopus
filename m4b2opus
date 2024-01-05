@@ -176,19 +176,51 @@ for i in "$title -- Part "*.opus
 done
 }
 
+filecheck() {
+if [[ ! -z "$1" ]] && [[ "$1" != *\ --\ Audiobook.m4b ]]
+ then
+   printf 'The file specified: %s\nis not in the correct format of\n* -- Audiobook.m4b, checking directory for an m4b file...' "$1"
+elif [[ "$1" == *\ --\ Audiobook.m4b ]] && [[ -f "$1" ]]  #suggested this is poor design to ignore the input if it is not in the correct format.
+ then
+   m4bin="$1"
+   echo "$m4bin"
+else
+#   for i in *m4b
+#    do
+      files=(*m4b)
+      if [[ -f "$files" ]] && [[ "${#files[@]}" == 1 ]]
+       then
+         if [[ "$files" == *\ --\ Audiobook.m4b ]]
+          then
+            m4bin="$files"
+         elif [[ "$files" == *m4b ]]
+          then
+            m4bin="${files/.m4b/ -- Audiobook.m4b}"
+            mv "$files" "$m4bin"
+         fi
+      else
+        echo "No single & appropriate input file found or specified, please check and retry..."
+        ls
+        exit 1
+      fi
+fi
+}
+
+
+
 ####################################
 #start
 
 [[ "$1" == @(edit|e|nano) ]] && editscript
 
-#[[ ! $1 =~ .+\ --\ Audiobook.m4b ]] && echo "No file name give..." && exit
-if [[ "$1" != *\ --\ Audiobook.m4b ]]; then echo "Improper file name give..." && exit; fi
-m4bin="$1"
-echo "$m4bin"
+filecheck "$1" && [[ ! "$?" == 0 ]] && exit
+
 mediainfo "$m4bin"
 #mediainfo "$m4bin"|grep Menu; pause
+pause
 
-[[ ! $(mediainfo "$m4bin"|grep Menu) =~ ^Menu ]] && echo quartero4 && quartero4 "$1" && exit
+
+[[ ! $(mediainfo "$m4bin"|grep Menu) =~ ^Menu ]] && quartero4 "$m4bin" && exit
 
 
 duration=$(mediainfo "$m4bin" |grep -E ^Duration\ |uniq)
@@ -203,7 +235,7 @@ echo "$duration"
 
 convertdir="$CACHE/convert-$title"
 
-[[ $convertdir == *\'* ]] && convertdir="${convertdir//\'}"  #check $convertdir for \'s and remove them
+[[ "$convertdir" == *\'* ]] && convertdir="${convertdir//\'}"  #check $convertdir for \'s and remove them
 
 mkdir "$convertdir"
 
@@ -224,13 +256,17 @@ for m4afile in *m4a
 #   [[ "$m4afila" =~ "$regexexp" ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"
 # done
 
-#screen sh -c 'cd $CACHE/convert-$title; bash'
-#screen sh -c "cd $convertdir; bash; pwd; read -p x"
 screencmd+="cd \"$convertdir\"; "
-screencmd+="bash"
-screen sh -c "${screencmd[@]}"
+screencmd+="bash -c 'echo "screencmd+"'; "
+#screen sh -c "${screencmd[@]}"
+#pause "Resume from screen...?"
 
-pause "Resume from screen...?"
+printf '\n'
+ls "$convertdir"
+printf '\n'
+
+pause "$ulonControl-Z to suspend to change to $convertdir and adjust chapter names?$uloff"
+
 
 printf '\nDuration of the original m4b file: %s' "$duration"
 
@@ -254,10 +290,11 @@ mv "$title -- Audiobook.opus" "$swd"
 
 cd "$swd"
 
-printf 'The duration if the %s -- Part *opus is %s\n\n' "$ititle" "$duration"
+printf 'The duration of the %s -- Part *opus:\n%s\n\n' "$ititle" "$duration"
 
-rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
-rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ ??:*.opus
+cd 
+rmyn "Remove $convertdir/tmp? " "...Leaving $convertdir/tmp" rm -r "$convertdir"/tmp
+rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
 
 
 printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
