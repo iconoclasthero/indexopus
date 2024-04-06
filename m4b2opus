@@ -216,24 +216,16 @@ fi
 filecheck "$1" && [[ ! "$?" == 0 ]] && exit
 
 mediainfo "$m4bin"
-#mediainfo "$m4bin"|grep Menu; pause
-pause
-
 
 [[ ! $(mediainfo "$m4bin"|grep Menu) =~ ^Menu ]] && quartero4 "$m4bin" && exit
 
-
 duration=$(mediainfo "$m4bin" |grep -E ^Duration\ |uniq)
-
 title="${m4bin% -- *}"
-
 swd="$PWD"
+convertdir="$CACHE/convert-$title"
 
 echo "$m4bin"
-
 echo "$duration"
-
-convertdir="$CACHE/convert-$title"
 
 [[ "$convertdir" == *\'* ]] && convertdir="${convertdir//\'}"  #check $convertdir for \'s and remove them
 
@@ -244,17 +236,11 @@ m4bsplit "$m4bin" "$convertdir"
 cd "$convertdir"
 
 rexexexp='.*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\ |\.]'
-#for m4afile in *m4a; do [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][. ] ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"; done
 
 for m4afile in *m4a
  do
    [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\.\ ] ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"
  done
-
-#for m4afile in *m4a
-# do
-#   [[ "$m4afila" =~ "$regexexp" ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"
-# done
 
 screencmd+="cd \"$convertdir\"; "
 screencmd+="bash -c 'echo "screencmd+"'; "
@@ -303,16 +289,6 @@ checkdur
 rmr *m4b "$convertdir"
 
 exit
-
-
-
-
-
-
-
-
-
-
 
 
 all of this is extra...

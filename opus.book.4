@@ -1,23 +1,20 @@
 #!/bin/bash
 
-editdate="Sat Dec 24 12:56:22 PM EST 2022"
+# nb: the swp file that editscript relies on is provided by nano
+
+editscript(){
+  local scriptname script path swp; scriptname=$(realpath "$0" 2>/dev/null); script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
+     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptname") && exit
+     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit ;}
+
+pause(){ read -p "$*" ; }
+
+[[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
 
 shopt -s extglob
 scriptname="$(realpath $0)"
 pidfile="/tmp/.opus.book.pids"
 threads=4
-
-function editscript(){
-if [[ "$1" == "edit" ]] || [[ "$1" == "e" ]]; then
- (/usr/bin/nano "$scriptname")
- exit 1
-fi
-}
-
-function pause(){
-   read -p "$*"
-}
-
 
 function threadno(){
  filenum=$(ls *.@(flac|mp3|MP3|wav|m4?|ogg|MP4|mp4|wma)|wc -l)
@@ -32,10 +29,8 @@ function ffmpegs(){
 function ffmpeg2(){
     for file in *.@(flac|mp3|MP3|wav|m4?|ogg|MP4|mp4|wma) #2022.12.23 added MP4|mp4 support #2023.09.06 added wma support
      do
-      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -ar 24k -frame_duration:a 60 -ar 24000 "${file%.*}.opus"
-#      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -acodec libopus -b:a 64k "${file%.*}.opus"&
-#      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -frame_duration:a 60 "/dev/shm/cache/${file%.*}.opus"
-#      mv "/dev/shm/cache/${file%.*}.opus" "$PWD"
+      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -frame_duration:a 60 -ar 24000 "${file%.*}.opus"
+#      ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -acodec libopus -b:a 17k "${file%.*}.opus"&
      done
 }
 
@@ -76,6 +71,16 @@ printf '%s%% file size reduction\n' "$r"
 }
 
 
+function breakout(){
+while IFS= read -r pid
+ do
+  if [[ "$pid" == *$script* ]] || [[ "$pid" == *ffmpeg* ]]
+   then
+    echo "${pid% pts*}" >> "$pidfile"
+  fi
+  done< <(ps --tty $(tty) Sf)
+  opusbook4ka
+}
 
 script="${0#*\/}"
 
@@ -88,25 +93,11 @@ if [ -f ".opus.book.pids" ]
 #  rm ".$script.pids"
 # fi
 
-
-function breakout(){
-while IFS= read -r pid
- do
-  if [[ "$pid" == *$script* ]] || [[ "$pid" == *ffmpeg* ]]
-   then
-    echo "${pid% pts*}" >> "$pidfile"
-  fi
-  done< <(ps --tty $(tty) Sf)
-  opusbook4ka
-}
-
 trap '{ breakout; exit 1; }' INT
 
 #printf "\n\n\n\nInterrupt caught: killall %s killall ffmpeg \n\n\n\n" "${0#*\/}"
 #rm pids;while IFS= read -r pid; do if [[ "$pid" == *ffmpeg* ]] || [[ "$pid" == *opus.book.* ]]; then echo "${pid% pts*}">>pids; fi; done < <(ps --tty $(tty) Sf)
 #exec "killall $script ffmpeg"; killall ffmpeg; exec "killall $script"; killall $script; killall $script; killall ffmpeg; exit 1; }' INT
-
-editscript "$1"
 
 for g in *@(flac|mp3|MP3|wav|m4?|ogg|wma);
  do
@@ -126,8 +117,6 @@ while [ $i -le $threads ]
    then
 #    ffmpegs "$1"&
 #    ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$1" -acodec libopus -b:a 17k "${1%.*}.opus"&
-#   ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$1"  -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -frame_duration:a 60 "${1%.*}".opus&
-#   ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$1"  -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -frame_duration:a 60 "${1%.*}".opus&
       ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0" -c:a libopus -b:a 17k -ar 24k -frame_duration:a 60 -ar 24000 "${file%.*}.opus"
 
    else

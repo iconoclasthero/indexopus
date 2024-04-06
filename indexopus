@@ -15,8 +15,12 @@
 
 shopt -s extglob
 scriptname=$(realpath "$0")
-ulon=$(tput smul)  #underline on
-uloff=$(tput rmul) #underline off
+ulon="$(tput smul)"  #underline on
+uloff="$(tput rmul)" #underline off
+red="$(tput setaf 9)" #red fg
+white="$(tput setaf 15)" #white fg
+tput0="$(tput sgr0)" #reset tput changes
+bold="$(tput bold)" #bold on
 
 function editscript(){
   local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
@@ -33,7 +37,7 @@ confirm(){
   read -rp " " -n1 ans
    do
      printf '\n'
-     case $ans in [Yy]) return 0;; [Nn]) return 1;;
+     case "$ans" in [Yy]) return 0;; [Nn]) return 1;;
      esac
    done
 }
@@ -105,7 +109,7 @@ for i in "$title -- Part "*.opus
       printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna"|tee -a ./tmp/opusindex
    fi
       d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
-
+       echo this is after the ffprobe
 #      d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
       t=$(echo "$d + $t" | bc)
 done
@@ -117,16 +121,29 @@ done
 
 [[ "$1" == @(edit|e|nano) ]] && editscript
 
-#if [[ "$1" == @(edit|e|nano) ]]; then editscript; fi
-
-#if ! compgen -G ./*\ --\ Part\ ??\:\ *.opus > /dev/null
-# then
-#   printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
-#   exit
 if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) > /dev/null
  then
-   printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
-   exit
+   if compgen -G @(*\ --\ Chapter\ ??*.opus|*\ --\ Disc\ ??.opus) > /dev/null
+     then
+       for renopus in *Chapter\ ??*.opus; do [[ -f "$renopus" ]] && mv "$renopus" "${renopus/ Chapter / Part }"; done
+       for renopus in *Disc\ ??.opus; do [[ -f "$renopus" ]] && mv "$renopus" "${renopus/ Disc / Part }"; done
+   fi
+
+
+   for renopus in *Part\ 01*.opus
+    do
+     echo
+    done
+   if [[ "${renopus/ -- Part / -- Part 00: Part }" == *\ --\ Part\ ??\:\ *.opus ]]
+     then
+       for i in *opus
+         do
+           mv "$i" "${i/ -- Part / -- Part 00: Part }"
+         done
+   else
+     printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
+     exit
+   fi
 fi
 
 #ffprobe -sexagesimal -> "00:00:00.00"
@@ -157,8 +174,7 @@ if [[ -f ./"$output" ]]
    fi
 fi
 
-#duration=$(find -type f -name "$title -- Part ??:*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
-duration=$(find -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
 
 printf '\n%sGenerating the index for %s from...\n\n' "$elipsis" "$ititle"
 ls "$title -- Part "*.opus
@@ -172,40 +188,21 @@ for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus)
  do
    if [[ "$f" == *\'* ]]
     then
-	   ff="${f//\'/\'\\\'\'}"  #ffmpeg will not take filenames with ' in them, they must be quoted:
-       echo "$ff"
-       echo "file '$PWD/$ff'" >> ./tmp/opusfiles
-#    elif [[ "$f" == *\:* ]]
-#     then
-#	   ff="${f//\:/\'\\\:\'}"
-#       echo "$ff"
-#       echo "file '$PWD/$ff'" >> ./tmp/opusfiles
+       ff="${f//\'/\'\\\'\'}"  #ffmpeg will not take filenames with ' in them, they must be quoted:
+       dir="$PWD"
+       [[ "$PWD" = *\'* ]] && dir="${PWD//\'/\'\\\'\'}"
+       echo "file '$dir/$ff'" >> ./tmp/opusfiles
     else
       echo "file '$PWD/$f'" >> ./tmp/opusfiles
     fi
 done
 
-#if [[ -f "./$output" ]]
-# then
-#  if ! confirm "Skip overwrite?"
-#   then
-     ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "./tmp/opusfiles" -n -acodec copy "./tmp/$output"
-#   else
-#     mv "$output" ./tmp
-#  fi
-#fi
+ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "./tmp/opusfiles" -n -acodec copy "./tmp/$output"
+[[ "$?" != 0 ]] && echo && echo "ffmpeg failed to concatinate; exit 1" && echo && exit 1
 
 printf '\n\n...Incorporating index into %s -- Audiobook.opus...\n\n' "$ititle"
 
-pause "Press any key to begin adding the index to $ioutput..."
-   mv "./tmp/$output" "$output"
-
-
-###while read -r chaptag
-### do
-###   opustags -i -a "$chaptag" "$output"
-####   ffmpeg -i "$output" -metadata "\"$chaptag\"" -acodec copy "./tmp/$output"
-### done < "./tmp/opusindex"
+mv "./tmp/$output" "$output"
 
 while read -r chaptag
  do
@@ -214,24 +211,28 @@ while read -r chaptag
 
 opustags -i "$output" "${args[@]}"
 
-#   ffmpeg -i "$output" -metadata "\"$chaptag\"" -acodec copy "./tmp/$output"
-
 printf '...Chapter info added...\n\n'
 
 if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null;
  then
    printf '...Checking output from mediainfo...\n\n'
-   mediainfo "$output"
+   mediainfo "$output"|grep -A 9 -E 'Audio$' #|grep -C 18 --color=always 'Duration.*$'
+   mediainfo "$output"|grep -A 9 -E 'Audio$'|grep --color=always 'Duration.*$'
  elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null ;
   then
     printf 'Checking the output from ffprobe...\n\n'
     ffprobe "$output"
+ else
+  echo "Indexed opus file not found! Exit 1"
+  exit 1
 fi
 
-printf 'The duration if the %s -- Part *opus is %s\n\n' "$ititle" "$duration"
+printf '\nThe duration of the %s -- Part *opus is %s%s%s%s\n\n' "$ititle" "$bold" "$red" "$duration" "$tput0"
 
-rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
-rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ ??:*.opus
+#rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
+#rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ ??:*.opus
+
+rmyn "Remove temporary files? (y/n) " "Deleting temporary files" rm -r "$title"\ --\ Part\ ??:*.opus ./tmp
 
 printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 
