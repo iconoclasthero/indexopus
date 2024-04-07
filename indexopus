@@ -22,7 +22,7 @@ white="$(tput setaf 15)" #white fg
 tput0="$(tput sgr0)" #reset tput changes
 bold="$(tput bold)" #bold on
 
-function editscript(){
+editscript(){
   local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
      if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
      else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
@@ -41,7 +41,6 @@ confirm(){
      esac
    done
 }
-
 
 #unused
 tagtt(){
@@ -62,7 +61,7 @@ rmyn(){
    do
      case "$rmyn" in
        [yY] ) "${@:3}"; break;;
-       [nN] ) printf '%s\n' "$2"; break;;
+       [nN] ) printf '\n%s\n' "$2"; break;;
           * ) printf "Invalid response...\n";;
      esac
    done
@@ -186,10 +185,10 @@ printf '\n...Concatenating %s -- Part ??: *.opus...\n\n' "$ititle"
 
 for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus)
  do
-   if [[ "$f" == *\'* ]]
+   if [[ "$PWD/$f" == *\'* ]]
     then
-       ff="${f//\'/\'\\\'\'}"  #ffmpeg will not take filenames with ' in them, they must be quoted:
-       dir="$PWD"
+       ff="$f"; dir="$PWD"
+       [[ "$f" == *\'* ]] && ff="${f//\'/\'\\\'\'}" || ff="$f"  #ffmpeg will not take filenames with ' in them, they must be quoted:
        [[ "$PWD" = *\'* ]] && dir="${PWD//\'/\'\\\'\'}"
        echo "file '$dir/$ff'" >> ./tmp/opusfiles
     else
@@ -216,23 +215,31 @@ printf '...Chapter info added...\n\n'
 if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null;
  then
    printf '...Checking output from mediainfo...\n\n'
-   mediainfo "$output"|grep -A 9 -E 'Audio$' #|grep -C 18 --color=always 'Duration.*$'
-   mediainfo "$output"|grep -A 9 -E 'Audio$'|grep --color=always 'Duration.*$'
- elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null ;
-  then
-    printf 'Checking the output from ffprobe...\n\n'
-    ffprobe "$output"
- else
-  echo "Indexed opus file not found! Exit 1"
-  exit 1
+ #   mediainfo "$output"|grep -A 9 -E 'Audio$' #|grep -C 18 --color=always 'Duration.*$'
+ #   mediainfo "$output"|grep -A 9 -E 'Audio$'|grep --color=always 'Duration.*$'
+ #   outdur=$(mediainfo "$output"|grep -A 9 -E 'Audio$'|grep --color=always 'Duration.*$')
+   outdur="$(mediainfo -f "$output"|grep Duration|head -n1)"
+   outdur="${outdur#*: }"
+   outdur="$(echo "$outdur" | perl -nle '/([0-9\.]+)/ && ($t += $1) && printf "%02d:%02d:%02d\n", $t/3600000, ($t/60000)%60, ($t/1000)%60')"
+
+   data=("The duration of the $ititle -- Part *opus is ~$bold$red$duration$tput0"
+         "The duration of the $ititle -- Audiobook.opus is ~$bold$red$outdur$tput0")
+
+   # Print the aligned data using column, right justifying durations
+   printf '%s\n' "${data[@]}" | column -s "~" -t -R 2
+
+   elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null ;
+     then
+       printf 'Checking the output from ffprobe...\n\n'
+       ffprobe "$output"
+      printf 'Original duration... %s' "$duration"
+   else
+     echo "Indexed opus file not found! Exit 1"
+     exit 1
 fi
 
-printf '\nThe duration of the %s -- Part *opus is %s%s%s%s\n\n' "$ititle" "$bold" "$red" "$duration" "$tput0"
 
-#rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
-#rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ ??:*.opus
-
-rmyn "Remove temporary files? (y/n) " "Deleting temporary files" rm -r "$title"\ --\ Part\ ??:*.opus ./tmp
+rmyn "Remove temporary files? (y/n) " "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ ??:*.opus ./tmp
 
 printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 
