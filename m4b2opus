@@ -339,7 +339,8 @@ printf '\n\n\n'
 
 printf '\n'
 printf '\n%s----------  Calling external dependency: %sindex-opus%s  ----------\n' "$bold" "$red" "$tput0"
-indexopus "$title"  # this is a dependency, don't make a funciton.
+echo indexopus "$title"  # this is a dependency, don't make a funciton.
+indexopus "$title"
 printf '\n'
 printf '\n%s----------  Leaving external dependency: %sindex-opus%s  ----------\n' "$bold" "$red" "$tput0"
 

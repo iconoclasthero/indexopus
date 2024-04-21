@@ -87,11 +87,9 @@ is_even() {
 
 
 gettitle(){
-for title in *Part\ 0*.opus
- do
-   ext="$title##*."
-   title="${title% -- Part*}"
- done
+titles=(*Part\ 0?*.opus)
+ext="${titles[0]##*.}"
+[[ ! -n "$title" ]] && title="${titles[0]% -- Part*}"
 ititle="${ulon}$title${uloff}"
 output="$title -- Audiobook.opus"
 ioutput="$ititle -- Audiobook.opus"
@@ -179,7 +177,13 @@ fi
 
 #xgettitle
 
-[[ -n "$1" ]] && title="$1" || gettitle
+[[ -n "$1" ]] && title="$@"
+
+gettitle "$title"
+
+
+echo "$title"
+pause
 
 if [[ -f ./"$output" ]]
  then
