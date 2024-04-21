@@ -1,12 +1,18 @@
 #!/bin/bash
 #depends opustags, ffmpeg, index-opus, opus.book.
+
 pause(){ read -p "$*" ; }
+
 #trap pause DEBUG
+shopt -s nullglob
 
 scriptname=$(realpath "$0")
 ulon=$(tput smul)  #underline on
 uloff=$(tput rmul) #underline off
-
+bold="$(tput bold)"  #bold on
+tput0="$(tput sgr0)" #clear tput
+red="$(tput setaf 9)" #red fg
+white="$(tput setaf 15)" #white fg
 
 #################################################################################
 
@@ -31,15 +37,15 @@ checkdur(){
   m4a=(*m4a)
   m4b=(*m4b)
   opus=(*opus)
-  [[ -e "$m4a" ]] &&
-    printf '\nDuration of %s : ' "${m4a[@]}" &&
-    find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
-  [[ -e "$m4b" ]] &&
-    printf '\nDuration of %s : ' "${m4b[@]}" &&
-    find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
-  [[ -e "$opus" ]] &&
-    printf '\nDuration of %s : ' "${opus[@]}" &&
-    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+  printf '\n%sDuration(s):%s\n' "$bold" "$tput0"
+  [[ "${#m4a[@]}" -gt 0 ]] &&
+    printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white"  "${m4a[@]}" "$tput0"
+
+  [[ "${#m4b[@]}" -gt 0 ]] &&
+    printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${m4b[@]}" "$tput0"
+
+  [[ "${#opus[@]}" -gt 0 ]] &&
+    printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
 }
 
 
@@ -52,11 +58,11 @@ m4bsplit(){
 
 #     Chapter #0:0: start 0.000000, end 1290.013333
 #       first   _     _     start    _     end
-
+local stamp bpath outputdur START first start end partnum n
 outputdir="$2"
 START=1
-basename "$PWD"
-stamp=$(date +%s)
+bpath="$(basename "$PWD")"
+stamp="$(date +%s)"
 
 while [ "$#" -gt 0 ]; do
 
@@ -71,10 +77,13 @@ while read -r first _ _ start _ end; do
 
     if [[ "$n" -lt 10 ]]; then partnum="0$n"; else partnum="$n"; fi
 
-    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "$outputdir/$title -- Part $partnum: $chapter.m4a" </dev/null
+#    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "$outputdir/$title -- Part $partnum: $chapter.m4a" </dev/null
+    echo "...Creating $title -- Part $partnum: $chapter.m4a"
+    readarray -t ffoutput < <(ffmpeg -n -nostdin -hide_banner -stats -v error -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "$outputdir/$title -- Part $partnum: $chapter.m4a" 2>&1)
 
+#    [[ "$ffoutput" = size=* ]] &&
+#    echo "${ffoutput[@]}"
     ((n++))
-
   fi
 done <".tmp$stamp"
 
@@ -101,6 +110,38 @@ confirm(){
 }
 
 
+
+calculatetime(){
+duration=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+hours=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' | tail -n 1)
+minutes=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' | tail -n 1)
+seconds=$(find -type f -name "*$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' | tail -n 1)
+
+[[ "$hours" =~ "0*(.*)" ]] && hours=${BASH_REMATCH[1]}
+[[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
+[[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
+
+printf "Duration %s\n" "$duration"
+
+hours="${hours#0}"
+hourmin=$(( hours*60 ))
+##echo "hourmin $hourmin"
+minutes="${minutes#0}"
+secmin=$((hourmin+minutes))
+secmin=$((secmin*60))
+seconds="${seconds#0}"
+##echo "secmin  $secmin"
+##echo "seconds $seconds"
+totalsec=$(( "$seconds" + "$secmin" ))
+##echo "totalsec $totalsec"
+divsec=$(python3 -c "print($totalsec/4)")
+##echo "divsec $divsec"
+}  #calculatetime()
+
+
+
+
+
 #unused
 tagtt(){
 for i in *\ --\ Part\ ??\:\ *opus
@@ -116,7 +157,7 @@ done
 
 rmyn(){
   while true
-  read -rp "$1" rmyn
+  read -rp "$1"$'\n ' rmyn
    do
      case "$rmyn" in
        [yY] ) "${@:3}"; break;;
@@ -180,7 +221,6 @@ filecheck() {
   elif [[ "$1" == *\ --\ Audiobook.m4b ]] && [[ -f "$1" ]]  #suggested this is poor design to ignore the input if it is not in the correct format.
     then
       m4bin="$1"
-      echo "$m4bin"
   else
       files=(*m4b)
       if [[ -f "$files" ]] && [[ "${#files[@]}" == 1 ]]
@@ -210,74 +250,110 @@ filecheck() {
 
 filecheck "$1" && [[ ! "$?" == 0 ]] && exit
 
+allm4s=(*m4?)
+
+printf '\nAll *m4?: \n'
+printf ' %s%s%s\n' "$red" "${allm4s[@]}" "$white"
+printf '\n'
+
 mediainfo "$m4bin"
 
-[[ ! $(mediainfo "$m4bin"|grep Menu) =~ ^Menu ]] && quartero4 "$m4bin" && exit #quartero4 is a dependency and needs to be folded into this as a function
+m4bindur="$(mediainfo "$m4bin" |grep -E ^Duration\ |uniq)"
 
+printf '\n%sStarting .m4bfile:%s\n' "$bold" "$tput0"
+printf ' %s%s%s%s\n' "$bold" "$red" "$m4bin" "$tput0"
+#printf '%s%s%s\n' "$red" "$bold" "$m4bin" "$tput0"
+printf ' %s%s%s\n' "$red" "$bold" "$m4bindur" "$tput0"
+printf '\n\n'
 
-m4bindur=$(mediainfo "$m4bin" |grep -E ^Duration\ |uniq)
-m4bindur="${m4bin#*: }"
 title="${m4bin% -- *}"
 swd="$PWD"
 convertdir="$CACHE/convert-$title"
 
-echo "$m4bin"
-echo "$m4bindur"
-
 [[ "$convertdir" == *\'* ]] && convertdir="${convertdir//\'}"  #check $convertdir for \'s and remove them
 
-mkdir "$convertdir"
+[[ ! -d "$convertdir" ]] && mkdir "$convertdir"
 
-m4bsplit "$m4bin" "$convertdir"
+if [[ ! "$(mediainfo "$m4bin"|grep Menu)" =~ ^Menu ]] ## && quartero4 "$m4bin" && exit #quartero4 is a dependency and needs to be folded into this as a function
+  then
+    qtcnt=1
+    calculatetime "$m4bin"
+#    quarter "$m4bin" "$convertdir" "$divsec"
+    while [[ "$qtcnt" -lt 5 ]]
+      do
+       printf '%s: ' "$qtcnt"
+       ffmpeg -n -nostdin -hide_banner -stats -v error -ss $(python -c "print(($qtcnt-1)*$divsec)") -to $(python -c "print($qtcnt*$divsec)") -i "$m4bin" -vn -acodec copy "$convertdir/${m4bin%% -- *} -- Part 0$qtcnt.m4a"
+       ((qtcnt++))
+     done
+    cd "$convertdir"
+    for i in First Second Third Fourth
+      do
+        ((n++))
+        for f in *\ --\ Part\ 0"$n".*
+          do
+           mv "$f" "${f/./: $i Quarter.}"
+          done
+       done
+  else
+    m4bsplit "$m4bin" "$convertdir"
+    cd "$convertdir"
+    regexexp='.*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\ |\.]'
+    for m4afile in *m4a
+      do
+        [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\.\ ] ]] &&
+           mv "$m4afile" "${m4afile/Chapter /Chapter 0}"
+      done
+fi
 
 cd "$convertdir"
-
-rexexexp='.*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\ |\.]'
-
-for m4afile in *m4a
- do
-   [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\.\ ] ]] && mv "$m4afile" "${m4afile/Chapter /Chapter 0}"
- done
-
-screencmd+="cd \"$convertdir\"; "
-screencmd+="bash -c 'echo "screencmd+"'; "
-#screen sh -c "${screencmd[@]}"
-#pause "Resume from screen...?"
 
 printf '\n'
 ls "$convertdir"
 printf '\n'
 
-pause "${ulon}Control-Z to suspend to change to $convertdir and adjust chapter names?${uloff} "
+pause "${ulon}${red}Control-Z to suspend to change to $convertdir and adjust chapter names?${uloff}${white} "
 
+printf '\n'
+printf '%s\n----------  Calling external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
 opus.book.4  #this is a dependency; needs to be made a function
+printf '\n'
+printf '%s\n----------  Leaving external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
+
+#######
 
 [[ ! -d "$convertdir/m4a" ]] && mkdir "$convertdir/m4a"
 
 mv *.m4a ./m4a
 
-opuspartdur="$(/home/bvargo/bin/opusdur)"     # this is a dependency, make a function
+opuspartdur="$(/home/$USER/bin/opusdur)"     # this is a dependency, make a function
 opuspartdur="${opuspartdur#*Duration: }"
 
 clear -x
 
-printf 'Duration of the original m4b file: %s\n' "$m4bindur"
-printf 'Duration of the .opus part files: %s\n' "$opuspartdur"
-#printf '%s Duration: %s\n' "$1" "${duration#*: }"
+m4bindur="${m4bindur#*: }"
+printf '\n\n'
+printf '%sDuration of the original m4b file: %s%s%s\n' "$bold" "$red" "$m4bindur" "$tput0"
+printf '%sDuration of the .opus part files: %s%s%s\n' "$bold" "$red" "$opuspartdur" "$tput0"
+printf '\n\n\n'
 
-# why is this being done here?  it should be after all the checks are done.
-#[[ -d ./tmp ]] && ls ./tmp && rm -ri m4a
 
-index-opus "$title"  # this is a dependency, don't make a funciton.
+printf '\n'
+printf '\n%s----------  Calling external dependency: %sindex-opus%s  ----------\n' "$bold" "$red" "$tput0"
+indexopus "$title"  # this is a dependency, don't make a funciton.
+printf '\n'
+printf '\n%s----------  Leaving external dependency: %sindex-opus%s  ----------\n' "$bold" "$red" "$tput0"
 
 mv "$title -- Audiobook.opus" "$swd"
 
 cd "$swd"
+
 checkdur
 
-[[ ! -f *\ --\ Audiobook.opus ]] && echo "No opus audiobook found! exit 1" && exit 1
+[ ! -f *\ --\ Audiobook.opus ] && echo "No opus audiobook found! exit 1" && exit 1
 
-rmyn "Remove $convertdir/tmp, $convertdir/m4a? " "...Leaving $convertdir/tmp, $convertdir/m4a" rm -r "$convertdir"/tmp "$convertdir"/m4a
+printf '\n\n'
+
+rmyn "Remove the conversion ../tmp and ../m4a directories? " "...Leaving ../tmp and ../m4a" rm -r "$convertdir"/tmp "$convertdir"/m4a
 rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
 rmr *m4b "$convertdir"   #rmr is a dependency
 printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"

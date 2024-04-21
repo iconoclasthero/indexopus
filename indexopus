@@ -80,6 +80,12 @@ yn(){
 }
 
 
+is_even() {
+    if [ $(( $1 % 2 )) -eq 0 ]; then return 0
+    else return 1; fi
+}
+
+
 gettitle(){
 for title in *Part\ 0*.opus
  do
@@ -92,26 +98,39 @@ ioutput="$ititle -- Audiobook.opus"
 }
 
 createindex(){
+declare -A associndex
+chno=0
 for i in "$title -- Part "*.opus
  do
-   chno="${i#*Part }"; chno="${chno%%:*}"; chno="${chno#00}"; chno="${chno#0}"
+#   chno="${i#*Part }"; chno="${chno%%:*}"; chno="${chno#00}"; chno="${chno#0}"
    chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna#*: }"
 
    if [[ "$t" != 0 ]]
     then
       ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
-      printf 'CHAPTER%03d=%s\n' "$chno" "$ts"|tee -a ./tmp/opusindex
-      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna"|tee -a ./tmp/opusindex
+      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  ./tmp/opusindex
+      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  ./tmp/opusindex
+      createdindex+=( "$i" )
+      createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
+      createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
+
     else
       ts="00:00:00.000"
-      printf 'CHAPTER%03d=%s\n' "$chno" "$ts"|tee -a ./tmp/opusindex
-      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna"|tee -a ./tmp/opusindex
+      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> ./tmp/opusindex
+      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  ./tmp/opusindex
+      createdindex+=( "$i" )
+      createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
+      createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
    fi
       d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
-       echo this is after the ffprobe
 #      d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
       t=$(echo "$d + $t" | bc)
+      ((chno++))
 done
+
+#printf 'Word -> %s\n' "${createdindex[@]}" #|column --table -s '~' -o ' | '
+#column ./tmp/opusindex IFS="$'\n'" -o " | " -t
+
 }
 
 
@@ -137,7 +156,8 @@ if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) > /dev/n
      then
        for i in *opus
          do
-           mv "$i" "${i/ -- Part / -- Part 00: Part }"
+           n="${i#* -- Part }"; n="${n%%.opus}"
+           mv "$i" "${i/ -- Part / -- Part $n: Part }"
          done
    else
      printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
@@ -157,9 +177,9 @@ if [[ -d ./tmp ]]
 fi
 
 
-gettitle
+#xgettitle
 
-#title="$1"
+[[ -n "$1" ]] && title="$1" || gettitle
 
 if [[ -f ./"$output" ]]
  then
@@ -176,11 +196,22 @@ fi
 duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
 
 printf '\n%sGenerating the index for %s from...\n\n' "$elipsis" "$ititle"
-ls "$title -- Part "*.opus
-printf '\n'
+#ls "$title -- Part "*.opus
+#printf '\n'
 
 createindex
 
+#arrayno="${#createdindex[@]}"
+#ii=0
+#while [[ "$ii" -lt "$arrayno" ]]
+# do
+#   printf '%s' "${createdindex[$ii]}"
+#   if  is_even "$ii"; then printf " \t"; fi
+#   if ! is_even "$ii"; then printf "\n"; fi
+#   ((ii++))
+# done
+
+printf '%s:~%s~%s\n\n' "${createdindex[@]}"|paste|column -t -s "~"
 printf '\n...Concatenating %s -- Part ??: *.opus...\n\n' "$ititle"
 
 for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus)

@@ -14,24 +14,31 @@ pause(){ read -p "$*" ; }
 
 cd-(){ cd - >/dev/null ; }
 
+rmyn(){
+  while true
+  read -rp "$1"$'\n ' rmyn
+   do
+     case "$rmyn" in
+       [yY] ) "${@:3}"; break;;
+       [nN] ) printf '%s\n' "$2"; break;;
+          * ) printf "Invalid response...\n";;
+     esac
+   done
+}
+
 calculatetime(){
 echo "this is \$1 $1"
 duration=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
 hours=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' | tail -n 1)
 minutes=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' | tail -n 1)
 seconds=$(find -type f -name "*$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' | tail -n 1)
-#hours=$((10#"$hours"))
-#minutes=$((10#$minutes))
-#seconds=$((10#$seconds))
+
 [[ "$hours" =~ "0*(.*)" ]] && hours=${BASH_REMATCH[1]}
-#[[ "$minutes" =~ "0*(.*)" ]] && minutes=BASH_REMATCH[1]}
 [[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
 [[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
 
 printf "Duration %s\n" "$duration"
-#if [[ $seconds -gt 29 ]]; then ((minutes++)); fi
 
-#printf "Duration of ${PWD##*/}: %02d:%02d hh:mm\n" ${hours#0} ${minutes#0}
 hours="${hours#0}"
 hourmin=$(( hours*60 ))
 echo "hourmin $hourmin"
@@ -39,16 +46,10 @@ minutes="${minutes#0}"
 secmin=$((hourmin+minutes))
 echo "secmin $secmin"
 secmin=$((secmin*60))
-#secmin=$(( 10#secmin ))
-#seconds=$(( 10#seconds ))
-#secmin="${secmin#0}"
 seconds="${seconds#0}"
 echo "secmin  $secmin"
 echo "seconds $seconds"
-#totalseconds=$(( seconds+60*minutes+60*hours*60 ))
-#totalsec=[[ "$(($((10#$seconds))+$((10#$secmin))))" ]]
 totalsec=$(( "$seconds" + "$secmin" ))
-#totalsec=$(($seconds+$secmin))
 echo "$totalsec"
 divsec=$(python3 -c "print($totalsec/4)")
 echo "$divsec"
@@ -96,7 +97,7 @@ while [[ "$count" -lt 5 ]]
     echo "$count"
 #echo '>>>>>       ffmpeg -i "$wholefile" -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -acodec copy "${wholefile%.*} -- Part 0$count.$ext" '
 #    ffmpeg -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$whilefile" -acodec copy "${wholefile%.*} -- Part 0$count.$ext"
-    ffmpeg -n -nostdin -hide_banner -stats -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$wholefile" -vn -acodec copy "$tmp/${wholefile%% -- *} -- Part 0$count.$outext"
+    ffmpeg -n -nostdin -hide_banner -stats -v error -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$wholefile" -vn -acodec copy "$tmp/${wholefile%% -- *} -- Part 0$count.$outext"
     ((count++))
   done
 done
@@ -127,7 +128,7 @@ printf '%s\n%s\n' "$(ls *\ Audiobook.opus)" "$(mediainfo *\ Audiobook.opus|grep 
 mv *\ Audiobook.opus ..
 
 rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
-rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ ->
+rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ *.opus
 cd-
 
 printf '%s\n%s\n' "$(ls *\ Audiobook.m4?)" "$(mediainfo *\ Audiobook.m4?|grep ^Duration\ |uniq)"
