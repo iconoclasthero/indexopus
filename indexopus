@@ -146,11 +146,8 @@ if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) > /dev/n
    fi
 
 
-   for renopus in *Part\ 01*.opus
-    do
-     echo
-    done
-   if [[ "${renopus/ -- Part / -- Part 00: Part }" == *\ --\ Part\ ??\:\ *.opus ]]
+   renopus=(*Part\ 01*.opus)
+   if [[ "${renopus[0]/ -- Part / -- Part 00: Part }" == *\ --\ Part\ ??\:\ *.opus ]]
      then
        for i in *opus
          do
@@ -175,8 +172,6 @@ if [[ -d ./tmp ]]
 fi
 
 
-#xgettitle
-
 [[ -n "$1" ]] && title="$@"
 
 gettitle "$title"
@@ -199,21 +194,9 @@ fi
 
 duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
 
-printf '\n%sGenerating the index for %s from...\n\n' "$elipsis" "$ititle"
-#ls "$title -- Part "*.opus
-#printf '\n'
+printf '\n%sGenerating the index for %s -- Audiobook.opus from...\n\n' "$elipsis" "$ititle"
 
 createindex
-
-#arrayno="${#createdindex[@]}"
-#ii=0
-#while [[ "$ii" -lt "$arrayno" ]]
-# do
-#   printf '%s' "${createdindex[$ii]}"
-#   if  is_even "$ii"; then printf " \t"; fi
-#   if ! is_even "$ii"; then printf "\n"; fi
-#   ((ii++))
-# done
 
 printf '%s:~%s~%s\n\n' "${createdindex[@]}"|paste|column -t -s "~"
 printf '\n...Concatenating %s -- Part ??: *.opus...\n\n' "$ititle"
@@ -247,12 +230,10 @@ opustags -i "$output" "${args[@]}"
 
 printf '...Chapter info added...\n\n'
 
-if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null;
+if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null
  then
    printf '...Checking output from mediainfo...\n\n'
- #   mediainfo "$output"|grep -A 9 -E 'Audio$' #|grep -C 18 --color=always 'Duration.*$'
- #   mediainfo "$output"|grep -A 9 -E 'Audio$'|grep --color=always 'Duration.*$'
- #   outdur=$(mediainfo "$output"|grep -A 9 -E 'Audio$'|grep --color=always 'Duration.*$')
+
    outdur="$(mediainfo -f "$output"|grep Duration|head -n1)"
    outdur="${outdur#*: }"
    outdur="$(echo "$outdur" | perl -nle '/([0-9\.]+)/ && ($t += $1) && printf "%02d:%02d:%02d\n", $t/3600000, ($t/60000)%60, ($t/1000)%60')"
@@ -263,7 +244,7 @@ if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null;
    # Print the aligned data using column, right justifying durations
    printf '%s\n' "${data[@]}" | column -s "~" -t -R 2
 
-   elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null ;
+   elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null
      then
        printf 'Checking the output from ffprobe...\n\n'
        ffprobe "$output"
