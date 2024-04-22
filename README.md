@@ -1,11 +1,16 @@
+
+
+# m4b2opus
+realistically, that's what this does.  there are pices that do other things, but m4b2opus takes the disparate pieces and chops up an audio book so it can be converted in parallel to opus, and stitched back together to get an indexed audiobook out of it.  at this point indexopus is being used by the script and index-opus will be removed.
+
+
+
 # indexopus
 This takes .opus chapter files and incorporates them into a single indexed file using ffmpeg, mediainfo, and opustags.
 depends: opustag, ffmpeg/ffprobe
 optional: mediainfo
 
-Files **must** be in the format of 'Title -- Part ##: Chapter Title.opus' and presently only works for .opus; there are other tools for e.g., m4b: use them.
-Presumably, however, this script could easily be changed out for another codec, however opustag would need to change to something else that can write metadata, e.g, ffmpeg which should be able to do any format.
-Tthat said, the author feels that this satisfices for the purposes at hand and if/when the codec changes, that bridge will be burnt when it is arrived upon.
+Files need to be in the format of 'Title -- Part ##: Chapter Title.opus'  
 
 ### Usage:
 From the directory containing your opus chapter files named in the correct format (takes no options):
