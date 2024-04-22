@@ -178,7 +178,6 @@ gettitle "$title"
 
 
 echo "$title"
-pause
 
 if [[ -f ./"$output" ]]
  then
