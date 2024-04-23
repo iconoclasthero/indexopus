@@ -135,7 +135,9 @@ done
 
 #### ---- Main Code ---- ####
 
-[[ "$1" == @(edit|e|nano) ]] && editscript
+[[ "$1" = @(edit|e|nano) ]] && editscript
+
+[[ "$1" = "-y" ]] && shift && rmmatch=true
 
 if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) > /dev/null
  then
@@ -172,14 +174,13 @@ if [[ -d ./tmp ]]
 fi
 
 
-[[ -n "$1" ]] && title="$@"
+[[ -n "$1" ]] && title="$1"
 
 gettitle "$title"
 
-
 echo "$title"
 
-if [[ -f ./"$output" ]]
+if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]
  then
    printf 'This directory already contains %s\n' "$ioutput"
    if confirm "Overwrite the existing file? (y/n)"
@@ -191,7 +192,11 @@ if [[ -f ./"$output" ]]
    fi
 fi
 
-duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+[[ "$2" ]] && duration="$2" ||
+           duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
+           xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+           perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
+           tail -n 1)
 
 printf '\n%sGenerating the index for %s -- Audiobook.opus from...\n\n' "$elipsis" "$ititle"
 
@@ -253,6 +258,11 @@ if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null
      exit 1
 fi
 
+[[ "$rmmatch" ]] &&
+   [[ "$duration" = "$outdur" ]] &&
+   rm -r "$title"\ --\ Part\ ??:*.opus ./tmp &&
+   printf 'Durations of part and indexed opus files match, deleting temporary files.\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput" &&
+   exit
 
 rmyn "Remove temporary files? (y/n) " "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ ??:*.opus ./tmp
 
