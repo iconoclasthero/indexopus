@@ -1,74 +1,155 @@
 #!/bin/bash
-# nb: the swp file that editscript relies on is provided by nano
+# depends: opustags, ffmpeg/ffprobe
+# optional: mediainfo
+# files must be in the format of Title -- Part ##: Chapter Title.opus and present ONLY works for .opus; there are other tools for e.g., m4b: use them.
+# presumably, this script could easily be changed out for another codec, however opustags would need to change to something else that can write metadata, e.g, ffmpeg which should be able to do any format.
+# that said, the author feels that this satisfices for the purposes at hand and if/when the codec changes, that bridge will be burnt when it is arrived upon.
+# Would like to make it so that the files do not need a chapter name and are iterated with 000, 001, 002, .... for Chapter Title
+# ffmpeg could presumably take over for opustags to eliminate that dependency and then all that would be required is ffmpeg
+# Also, given that tagging is being done, it might be useful to tag at least the tracknumber and the track title in this script rather than doing it after.
+#
+# Promlem with colons in the part description:
+# That could still indicate a problem if the code is later attempting to do shell arithmetic on the value, in which case you got lucky by having printf throw an error. You could fix that by adding a test and failing early, because printf won't cause the script to exit.
+# https://mywiki.wooledge.org/BashFAQ/054 -- How can I tell whether a variable contains a valid number?
+
+
+shopt -s extglob
+scriptname=$(realpath "$0")
+ulon="$(tput smul)"  #underline on
+uloff="$(tput rmul)" #underline off
+red="$(tput setaf 9)" #red fg
+white="$(tput setaf 15)" #white fg
+tput0="$(tput sgr0)" #reset tput changes
+bold="$(tput bold)" #bold on
 
 editscript(){
-  local scriptname script path swp; scriptname=$(realpath "$0" 2>/dev/null); script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
-     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptname") && exit
-     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit ;}
+  local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
+     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
+     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
+  fi; }
 
 pause(){ read -p "$*" ; }
 
-createindex(){
-declare -A associndex
-local t
+rmyn(){
+  while true
+  read -rp "$1" rmyn
+   do
+     case "$rmyn" in
+       [yY] ) "${@:3}"; break;;
+       [nN] ) printf '\n%s\n' "$2"; break;;
+          * ) printf "Invalid response...\n";;
+     esac
+   done
+}
+
+recreateindex(){
+local t chap_title chap_starts
 t=0
 chno=0
 
-[[ ! -d ./tmp ]] && mkdir ./tmp
-[[ -f ./tmp/opusindex ]] && rm ./tmp/opusindex
+readarray -t chap_titles < <(jq -r '.chapters[] | .title' metadata.json 2>/dev/null)
+readarray -t chap_starts < <(jq -r '.chapters[] | .start' metadata.json 2>/dev/null)
 
-for ((i=0;i<"${#chap_titles[@]}";i++))
+[[ ! "${chap_titles[@]}" ]] || [[ ! "${chap_starts[@]}" ]] &&
+   printf 'Error with %s/metadata.json; check and retry.\nexit 1' "$PWD" &&
+   exit 1
+
+title=( *\ --\ Audiobook.opus )
+
+[[ ! "${#title[@]}" -eq 1 ]] && printf 'No suitable audiobook found in pwd of format * -- Audiobook.opus\nCheck path %s and try again.\nexit 1' "$PWD" && exit 1
+
+for ((chno=0;chno<"${#chap_titles[@]}";chno++))
  do
-#   chno="${i#*Part }"; chno="${chno%%:*}"; chno="${chno#00}"; chno="${chno#0}"
-#   chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna#*: }"
-
    if [[ "$t" != 0 ]]
     then
       ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
       chna="${chap_titles[$chno]}"
       [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
-      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  ./tmp/opusindex
-      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  ./tmp/opusindex
-      createdindex+=( "$i" )
+      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  "$tmp/opusindex"
+      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
+      createdindex+=( "$chno" )
       createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
       createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
     else
       ts="00:00:00.000"
       chna="${chap_titles[$chno]}"
       [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
-      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> ./tmp/opusindex
-      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  ./tmp/opusindex
-      createdindex+=( "$i" )
+      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> "$tmp/opusindex"
+      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
+      createdindex+=( "$chno" )
       createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
       createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
    fi
-  #    d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
       t="${chap_starts[$i]}"
-      ((chno++))
-done ; }
-##createindex()##########################################################################
+done
+
+cat "$tmp/opusindex"
+if [[ "$rmmatch" = true ]]
+  then
+   writeindex
+elif confirm "Apply index? "
+  then
+   writeindex
+fi
+
+mediainfo *Audiobook.opus
+
+[[ "$rmmatch" = true ]] &&
+   rm -r "$tmp" ||
+   rmyn "Remove temporary files? (y/n) " "Leaving temporary files in $tmp" rm -r "$tmp"
+}
+##recreateindex()##############################################################################
+
+writeindex(){
+while read -r chaptag
+ do
+   args+=(-a "$chaptag")
+ done < "$tmp/opusindex"
+
+opustags -i "$output" "${args[@]}"
+printf '...Chapter info added...\n\n'
+}
+##writeindex()#################################################################################
 
 
-[[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
-
-readarray -t chap_titles < <(jq -r '.chapters[] | .title' metadata.json)
-readarray -t chap_starts < <(jq -r '.chapters[] | .start' metadata.json)
-
-n="${#chap_titles[@]}"
-#i=0
-#while read -r "${chap_titles[$i]}"
-#for ((i=0;i<"${#chap_starts[@]}";i++))
-#do chap_starts["$i"]=$(echo "${chap_starts[$i]}" | perl -nle '/([0-9\.]+)/ && ($t += $1) && printf "%02d:%02d:%02d\n", $t/3600000, ($t/60000)%60, ($t/1000)%60')
-#    ((i++))
-#done
-
-#echo "chap_starts[@]: ${chap_starts[@]}"
+confirm(){
+ local ans IFS=
+ while
+  printf '%s' "$1"
+  read -rp " " -n1 ans
+   do
+     printf '\n'
+     case "$ans" in [Yy]) return 0;; [Nn]) return 1;;
+     esac
+   done
+}
 
 
 
-createindex
-cat ./tmp/opusindex
+#### ---- Main Code ---- ####
+
+[[ "$1" = @(edit|e|nano) ]] && editscript
+
+[[ "$1" = "-y" ]] && shift && rmmatch=true
+[[ "$1" = "reindex" ]] && shift && reindex=true
+
+reindex=true
+
+tmp="/tmp/indexopus-$(date +%s)"
 
 
-#ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
+if [[ ! -d "$tmp" ]]
+  then
+    mkdir "$tmp"
+  else
+    rmdir -r "$tmp" && mkdir "$tmp"
+fi
 
+
+
+if [[ "$reindex" = true ]]
+ then
+   [[ "$1" = "-y" ]] && shift && rmmatch=true
+   recreateindex
+   exit
+fi

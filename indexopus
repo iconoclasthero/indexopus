@@ -87,7 +87,7 @@ is_even() {
 
 
 gettitle(){
-titles=(*Part\ 0?*.opus)
+titles=(*Part\ ??*.opus)
 ext="${titles[0]##*.}"
 [[ ! -n "$title" ]] && title="${titles[0]% -- Part*}"
 ititle="${ulon}$title${uloff}"
@@ -106,16 +106,16 @@ for i in "$title -- Part "*.opus
    if [[ "$t" != 0 ]]
     then
       ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
-      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  ./tmp/opusindex
-      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  ./tmp/opusindex
+      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  "$tmp/opusindex"
+      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
       createdindex+=( "$i" )
       createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
       createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
 
     else
       ts="00:00:00.000"
-      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> ./tmp/opusindex
-      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  ./tmp/opusindex
+      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> "$tmp/opusindex"
+      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
       createdindex+=( "$i" )
       createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
       createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
@@ -127,9 +127,82 @@ for i in "$title -- Part "*.opus
 done
 
 #printf 'Word -> %s\n' "${createdindex[@]}" #|column --table -s '~' -o ' | '
-#column ./tmp/opusindex IFS="$'\n'" -o " | " -t
+#column "$tmp/opusindex" IFS="$'\n'" -o " | " -t
 
 }
+
+
+
+recreateindex(){
+local t chap_title chap_starts
+t=0
+chno=0
+
+readarray -t chap_titles < <(jq -r '.chapters[] | .title' metadata.json 2>/dev/null)
+readarray -t chap_starts < <(jq -r '.chapters[] | .start' metadata.json 2>/dev/null)
+
+[[ ! "${chap_titles[@]}" ]] || [[ ! "${chap_starts[@]}" ]] &&
+   printf 'Error with %s/metadata.json; check and retry.\nexit 1' "$PWD" &&
+   exit 1
+
+title=( *\ --\ Audiobook.opus )
+
+[[ ! "${#title[@]}" -eq 1 ]] && printf 'No suitable audiobook found in pwd of format * -- Audiobook.opus\nCheck path %s and try again.\nexit 1' "$PWD" && exit 1
+
+for ((chno=0;chno<"${#chap_titles[@]}";chno++))
+ do
+   if [[ "$t" != 0 ]]
+    then
+      ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
+      chna="${chap_titles[$chno]}"
+      [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
+      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  "$tmp/opusindex"
+      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
+      createdindex+=( "$chno" )
+      createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
+      createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
+    else
+      ts="00:00:00.000"
+      chna="${chap_titles[$chno]}"
+      [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
+      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> "$tmp/opusindex"
+      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
+      createdindex+=( "$chno" )
+      createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
+      createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
+   fi
+      t="${chap_starts[$i]}"
+done
+
+cat "$tmp/opusindex"
+if [[ "$rmmatch" = true ]]
+  then
+   writeindex
+elif confirm "Apply index? "
+  then
+   writeindex
+fi
+
+mediainfo *Audiobook.opus
+
+[[ "$rmmatch" = true ]] &&
+   rm -r "$tmp" ||
+   rmyn "Remove temporary files? (y/n) " "Leaving temporary files in $tmp" rm -r "$tmp"
+}
+##recreateindex()##############################################################################
+
+writeindex(){
+while read -r chaptag
+ do
+   args+=(-a "$chaptag")
+ done < "$tmp/opusindex"
+
+opustags -i "$output" "${args[@]}"
+printf '...Chapter info added...\n\n'
+}
+##writeindex()#################################################################################
+
+
 
 
 
@@ -138,6 +211,23 @@ done
 [[ "$1" = @(edit|e|nano) ]] && editscript
 
 [[ "$1" = "-y" ]] && shift && rmmatch=true
+[[ "$1" = "reindex" ]] && shift && reindex=true
+
+tmp="/tmp/indexopus-$(date +%s)"
+
+if [[ ! -d "$tmp" ]]
+  then
+    mkdir "$tmp"
+  else
+    rmdir -r "$tmp" && mkdir "$tmp"
+fi
+
+if [[ "$reindex" = true ]]
+ then
+   [[ "$1" = "-y" ]] && shift && rmmatch=true
+   recreateindex
+   exit
+fi
 
 if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) > /dev/null
  then
@@ -146,7 +236,6 @@ if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) > /dev/n
        for renopus in *Chapter\ ??*.opus; do [[ -f "$renopus" ]] && mv "$renopus" "${renopus/ Chapter / Part }"; done
        for renopus in *Disc\ ??.opus; do [[ -f "$renopus" ]] && mv "$renopus" "${renopus/ Disc / Part }"; done
    fi
-
 
    renopus=(*Part\ 01*.opus)
    if [[ "${renopus[0]/ -- Part / -- Part 00: Part }" == *\ --\ Part\ ??\:\ *.opus ]]
@@ -166,19 +255,12 @@ fi
 d=0
 t=0
 
-if [[ -d ./tmp ]]
- then
-   rm -r ./tmp && mkdir ./tmp
- else
-   mkdir ./tmp
-fi
-
-
-[[ -n "$1" ]] && title="$1"
+[[ -n "$1" ]] && [[ "$1" != -y ]] && title="$1"
 
 gettitle "$title"
 
 echo "$title"
+
 
 if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]
  then
@@ -191,6 +273,7 @@ if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]
       exit
    fi
 fi
+
 
 [[ "$2" ]] && duration="$2" ||
            duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
@@ -212,27 +295,32 @@ for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus)
        ff="$f"; dir="$PWD"
        [[ "$f" == *\'* ]] && ff="${f//\'/\'\\\'\'}" || ff="$f"  #ffmpeg will not take filenames with ' in them, they must be quoted:
        [[ "$PWD" = *\'* ]] && dir="${PWD//\'/\'\\\'\'}"
-       echo "file '$dir/$ff'" >> ./tmp/opusfiles
+       echo "file '$dir/$ff'" >> "$tmp/opusfiles"
     else
-      echo "file '$PWD/$f'" >> ./tmp/opusfiles
+      echo "file '$PWD/$f'" >> "$tmp/opusfiles"
     fi
 done
 
-ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "./tmp/opusfiles" -n -acodec copy "./tmp/$output"
+ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "/tmp/$output"
 [[ "$?" != 0 ]] && echo && echo "ffmpeg failed to concatinate; exit 1" && echo && exit 1
 
 printf '\n\n...Incorporating index into %s -- Audiobook.opus...\n\n' "$ititle"
 
-mv "./tmp/$output" "$output"
+mv "/tmp/$output" "$output"
 
-while read -r chaptag
- do
-   args+=(-a "$chaptag")
- done < "./tmp/opusindex"
+#while read -r chaptag
+# do
+#   args+=(-a "$chaptag")
+# done < ""$tmp/opusindex""
+#
+#opustags -i "$output" "${args[@]}"
+#
 
-opustags -i "$output" "${args[@]}"
+
+writeindex
 
 printf '...Chapter info added...\n\n'
+
 
 if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null
  then
@@ -255,6 +343,7 @@ if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null
       printf 'Original duration... %s' "$duration"
    else
      echo "Indexed opus file not found! Exit 1"
+     rmyn "remove $tmp? " "leaving files" rm -r "$tmp"
      exit 1
 fi
 
@@ -262,10 +351,10 @@ fi
    [[ "$duration" = "$outdur" ]] &&
    printf 'Durations of part and indexed opus files match, deleting temporary files.\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput" &&
    pause "rm -r $title -- Part ??:*.opus .tmp &&" &&
-   rm -r "$title"\ --\ Part\ ??:*.opus ./tmp &&
+   rm -r "$title"\ --\ Part\ ??:*.opus "$tmp" &&
    exit
 
-rmyn "Remove temporary files? (y/n) " "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ ??:*.opus ./tmp
+rmyn "Remove temporary files? (y/n) " "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ ??:*.opus "$tmp"
 
 printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 
