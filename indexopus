@@ -260,8 +260,9 @@ fi
 
 [[ "$rmmatch" ]] &&
    [[ "$duration" = "$outdur" ]] &&
-   rm -r "$title"\ --\ Part\ ??:*.opus ./tmp &&
    printf 'Durations of part and indexed opus files match, deleting temporary files.\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput" &&
+   pause "rm -r $title -- Part ??:*.opus .tmp &&" &&
+   rm -r "$title"\ --\ Part\ ??:*.opus ./tmp &&
    exit
 
 rmyn "Remove temporary files? (y/n) " "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ ??:*.opus ./tmp
