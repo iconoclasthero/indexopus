@@ -1,0 +1,74 @@
+#!/bin/bash
+# nb: the swp file that editscript relies on is provided by nano
+
+editscript(){
+  local scriptname script path swp; scriptname=$(realpath "$0" 2>/dev/null); script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
+     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptname") && exit
+     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit ;}
+
+pause(){ read -p "$*" ; }
+
+createindex(){
+declare -A associndex
+local t
+t=0
+chno=0
+
+[[ ! -d ./tmp ]] && mkdir ./tmp
+[[ -f ./tmp/opusindex ]] && rm ./tmp/opusindex
+
+for ((i=0;i<"${#chap_titles[@]}";i++))
+ do
+#   chno="${i#*Part }"; chno="${chno%%:*}"; chno="${chno#00}"; chno="${chno#0}"
+#   chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna#*: }"
+
+   if [[ "$t" != 0 ]]
+    then
+      ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
+      chna="${chap_titles[$chno]}"
+      [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
+      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  ./tmp/opusindex
+      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  ./tmp/opusindex
+      createdindex+=( "$i" )
+      createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
+      createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
+    else
+      ts="00:00:00.000"
+      chna="${chap_titles[$chno]}"
+      [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
+      printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> ./tmp/opusindex
+      printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  ./tmp/opusindex
+      createdindex+=( "$i" )
+      createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
+      createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
+   fi
+  #    d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
+      t="${chap_starts[$i]}"
+      ((chno++))
+done ; }
+##createindex()##########################################################################
+
+
+[[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
+
+readarray -t chap_titles < <(jq -r '.chapters[] | .title' metadata.json)
+readarray -t chap_starts < <(jq -r '.chapters[] | .start' metadata.json)
+
+n="${#chap_titles[@]}"
+#i=0
+#while read -r "${chap_titles[$i]}"
+#for ((i=0;i<"${#chap_starts[@]}";i++))
+#do chap_starts["$i"]=$(echo "${chap_starts[$i]}" | perl -nle '/([0-9\.]+)/ && ($t += $1) && printf "%02d:%02d:%02d\n", $t/3600000, ($t/60000)%60, ($t/1000)%60')
+#    ((i++))
+#done
+
+#echo "chap_starts[@]: ${chap_starts[@]}"
+
+
+
+createindex
+cat ./tmp/opusindex
+
+
+#ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
+

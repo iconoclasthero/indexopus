@@ -1,0 +1,92 @@
+#!/bin/bash
+#set -vx
+#trap read debug
+# Last modified:  Mon Mar 20 11:30:42 PM EDT 2023
+# version 1.1.2
+
+bold=$(tput bold)
+tput0=$(tput sgr0)
+scriptname="$(realpath "$0")"
+red="$(tput setaf 9)"
+
+editscript(){
+  local scriptname script path swp; scriptname=$(realpath "$0" 2>/dev/null); script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
+     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptname") && exit
+     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit ;}
+
+
+fn_rmfile(){
+    printf "%s\n%s is a file:\n" "$bold" "$1"
+    ls -ltr "$1"
+    printf '\nrmr: remove this file? (y/n) '
+    printf "%s" "$tput0"
+    old_stty_cfg=$(stty -g)	# https://stackoverflow.com/questions/226703/how-do-i-prompt-for-yes-no-cancel-input-in-a-linux-shell-script
+    stty raw -echo
+    answer=$(head -c 1)
+    stty "$old_stty_cfg" 	# Careful playing with stty
+
+    if [ "$answer" != "${answer#[Yy]}" ];then
+      rm "$1"; printf "\n\n"; if [ ! -e "$1" ]; then printf "\nDone! File \"%s\" removed.\n\n" "$1"; else printf "\n\n%s%s not removed, check permissions:\n\n" "$bold" "$1"; ls -ltr "$1"; fi
+    else
+      printf '\n\n%sFiles remain:\n%s \n%s\n' "$red" "$(ls -ltr "$1")" "$tput0"
+    fi
+
+#########################################################################################################################################################
+#	There isn't really anything wrong with this code, but the above method removes the CR
+#	There're other ways to do this https://stackoverflow.com/questions/226703/how-do-i-prompt-for-yes-no-cancel-input-in-a-linux-shell-script
+
+}
+
+
+[[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
+
+for path in "$@"
+  do
+    if [[ -d "$path" ]]; then
+	printf "%s\n" "$bold"
+	if rmdir "$path" 2>/dev/null; then
+	   printf "Removing %s... \n\n$ ls %s/ \n\n" "$path" "$path"
+	else
+	   find "$path"
+	   printf "\n"
+	   rm -rI "$path"
+       	   printf "%s" "$tput0"
+	fi
+
+	if [ ! -e "$path" ]; then
+      	   printf "\nDone!\n"
+      	else
+      	   printf "\n\n%sRemoval Failed!%s\n\n%s is still present check ownership and permissions:\n" "$bold" "$tput0" "$path"
+      	   ls -lad --color=always "$path"
+	fi
+
+
+#
+# this does not work because -e in  if [ -e ... ]  does not work with globs:  https://www.shellcheck.net/wiki/SC2144
+#
+#if [[ -d "$1" ]]
+# then
+#   if [ ! -e "$1"/* ]
+#    then
+#	.
+#	.
+#	.
+#   else
+#	printf "%s\n" "$bold"
+#	find "$1"
+#	printf "\n"
+#	rm -rI "$1"
+#	printf "%s" "$tput0"
+#	if [ ! -e "$1" ]; then printf "\nDone!\n"; else printf "\n"$1" is still present check ownership and permissions:\n"; ls -glad --color=always "$1" ; fi
+#   fi
+
+
+  elif [[ -f "$path" ]]; then
+    fn_rmfile "$path"
+
+  else
+    printf "\n\n No such directory or file found!\n\n"
+
+  fi
+
+done
