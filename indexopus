@@ -147,6 +147,27 @@ readarray -t chap_starts < <(jq -r '.chapters[] | .start' metadata.json 2>/dev/n
 
 title=( *\ --\ Audiobook.opus )
 
+if [[ "$(opustags "$title")" = *CHAPTER* ]]
+  then
+    printf '\n%s%s%s contains existing tags -- removing...%s\n' "$red" "$bold" "$title" "$tput0"
+    tags=( $(opustags "$title") )
+    tags=( $(printf '%s\n' "${tags[@]%=*}"|sort -u|grep CHAPTER|sort -u) )
+#    printf "%s\n" "${tags[@]}"
+    printf '\n%s%s...mediainfo of existing %s:%s\n' "$red" "$bold" "$title" "$tput0"
+    mediainfo "$title"
+    for i in "${tags[@]}"
+      do
+        opustags -i -d "$i" "$title"
+      done
+    printf '%s%s...mediainfo of %s after tag removal:%s\n' "$red" "$bold" "$title" "$tput0"
+
+    mediainfo "$title"
+    if [[ "$rmmatch" != true ]]
+      then
+       confirm "${red}${bold}Has the old index been removed? (y/n)${tput0}" && echo || exit
+   fi
+fi
+
 [[ ! "${#title[@]}" -eq 1 ]] && printf 'No suitable audiobook found in pwd of format * -- Audiobook.opus\nCheck path %s and try again.\nexit 1' "$PWD" && exit 1
 
 for ((chno=0;chno<"${#chap_titles[@]}";chno++))
@@ -179,33 +200,51 @@ for ((chno=0;chno<"${#chap_titles[@]}";chno++))
       t="${chap_starts[$chno]}"
 done
 
-cat "$tmp/opusindex"
+#cat "$tmp/opusindex"
+printf '%s%sProposed index for %s:%s\n' "$red" "$bold" "$title" "${tput0}"
+mediainfo "$title"
+printf '%s\t\t\t\t\t\t\t : %s\n' "${rawindex[@]}"
+echo
 if [[ "$rmmatch" = true ]]
   then
-   writeindex
-elif confirm "Apply index? "
+   printf '\n'
+   writeindex "$title"
+elif confirm "${bold}${red}Apply index? ${tput0}"
   then
-   writeindex
+   echo
+   writeindex "$title"
 else
+   mediainfo "$title"
    printf '%s\t\t\t: %s\n' "${rawindex[@]}"
-   exit 
+   exit
 fi
 
 mediainfo *Audiobook.opus
 
-[[ "$rmmatch" = true ]] &&
-   rm -r "$tmp" ||
-   rmyn "Remove temporary files? (y/n) " "Leaving temporary files in $tmp" rm -r "$tmp"
+rmmatch=true
+
+if [[ -d "$tmp" ]] && [[ "$rmmatch" = true ]]
+  then
+    rm -r "$tmp"
+    ls "$tmp" 2>/dev/null
+elif [[ -d "$tmp" ]]
+  then
+    echo "Contents of $tmp"
+    ls "$tmp" 2>/dev/null
+    echo
+    rmyn "${red}${bold}Remove temporary files? (y/n) ${tput0}" "Leaving temporary files in $tmp" rm -r "$tmp"
+fi
 }
 ##recreateindex()##############################################################################
 
 writeindex(){
+local writetitle="$1"
 while read -r chaptag
  do
    args+=(-a "$chaptag")
  done < "$tmp/opusindex"
 
-opustags -i "$output" "${args[@]}"
+opustags -i "$writetitle" "${args[@]}"
 printf '...Chapter info added...\n\n'
 }
 ##writeindex()#################################################################################
@@ -234,6 +273,7 @@ if [[ "$reindex" = true ]]
  then
    [[ "$1" = "-y" ]] && shift && rmmatch=true
    recreateindex
+   echo "Please see $PWD/$title for indexed file."
    exit
 fi
 
@@ -305,7 +345,7 @@ for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus)
        [[ "$PWD" = *\'* ]] && dir="${PWD//\'/\'\\\'\'}"
        echo "file '$dir/$ff'" >> "$tmp/opusfiles"
     else
-      echo "file '$PWD/$f'" >> "$tmp/opusfiles"
+       echo "file '$PWD/$f'" >> "$tmp/opusfiles"
     fi
 done
 
@@ -325,7 +365,7 @@ mv "/tmp/$output" "$output"
 #
 
 
-writeindex
+writeindex "$output"
 
 printf '...Chapter info added...\n\n'
 
@@ -338,11 +378,12 @@ if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null
    outdur="${outdur#*: }"
    outdur="$(echo "$outdur" | perl -nle '/([0-9\.]+)/ && ($t += $1) && printf "%02d:%02d:%02d\n", $t/3600000, ($t/60000)%60, ($t/1000)%60')"
 
-   data=("The duration of the $ititle -- Part *opus is ~$bold$red$duration$tput0"
-         "The duration of the $ititle -- Audiobook.opus is ~$bold$red$outdur$tput0")
+   data=( "${bold}Duration(s):"
+          "${red} $duration ${white}${title} -- Part *opus $tput0"
+          "${red} $outdur ${white}${title} -- Audiobook.opus $tput0")
 
    # Print the aligned data using column, right justifying durations
-   printf '%s\n' "${data[@]}" | column -s "~" -t -R 2
+   printf '%s\n\n\n' "${data[@]}" #| column -s "~" -t -R 2
 
    elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null
      then
@@ -362,11 +403,10 @@ fi
    rm -r "$title"\ --\ Part\ ??:*.opus "$tmp" &&
    exit
 
-rmyn "Remove temporary files? (y/n) " "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ ??:*.opus "$tmp"
-
+rmyn "Remove temporary files? (y/n) " "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ ??:*.opus "$tmp" && iorm=true
 printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 
-exit
+[[ "$iorm" = true ]] && exit 2 || exit
 
 
 

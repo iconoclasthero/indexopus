@@ -251,13 +251,14 @@ printf '%sDuration of the .opus part files: %s%s%s\n' "$bold" "$red" "$opuspartd
 printf '\n\n\n\n\n%s----------  Calling external dependency: %sindexopus%s  ----------\n' "$bold" "$red" "$tput0"
 if [[ "$rmmatch" = true ]]
   then
-    pause "indexopus -y $title"
 # "$opuspartdur" is there realistically a way to pass the opus part durations?
     indexopus -y "$title" # "$opuspartdur" is there realistically a way to pass the opus part durations?
   else
-    pause "indexopus $title"
     indexopus "$title" # this is a dependency, don't make a funciton.
 fi
+
+  [[ "$?" = 2 ]] && iorm=true
+
 printf '\n\n%s----------  Leaving external dependency: %sindexopus%s  ----------\n' "$bold" "$red" "$tput0"
 ##indexopus##################################################################################
 
@@ -283,17 +284,20 @@ elif [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]
   then
     printf '%s%sThe m4b and opus audiobook durations do not match!\n' "$bold" "$red"
     printf '%s%sm4b2opus will not automatically delete starting and temporary files!\n' "$white" "$tput0"
+    ls "$tmp" "$convertdir/m4a" 2>/dev/null
     checkdur
     printf '\n\n'
-    rmyn "Remove the conversion ../tmp and ../m4a directories? " "...Leaving ../tmp and ../m4a" rm -r "$convertdir"/tmp "$convertdir"/m4a
-    rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
+#    rmyn "Remove the conversion ../tmp and ../m4a directories? " "...Leaving ../tmp and ../m4a" rm -r "$convertdir"/tmp "$convertdir"/m4a
+    rmyn "Remove the conversion ../tmp and ../m4a directories? " "...Leaving ../tmp and ../m4a" rm -r "$tmp" "$convertdir"/m4a
+    [[ ! "$iorm" ]] && rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
     rmr *m4b "$convertdir"   #rmr is a dependency
     printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 else
+    ls "$tmp" "$convertdir/m4a" 2>/dev/null
     checkdur
     printf '\n\n'
-    rmyn "Remove the conversion ../tmp and ../m4a directories? " "...Leaving ../tmp and ../m4a" rm -r "$convertdir"/tmp "$convertdir"/m4a
-    rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
+    rmyn "Remove the conversion ../tmp and ../m4a directories? " "...Leaving ../tmp and ../m4a" rm -r "$tmp" "$convertdir"/m4a
+    [[ ! "$iorm" ]] && rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
     rmr *m4b "$convertdir"   #rmr is a dependency
     printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 fi
