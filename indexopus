@@ -158,6 +158,9 @@ for ((chno=0;chno<"${#chap_titles[@]}";chno++))
       [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
       printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  "$tmp/opusindex"
       printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
+      rawindex+=( "$ts" )
+      rawindex+=( "$chna" )
+      createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
       createdindex+=( "$chno" )
       createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
       createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
@@ -167,11 +170,13 @@ for ((chno=0;chno<"${#chap_titles[@]}";chno++))
       [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
       printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> "$tmp/opusindex"
       printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
+      rawindex+=( "$ts" )
+      rawindex+=( "$chna" )
       createdindex+=( "$chno" )
       createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
       createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
    fi
-      t="${chap_starts[$i]}"
+      t="${chap_starts[$chno]}"
 done
 
 cat "$tmp/opusindex"
@@ -181,6 +186,9 @@ if [[ "$rmmatch" = true ]]
 elif confirm "Apply index? "
   then
    writeindex
+else
+   printf '%s\t\t\t: %s\n' "${rawindex[@]}"
+   exit 
 fi
 
 mediainfo *Audiobook.opus
