@@ -14,6 +14,16 @@ optional: mediainfo
 `$ indexopus` 
 You can specify the title with `$ indexopus <title>`; m4b2opus passes indexopus the title that way.
 
+This has been reworked to include a reindex option that will take an audiobookshelf metadata.json with chapter information and remove the old index, if found, and replace it with a new one.
+
+# reindex
+it's most of the above with portions clipped out so it can be used separately.  it's not up to date with indexopus and will eventually be dropeed unless I can find an easy way to clip the portions of indexopus.
+it was mainly for demonstration/sharing purposes
+
+# rmr
+a dependency for removing things with rm -r
+This is in another repo.  I wonder how I can use that rather than have a hard link locally...
+
 # chaptersplit, opusduration, mediaduration
 I have included these separate utilities I've been using to split files into chapters from an embedded index.  
 As shown in the code, it is not mine originally and I haven't cleaned it up at all, but should you want to run a conversion step in parallel before using indexopus to stitch the constiuent parts up again, this will do that, but presently the split files are going to /dev/shm/cache/convert which may or may not be where _you_ want them to go.  Adjust outputdir="/dev/shm/cache/convert" if you like (it should work fine on Ubuntu which includes /dev/shm by default; if left here, the conversion will be done on a scratch tmpfs ram drive).
