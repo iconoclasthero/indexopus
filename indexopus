@@ -27,8 +27,10 @@ editscript(){
      if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
      else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
   fi; }
+##editscript()#################################################################################
 
 pause(){ read -p "$*" ; }
+##pause()######################################################################################
 
 confirm(){
  local ans IFS=
@@ -41,6 +43,7 @@ confirm(){
      esac
    done
 }
+##tagtt()######################################################################################
 
 #unused
 tagtt(){
@@ -53,6 +56,7 @@ for i in *\ --\ Part\ ??\:\ *opus
    opustags -i "$i" -s title="$title" -s tracknumber="$tracknumber"
 done
 }
+##tagtt()######################################################################################
 
 
 rmyn(){
@@ -66,6 +70,7 @@ rmyn(){
      esac
    done
 }
+##rmyn()#######################################################################################
 
 yn(){
   while true
@@ -78,13 +83,14 @@ yn(){
      esac
    done
 }
+##yn()#########################################################################################
 
 
 is_even() {
     if [ $(( $1 % 2 )) -eq 0 ]; then return 0
     else return 1; fi
 }
-
+##is_even()####################################################################################
 
 gettitle(){
 titles=(*Part\ ??*.opus)
@@ -94,13 +100,12 @@ ititle="${ulon}$title${uloff}"
 output="$title -- Audiobook.opus"
 ioutput="$ititle -- Audiobook.opus"
 }
+##gettitle()###################################################################################
 
 createindex(){
-declare -A associndex
 chno=0
 for i in "$title -- Part "*.opus
  do
-#   chno="${i#*Part }"; chno="${chno%%:*}"; chno="${chno#00}"; chno="${chno#0}"
    chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna#*: }"
 
    if [[ "$t" != 0 ]]
@@ -126,10 +131,8 @@ for i in "$title -- Part "*.opus
       ((chno++))
 done
 
-#printf 'Word -> %s\n' "${createdindex[@]}" #|column --table -s '~' -o ' | '
-#column "$tmp/opusindex" IFS="$'\n'" -o " | " -t
-
 }
+##createindex()################################################################################
 
 
 
@@ -149,23 +152,25 @@ title=( *\ --\ Audiobook.opus )
 
 if [[ "$(opustags "$title")" = *CHAPTER* ]]
   then
-    printf '\n%s%s%s contains existing tags -- removing...%s\n' "$red" "$bold" "$title" "$tput0"
+    printf '\n%s%s%s contains existing tags; removing...%s\n' "$red" "$bold" "$title" "$tput0"
     tags=( $(opustags "$title") )
-    tags=( $(printf '%s\n' "${tags[@]%=*}"|sort -u|grep CHAPTER|sort -u) )
-#    printf "%s\n" "${tags[@]}"
+    tags=( $(printf -- '-d%s\n' "${tags[@]%=*}"|\grep CHAPTER|sort -u) )
     printf '\n%s%s...mediainfo of existing %s:%s\n' "$red" "$bold" "$title" "$tput0"
     mediainfo "$title"
-    for i in "${tags[@]}"
-      do
-        opustags -i -d "$i" "$title"
-      done
-    printf '%s%s...mediainfo of %s after tag removal:%s\n' "$red" "$bold" "$title" "$tput0"
+    printf '\n%s...removing exiting CHAPTER tags with opustags...%s\n\n' "$red" "$tput0"
+    opustags "${tags[@]}" -i "$title"
+    ck4tags=( "$(opustags "$title" | grep --color=always -i chapter)" ) &&
+      printf 'Error!\nCHAPTER tags still present in opus file.\n%s' "${ck4tags[@}}" && exit
+#    printf '%s%s...mediainfo of %s after tag removal:%s\n' "$red" "$bold" "$title" "$tput0"
+#    mediainfo "$title"
+#    if [[ "$rmmatch" != true ]]
+#      then
+#        confirm "${red}${bold}Has the old index been removed? (y/n)${tput0}" && echo || exit
+#    fi
+  else
+   printf '%s%sMediainfo of existing %s:%s\n' "$red" "$bold" "$title" "$tput0"
 
-    mediainfo "$title"
-    if [[ "$rmmatch" != true ]]
-      then
-       confirm "${red}${bold}Has the old index been removed? (y/n)${tput0}" && echo || exit
-   fi
+   mediainfo "$title"
 fi
 
 [[ ! "${#title[@]}" -eq 1 ]] && printf 'No suitable audiobook found in pwd of format * -- Audiobook.opus\nCheck path %s and try again.\nexit 1' "$PWD" && exit 1
@@ -203,7 +208,10 @@ done
 #cat "$tmp/opusindex"
 printf '%s%sProposed index for %s:%s\n' "$red" "$bold" "$title" "${tput0}"
 mediainfo "$title"
+printf "$bold"
 printf '%s\t\t\t\t\t\t\t : %s\n' "${rawindex[@]}"
+printf "$tput0"
+
 echo
 if [[ "$rmmatch" = true ]]
   then
@@ -245,7 +253,7 @@ while read -r chaptag
  done < "$tmp/opusindex"
 
 opustags -i "$writetitle" "${args[@]}"
-printf '...Chapter info added...\n\n'
+printf '%s...Chapter info added...\n\n%s' "$red" "$tput0"
 }
 ##writeindex()#################################################################################
 
@@ -273,7 +281,7 @@ if [[ "$reindex" = true ]]
  then
    [[ "$1" = "-y" ]] && shift && rmmatch=true
    recreateindex
-   echo "Please see $PWD/$title for indexed file."
+   printf '%sPlease see $PWD/$title for indexed file.%s\n\n' "$red" "$tput0"
    exit
 fi
 
