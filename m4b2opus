@@ -1,5 +1,5 @@
 #!/bin/bash
-#depends opustags, ffmpeg, indexopus, opus.book.4, mplayer, rmr, mediaduration(?)
+#depends opustags, ffmpeg, indexopus, opus.book.4, mplayer, mediaduration
 
 #trap pause DEBUG
 shopt -s nullglob
@@ -42,36 +42,33 @@ rmr(){
    }
   ##--> fn_rmfile() <--###############################################################################
 
+
 for path in "$@"
   do
-    if [[ -d "$path" ]]
-      then
-	    printf '%s\n' "$bold"
-	      if rmdir "$path" 2>/dev/null
-            then
-	          printf 'Removing %s... \n\n$ ls %s/ \n\n' "$path" "$path"
-	        else
-	          find "$path"
-	          printf '\n'
-	          rm -rI "$path"
-              printf '%s' "$tput0"
-	      fi
+    if [[ -d "$path" ]]; then
+	printf '%s\n' "$bold"
+	if rmdir "$path" 2>/dev/null; then
+	   printf 'Removing %s... \n\n$ ls %s/ \n\n' "$path" "$path"
+	else
+	   find "$path"
+	   printf '\n'
+	   rm -rI "$path"
+       	   printf '%s' "$tput0"
+	fi
 
-	      if [[ ! -e "$path" ]]
-            then
-              printf "\nDone!\n"
-            else
-              printf "\n\n%sRemoval Failed!%s\n\n%s is still present check ownership and permissions:\n" "$bold" "$tput0" "$path"
-              ls -lad --color=always "$path"
-	      fi
+	if [ ! -e "$path" ]; then
+      	   printf '\nDone!\n'
+      	else
+      	   printf '\n\n%sRemoval Failed!%s\n\n%s is still present check ownership and permissions:\n' "$bold" "$tput0" "$path"
+      	   ls -lad --color=always "$path"
+	fi
+  elif [[ -f "$path" ]]; then
+    fn_rmfile "$path"
 
-      elif [[ -f "$path" ]]
-        then
-          fn_rmfile "$path"
-      else
-          printf "\n\n No such directory or file found!\n\n"
+  else
+    printf '\n\n No such directory or file found!\n\n'
 
-     fi
+  fi
 
 done
 }
@@ -176,7 +173,7 @@ rm ".tmp$stamp"
 shift
 done
 }
-##m4bsplit{}##################################################################################
+##--> m4bsplit() <--##################################################################################
 
 checkdur(){
   local m4a m4b opus
