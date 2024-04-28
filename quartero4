@@ -211,7 +211,8 @@ opus.book.4
 
 mediaduration
 
-indexopus -y "$title"
+indexopus -y "$title" && (($?==1)) && echo "indexopus failed, exit 1" && exit 1
+
 
 printf '#####################################################\nleaving indexopus\n#####################################################\n\n'
 
@@ -236,10 +237,13 @@ ckparts=( "$title -- Part "*.opus )
 
 cd "$SWD"
 
+# for now i need to just remove the temp files....  at the end of the day, if indexopus sent them back without error, they can just be removed.
+rm -ri ./tmp
+
+#rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
+
 checkdur
 echo
-
-rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
 
 #printf '%s\n%s\n' "$(ls *\ Audiobook.m4?)" "$(mediainfo *\ Audiobook.m4?|grep ^Duration\ |uniq)"
 
