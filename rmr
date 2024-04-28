@@ -31,12 +31,12 @@ fn_rmfile(){
       printf '\n\n%sFiles remain:\n%s \n%s\n' "$red" "$(ls -ltr "$1")" "$tput0"
     fi
 
-#########################################################################################################################################################
+######################################################################################################
 #	There isn't really anything wrong with this code, but the above method removes the CR
 #	There're other ways to do this https://stackoverflow.com/questions/226703/how-do-i-prompt-for-yes-no-cancel-input-in-a-linux-shell-script
 
 }
-
+##--> fn_rmfile() <--#################################################################################
 
 [[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
 

@@ -13,7 +13,7 @@
 # https://mywiki.wooledge.org/BashFAQ/054 -- How can I tell whether a variable contains a valid number?
 
 
-shopt -s extglob
+shopt -s extglob nullglob dotglob
 scriptname=$(realpath "$0")
 ulon="$(tput smul)"  #underline on
 uloff="$(tput rmul)" #underline off
@@ -21,6 +21,7 @@ red="$(tput setaf 9)" #red fg
 white="$(tput setaf 15)" #white fg
 tput0="$(tput sgr0)" #reset tput changes
 bold="$(tput bold)" #bold on
+relipsis="$red..."
 
 editscript(){
   local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
@@ -152,16 +153,16 @@ title=( *\ --\ Audiobook.opus )
 
 if [[ "$(opustags "$title")" = *CHAPTER* ]]
   then
-    printf '\n%s%s%s contains existing tags; removing...%s\n' "$red" "$bold" "$title" "$tput0"
+    printf '\n%s%s%s contains existing tags; removing...%s\n' "$relipsis" "$bold" "$title" "$tput0"
     tags=( $(opustags "$title") )
     tags=( $(printf -- '-d%s\n' "${tags[@]%=*}"|\grep CHAPTER|sort -u) )
-    printf '\n%s%s...mediainfo of existing %s:%s\n' "$red" "$bold" "$title" "$tput0"
+    printf '\n%s%smediainfo of existing %s:%s\n' "$relipsis" "$bold" "$title" "$tput0"
     mediainfo "$title"
-    printf '\n%s...removing exiting CHAPTER tags with opustags...%s\n\n' "$red" "$tput0"
+    printf '\n%sremoving exiting CHAPTER tags with opustags...%s\n\n' "$relipsis" "$tput0"
     opustags "${tags[@]}" -i "$title"
     ck4tags=( "$(opustags "$title" | grep --color=always -i chapter)" ) &&
       printf 'Error!\nCHAPTER tags still present in opus file.\n%s' "${ck4tags[@}}" && exit
-#    printf '%s%s...mediainfo of %s after tag removal:%s\n' "$red" "$bold" "$title" "$tput0"
+#    printf '%s%smediainfo of %s after tag removal:%s\n' "$relipsis" "$bold" "$title" "$tput0"
 #    mediainfo "$title"
 #    if [[ "$rmmatch" != true ]]
 #      then
@@ -254,6 +255,7 @@ while read -r chaptag
 
 opustags -i "$writetitle" "${args[@]}"
 printf '%s...Chapter info added...\n\n%s' "$red" "$tput0"
+
 }
 ##writeindex()#################################################################################
 
@@ -285,25 +287,32 @@ if [[ "$reindex" = true ]]
    exit
 fi
 
-if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) > /dev/null
+
+if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) &> /dev/null
  then
-   if compgen -G @(*\ --\ Chapter\ ??*.opus|*\ --\ Disc\ ??.opus) > /dev/null
+   if compgen -G @(*\ --\ Chapter\ ??*.opus|*\ --\ Disc\ ??.opus|*-Part??.opus) > /dev/null
      then
        for renopus in *Chapter\ ??*.opus; do [[ -f "$renopus" ]] && mv "$renopus" "${renopus/ Chapter / Part }"; done
        for renopus in *Disc\ ??.opus; do [[ -f "$renopus" ]] && mv "$renopus" "${renopus/ Disc / Part }"; done
+       for renopus in *-Part??.opus; do [[ -f "$renopus" ]] && mv "$renopus" "${renopus/-Part/ -- Part 00: Part }"; done
    fi
 
-   renopus=(*Part\ 01*.opus)
-   if [[ "${renopus[0]/ -- Part / -- Part 00: Part }" == *\ --\ Part\ ??\:\ *.opus ]]
+   renopus=( *\ --\ Part\ *.opus )
+
+#  if [[ "${renopus[0]}" != @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) ]]
+   if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) &> /dev/null
      then
-       for i in *opus
-         do
-           n="${i#* -- Part }"; n="${n%%.opus}"
-           mv "$i" "${i/ -- Part / -- Part $n: Part }"
-         done
-   else
-     printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
-     exit
+       if [[ "${renopus[0]/ -- Part / -- Part 00: Part }" == *\ --\ Part\ ??\:\ *.opus ]]
+         then
+           for i in *opus
+             do
+               n="${i#* -- Part }"; n="${n%%.opus}"
+               mv "$i" "${i/ -- Part / -- Part $n: Part }"
+             done
+         else
+           printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
+           exit
+       fi
    fi
 fi
 
@@ -317,14 +326,12 @@ gettitle "$title"
 
 echo "$title"
 
-
 if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]
  then
    printf 'This directory already contains %s\n' "$ioutput"
    if confirm "Overwrite the existing file? (y/n)"
     then
       printf '\n...Overwriting %s -- Audiobook.opus...\n' "$ititle"
-      elipsis="..."
     else
       exit
    fi
@@ -360,7 +367,7 @@ done
 ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "/tmp/$output"
 [[ "$?" != 0 ]] && echo && echo "ffmpeg failed to concatinate; exit 1" && echo && exit 1
 
-printf '\n\n...Incorporating index into %s -- Audiobook.opus...\n\n' "$ititle"
+printf '\n\n%sincorporating index into%s %s -- Audiobook.opus%s\n\n%s' "$relipsis" "$white" "$ititle" "$relipsis" "$tput0"
 
 mv "/tmp/$output" "$output"
 
@@ -375,24 +382,21 @@ mv "/tmp/$output" "$output"
 
 writeindex "$output"
 
-printf '...Chapter info added...\n\n'
-
-
 if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null
  then
-   printf '...Checking output from mediainfo...\n\n'
+   printf '%schecking output from mediainfo...\n\n%s' "$relipsis" "$tput0"
 
    outdur="$(mediainfo -f "$output"|grep Duration|head -n1)"
    outdur="${outdur#*: }"
    outdur="$(echo "$outdur" | perl -nle '/([0-9\.]+)/ && ($t += $1) && printf "%02d:%02d:%02d\n", $t/3600000, ($t/60000)%60, ($t/1000)%60')"
 
-   data=( "${bold}Duration(s):"
-          "${red} $duration ${white}${title} -- Part *opus $tput0"
-          "${red} $outdur ${white}${title} -- Audiobook.opus $tput0")
+   data=( "${bold}Duration(s):${tput0}"
+          "${red}${bold} $duration ${tput0}${ititle} -- Part *opus $tput0"
+          "${red}${bold} $outdur ${tput0}${ititle} -- Audiobook.opus $tput0")
 
    # Print the aligned data using column, right justifying durations
-   printf '%s\n\n\n' "${data[@]}" #| column -s "~" -t -R 2
-
+   printf '%s\n' "${data[@]}" #| column -s "~" -t -R 2
+   echo
    elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null
      then
        printf 'Checking the output from ffprobe...\n\n'
@@ -406,8 +410,7 @@ fi
 
 [[ "$rmmatch" ]] &&
    [[ "$duration" = "$outdur" ]] &&
-   printf 'Durations of part and indexed opus files match, deleting temporary files.\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput" &&
-   pause "rm -r $title -- Part ??:*.opus .tmp &&" &&
+   printf 'Durations of part and indexed opus files match, automatically deleting temporary files!\n\n%s%sPlease see %s/%s%s\n\n%sDone.\n\n%s' "$white" "$bold" "$PWD" "$ioutput" "$tput0" "$relipsis" "$tput0" &&
    rm -r "$title"\ --\ Part\ ??:*.opus "$tmp" &&
    exit
 
