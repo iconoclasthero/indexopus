@@ -10,6 +10,7 @@ red="$(tput setaf 9)" #red fg
 white="$(tput setaf 15)" #white fg
 relipsis="${red}..."
 shopt -s nullglob extglob dotglob
+threads=4
 
 editscript(){
   local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
@@ -43,22 +44,16 @@ seconds=$(find -type f -name "*$1" -print0 | xargs -0 mplayer -vo dummy -ao dumm
 [[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
 [[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
 
-printf "Duration %s\n" "$duration"
+printf "Duration: %s\n" "$duration"
 
 hours="${hours#0}"
 hourmin=$(( hours*60 ))
-echo "hourmin $hourmin"
 minutes="${minutes#0}"
 secmin=$((hourmin+minutes))
-echo "secmin $secmin"
 secmin=$((secmin*60))
 seconds="${seconds#0}"
-echo "secmin  $secmin"
-echo "seconds $seconds"
 totalsec=$(( "$seconds" + "$secmin" ))
-echo "$totalsec"
 divsec=$(python3 -c "print($totalsec/4)")
-echo "$divsec"
 
 }  #calculatetime()
 
@@ -134,18 +129,17 @@ fi
 
 if [[ -n "$1" ]] && [[ -f "$1" ]]
   then
-    title="$1"
+    path="$1"
 elif ((${#ckbook[@]}==1))
   then
-    title="$ckbook"
+    path="$ckbook"
 fi
 
-
-if [[ "$title" != *\ --\ Audiobook.@(mp3|m4@(a|b)) ]]
+if [[ "$path" != *\ --\ Audiobook.@(mp3|m4@(a|b)) ]]
   then
-    title="$ckbook"
+    path="$ckbook"
     printf '\n%s%sFile is not in the format of <title> -- Audiobook.@(mp3|m4a|m4b)!\n%s\n' "$red" "$bold" "$tput0"
-      if confirm "Rename $title to ${ckbook%.*} -- Audiobook.${ckbook##*.}? (y/n) "
+      if confirm "Rename $path to ${ckbook%.*} -- Audiobook.${ckbook##*.}? (y/n) "
         then
           mv "$ckbook" "${ckbook%.*} -- Audiobook.${ckbook##*.}"
         else
@@ -155,8 +149,10 @@ if [[ "$title" != *\ --\ Audiobook.@(mp3|m4@(a|b)) ]]
       fi
 fi
 
-inext="${title##*.}"
-title="${title%.*}"
+[[ "$(mediainfo "$path"|grep Menu)" =~ ^Menu ]] && printf '%s has an index!\nexit 1\n' "$path" && exit 1
+
+inext="${path##*.}"
+title="${path%.*}"
 title="${title%% -- *}"
 ititle="${ulon}$title${uloff}"
 
@@ -173,7 +169,7 @@ elif [ "$inext" = "mp3" ] || [ "$inext" = "opus" ] || [[ "$inext" == "m4a" ]] ||
   exit 0
 fi
 
-printf ' inext=%s\noutext=%s\n   ext=%s' "$inext" "$outext" "$ext"
+#printf ' inext=%s\noutext=%s\n   ext=%s' "$inext" "$outext" "$ext"
 
 count=1
 
@@ -182,15 +178,14 @@ count=1
 for i in *"$ext"
 do
   wholefile="$i"
-  echo "File to split: $wholefile"
-#  calculatetime "$(basename $wholefile)"
+  printf '\nFile to split: %s\n' "$wholefile"
   calculatetime "$wholefile"
+  printf '\n\n%sSplitting file into %s pieces:\n%s' "$relipsis" "$threads" "$tput0"
 
-while [[ "$count" -lt 5 ]]
+while (( $count < $((1+$threads)) ))
   do
-    echo "$count"
-#echo '>>>>>       ffmpeg -i "$wholefile" -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -acodec copy "${wholefile%.*} -- Part 0$count.$ext" '
-#    ffmpeg -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$whilefile" -acodec copy "${wholefile%.*} -- Part 0$count.$ext"
+     #echo '>>>>>       ffmpeg -i "$wholefile" -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -acodec copy "${wholefile%.*} -- Part 0$count.$ext" '
+     #ffmpeg -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$whilefile" -acodec copy "${wholefile%.*} -- Part 0$count.$ext"
     ffmpeg -n -nostdin -hide_banner -stats -v error -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$wholefile" -vn -acodec copy "$tmp/${wholefile%% -- *} -- Part 0$count.$outext"
     ((count++))
   done
@@ -207,9 +202,15 @@ for i in First Second Third Fourth
     done
  done
 
+printf '#####################################################\nentering opus.book.4\n#####################################################\n\n'
+
 opus.book.4
 
+printf '#####################################################\nleaving opus.book.4\n#####################################################\n\n'
+
 mediaduration
+
+printf '#####################################################\nentering indexopus\n#####################################################\n\n'
 
 indexopus -y "$title" && (($?==1)) && echo "indexopus failed, exit 1" && exit 1
 
@@ -238,7 +239,7 @@ ckparts=( "$title -- Part "*.opus )
 cd "$SWD"
 
 # for now i need to just remove the temp files....  at the end of the day, if indexopus sent them back without error, they can just be removed.
-rm -ri ./tmp
+rm -r ./tmp
 
 #rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
 
