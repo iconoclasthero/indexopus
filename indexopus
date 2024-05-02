@@ -1,6 +1,8 @@
 #!/bin/bash
-# depends: opustags, ffmpeg/ffprobe
-# optional: mediainfo
+# depends: opustags, ffmpeg/ffprobe, mediainfo
+# config: "$HOME/.config/indexopus.conf"
+#          absserver="https://web.address.com"
+#          abssqlite="/path/to/location/of/config/absdatabase.sqlite"
 # files must be in the format of Title -- Part ##: Chapter Title.opus and present ONLY works for .opus; there are other tools for e.g., m4b: use them.
 # presumably, this script could easily be changed out for another codec, however opustags would need to change to something else that can write metadata, e.g, ffmpeg which should be able to do any format.
 # that said, the author feels that this satisfices for the purposes at hand and if/when the codec changes, that bridge will be burnt when it is arrived upon.
@@ -11,6 +13,8 @@
 # Promlem with colons in the part description:
 # That could still indicate a problem if the code is later attempting to do shell arithmetic on the value, in which case you got lucky by having printf throw an error. You could fix that by adding a test and failing early, because printf won't cause the script to exit.
 # https://mywiki.wooledge.org/BashFAQ/054 -- How can I tell whether a variable contains a valid number?
+
+
 
 
 shopt -s extglob nullglob dotglob
@@ -192,7 +196,7 @@ printf "$bold"
 #printf '%s\t\t\t\t\t\t\t : %s\n' "${rawindex[@]}"
 printf '%s                             : %s\n' "${rawindex[@]}"
 itemid="$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")"
-printf '\n%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s%s/chapters\n' "$red" "$absserver" "$itemid"
+printf '\n%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s/audiobook/%s/chapters\n' "$red" "$absserver" "$itemid"
 
 #printf '\n%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s%s/chapters' "$red" "$absserver" "$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")" # &&
 

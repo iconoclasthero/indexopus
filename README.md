@@ -16,6 +16,10 @@ You can specify the title with `$ indexopus <title>`; m4b2opus passes indexopus 
 
 This has been reworked to include a reindex option that will take an audiobookshelf metadata.json with chapter information and remove the old index, if found, and replace it with a new one.
 
+A config file is required at '$HOME/.config/indexopus.conf' with the following information:
+  absserver="https://web.address.com"
+  abssqlite="/path/to/location/of/config/absdatabase.sqlite"
+
 # opus.book.4
 I use screen and opus.book.4 to manage the conversions for me.  The "4" refers to the number of cores I have and use.  
 YMMV, change the code to the number of parallel conversion jobs you want.
