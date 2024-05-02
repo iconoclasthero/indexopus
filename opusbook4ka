@@ -1,0 +1,40 @@
+#!/bin/bash
+# nb: the swp file that editscript relies on is provided by nano
+
+scriptname="$(realpath $0)"
+pidfile="/tmp/.opus.book.pids"
+
+editscript(){
+  local scriptname script path swp; scriptname=$(realpath "$0" 2>/dev/null); script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
+     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptname") && exit
+     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit ;}
+
+pause(){ read -p "$*" ; }
+
+
+breakout(){
+  while IFS= read -r pid
+    do
+      if [[ "$pid" == *opus.book* ]] || [[ "$pid" == *ffmpeg* ]]
+        then
+          echo "${pid% pts*}" >> "$pidfile"
+      fi
+    done< <(ps --tty $(tty) Sf)
+
+  while IFS= read -r killpid
+    do
+      echo "kill -9 $killpid"
+      kill -9 "$killpid" 2>/dev/null
+    done < "$pidfile" ; }
+
+
+[[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
+
+breakout
+rm "$pidfile"
+sleep 0.5s
+breakout
+rm "$pidfile"
+ps
+
+printf '\n$s done.\n\n' "$scriptname"
