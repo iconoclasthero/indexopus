@@ -1,0 +1,2 @@
+absserver="https://web.address.com"
+abssqlite="/path/to/location/of/config/absdatabase.sqlite"
