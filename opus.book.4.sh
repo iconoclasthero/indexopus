@@ -145,6 +145,8 @@ if [ -f ".opus.book.pids" ]
  fi
 
 
+rm /tmp/mytmpfile 2>/dev/null
+
 exit
 
 <!wait-n> Run up to 5 processes in parallel (bash 4.3): i=0 j=5; for elem in "${array[@]}"; do (( i++ < j )) || wait -n; my_job "$elem" & done; wait

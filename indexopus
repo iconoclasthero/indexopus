@@ -15,6 +15,8 @@
 
 shopt -s extglob nullglob dotglob
 scriptname=$(realpath "$0")
+confpath="$HOME/.config/indexopus.conf"
+. "$confpath"
 ulon="$(tput smul)"  #underline on
 uloff="$(tput rmul)" #underline off
 red="$(tput setaf 9)" #red fg
@@ -65,8 +67,8 @@ rmyn(){
   read -rp "$1" rmyn
    do
      case "$rmyn" in
-       [yY] ) "${@:3}"; break;;
-       [nN] ) printf '\n%s\n' "$2"; break;;
+       [yY] ) "${@:3}"; rmynres=0; break;;
+       [nN] ) printf '\n%s\n' "$2"; rmynres=1; break;;
           * ) printf "Invalid response...\n";;
      esac
    done
@@ -137,8 +139,8 @@ done
 
 
 
-recreateindex(){
-local t chap_title chap_starts
+reindex(){
+local t chap_title chap_starts reintitle
 t=0
 chno=0
 
@@ -149,32 +151,9 @@ readarray -t chap_starts < <(jq -r '.chapters[] | .start' metadata.json 2>/dev/n
    printf 'Error with %s/metadata.json; check and retry.\nexit 1' "$PWD" &&
    exit 1
 
-title=( *\ --\ Audiobook.opus )
+reintitle=( *\ --\ Audiobook.opus )
 
-if [[ "$(opustags "$title")" = *CHAPTER* ]]
-  then
-    printf '\n%s%s%s contains existing tags; removing...%s\n' "$relipsis" "$bold" "$title" "$tput0"
-    tags=( $(opustags "$title") )
-    tags=( $(printf -- '-d%s\n' "${tags[@]%=*}"|\grep CHAPTER|sort -u) )
-    printf '\n%s%smediainfo of existing %s:%s\n' "$relipsis" "$bold" "$title" "$tput0"
-    mediainfo "$title"
-    printf '\n%sremoving exiting CHAPTER tags with opustags...%s\n\n' "$relipsis" "$tput0"
-    opustags "${tags[@]}" -i "$title"
-    ck4tags=( "$(opustags "$title" | grep --color=always -i chapter)" ) &&
-      printf 'Error!\nCHAPTER tags still present in opus file.\n%s' "${ck4tags[@}}" && exit
-#    printf '%s%smediainfo of %s after tag removal:%s\n' "$relipsis" "$bold" "$title" "$tput0"
-#    mediainfo "$title"
-#    if [[ "$rmmatch" != true ]]
-#      then
-#        confirm "${red}${bold}Has the old index been removed? (y/n)${tput0}" && echo || exit
-#    fi
-  else
-   printf '%s%sMediainfo of existing %s:%s\n' "$red" "$bold" "$title" "$tput0"
-
-   mediainfo "$title"
-fi
-
-[[ ! "${#title[@]}" -eq 1 ]] && printf 'No suitable audiobook found in pwd of format * -- Audiobook.opus\nCheck path %s and try again.\nexit 1' "$PWD" && exit 1
+[[ ! "${#reintitle[@]}" -eq 1 ]] && printf 'No suitable audiobook found in pwd of format * -- Audiobook.opus\nCheck path %s and try again.\nexit 1' "$PWD" && exit 1
 
 for ((chno=0;chno<"${#chap_titles[@]}";chno++))
  do
@@ -207,23 +186,32 @@ for ((chno=0;chno<"${#chap_titles[@]}";chno++))
 done
 
 #cat "$tmp/opusindex"
-printf '%s%sProposed index for %s:%s\n' "$red" "$bold" "$title" "${tput0}"
-mediainfo "$title"
+mediainfo "$reintitle"
+printf '%s%sProposed index for %s:%s\n' "$red" "$bold" "$reintitle" "${tput0}"
 printf "$bold"
-printf '%s\t\t\t\t\t\t\t : %s\n' "${rawindex[@]}"
-printf "$tput0"
+#printf '%s\t\t\t\t\t\t\t : %s\n' "${rawindex[@]}"
+printf '%s                             : %s\n' "${rawindex[@]}"
+itemid="$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")"
+printf '\n%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s%s/chapters\n' "$red" "$absserver" "$itemid"
+
+#printf '\n%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s%s/chapters' "$red" "$absserver" "$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")" # &&
+
+#      confirm "${bold}A metadata.json file exists with duplicate chapter information. Would you like to try to reindex the file after importing chapter information?${tput0}" &&
+#      reindex=true
+#echo "google-chrome $absserver"$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")"/chapters"
+#printf "$tput0"
 
 echo
 if [[ "$rmmatch" = true ]]
   then
    printf '\n'
-   writeindex "$title"
+   writeindex "$reintitle"
 elif confirm "${bold}${red}Apply index? ${tput0}"
   then
    echo
-   writeindex "$title"
+   writeindex "$reintitle"
 else
-   mediainfo "$title"
+   mediainfo "$reintitle"
    printf '%s\t\t\t: %s\n' "${rawindex[@]}"
    exit
 fi
@@ -248,6 +236,25 @@ fi
 
 writeindex(){
 local writetitle="$1"
+
+if [[ "$(opustags "$writetitle")" = *CHAPTER* ]]
+  then
+    opustags -d "OverDrive MediaMarkers" -i "$writetitle"
+    printf '\n%s%s%s contains existing tags; removing...%s\n' "$relipsis" "$bold" "$title" "$tput0"
+    tags=( $(opustags "$writetitle") )
+    tags=( $(printf -- '-d%s\n' "${tags[@]%=*}"|\grep CHAPTER|sort -u) )
+    printf '\n%s%smediainfo of existing %s:%s\n' "$relipsis" "$bold" "$writetitle" "$tput0"
+    mediainfo "$writetitle"
+    printf '\n%sremoving exiting CHAPTER tags with opustags...%s\n\n' "$relipsis" "$tput0"
+    opustags "${tags[@]}" -i "$writetitle"
+    ck4tags=( "$(opustags "$writetitle" | grep --color=always -i chapter)" ) &&
+      printf 'Error!\nCHAPTER tags still present in opus file.\n%s' "${ck4tags[@]}" &&
+      exit
+  else
+    printf '%s%sMediainfo of existing %s:%s\n' "$red" "$bold" "$writetitle" "$tput0"
+    mediainfo "$writetitle"
+fi
+
 while read -r chaptag
  do
    args+=(-a "$chaptag")
@@ -282,15 +289,29 @@ fi
 if [[ "$reindex" = true ]]
  then
    [[ "$1" = "-y" ]] && shift && rmmatch=true
-   recreateindex
-   printf '%sPlease see $PWD/$title for indexed file.%s\n\n' "$red" "$tput0"
+   reindex
+   printf '%sPlease see %s/%s for indexed file.%s\n\n' "$red" "$PWD" "$reintitle" "$tput0"
    exit
 fi
 
 
+if [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].title' metadata.json)" ]]
+  then
+    reindex=true
+    ckjson=( *opus )
+    [[ "$(jq -r '.chapters[0] | .title' metadata.json)".opus == "${ckjson[0]}" ]] ||
+      [[ "$(jq -r '.chapters[0] | .title' metadata.json)" == "001" ]] &&
+      reindex=false
+    [[ "$reindex" = false ]] &&
+      printf '%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s%s/chapters\n\n' "$red" "$absserver" "$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")" &&
+      confirm "${bold}Would you like to try to reindex the file after importing chapter information?${tput0}" &&
+      reindex=true
+fi
+#      echo "${red}google-chrome $absserver"$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")"/chapters" &&
+
 if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) &> /dev/null
  then
-   if compgen -G @(*\ --\ Chapter\ ??*.opus|*\ --\ Disc\ ??.opus|*-Part??.opus) > /dev/null
+   if compgen -G @(*\ --\ Chapter\ ??*.opus|*\ --\ Disc\ ??.opus|*-Part??.opus) &> /dev/null
      then
        for renopus in *Chapter\ ??*.opus; do [[ -f "$renopus" ]] && mv "$renopus" "${renopus/ Chapter / Part }"; done
        for renopus in *Disc\ ??.opus; do [[ -f "$renopus" ]] && mv "$renopus" "${renopus/ Disc / Part }"; done
@@ -397,7 +418,7 @@ if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null
    # Print the aligned data using column, right justifying durations
    printf '%s\n' "${data[@]}" #| column -s "~" -t -R 2
    echo
-   elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null
+elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null
      then
        printf 'Checking the output from ffprobe...\n\n'
        ffprobe "$output"
@@ -405,6 +426,7 @@ if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null
    else
      echo "Indexed opus file not found! Exit 1"
      rmyn "remove $tmp? " "leaving files" rm -r "$tmp"
+#     (( $rmynres == 1 )) && >&2 echo "$tmp"
      exit 1
 fi
 
@@ -414,10 +436,15 @@ fi
    rm -r "$title"\ --\ Part\ ??:*.opus "$tmp" &&
    exit
 
+[[ "$reindex" = true ]] && confirm "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info?%s' "${red}" "${bold}" "${tput0}")" && indexopus reindex
 rmyn "Remove temporary files? (y/n) " "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ ??:*.opus "$tmp" && iorm=true
 printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 
+#exec 5<> "$tmp/5"
+(( $rmynres == 1 )) && echo "$tmp remains"
+
 [[ "$iorm" = true ]] && exit 2 || exit
 
+exit
 
 
