@@ -28,6 +28,7 @@ white="$(tput setaf 15)" #white fg
 tput0="$(tput sgr0)" #reset tput changes
 bold="$(tput bold)" #bold on
 relipsis="$red..."
+stamp="$(date +%s)"
 
 editscript(){
   local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
@@ -41,12 +42,12 @@ pause(){ read -p "$*" ; }
 
 confirm(){
  local ans IFS=
- while
-  printf '%s' "$1"
-  read -rp " " -n1 ans
+ while read -rp "$1" -n1 ans
    do
      printf '\n'
-     case "$ans" in [Yy]) return 0;; [Nn]) return 1;;
+     case "$ans" in
+       [Yy]) return 0;;
+       [Nn]) return 1;;
      esac
    done
 }
@@ -107,7 +108,7 @@ ititle="${ulon}$title${uloff}"
 output="$title -- Audiobook.opus"
 ioutput="$ititle -- Audiobook.opus"
 }
-##gettitle()###################################################################################
+##--> gettitle() <--###################################################################################
 
 createindex(){
 chno=0
@@ -138,9 +139,22 @@ for i in "$title -- Part "*.opus
       ((chno++))
 done
 
-}
-##createindex()################################################################################
+#check index for single quotes:
+for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus)
+ do
+   if [[ "$PWD/$f" == *\'* ]]
+    then
+       ff="$f"; dir="$PWD"
+       [[ "$f" == *\'* ]] && ff="${f//\'/\'\\\'\'}" || ff="$f"  #ffmpeg will not take filenames with ' in them, they must be quoted:
+       [[ "$PWD" = *\'* ]] && dir="${PWD//\'/\'\\\'\'}"
+       echo "file '$dir/$ff'" >> "$tmp/opusfiles"
+    else
+       echo "file '$PWD/$f'" >> "$tmp/opusfiles"
+    fi
+done
 
+}
+##--> createindex() <--################################################################################
 
 
 reindex(){
@@ -194,30 +208,23 @@ mediainfo "$reintitle"
 printf '%s%sProposed index for %s:%s\n' "$red" "$bold" "$reintitle" "${tput0}"
 printf "$bold"
 printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
-pause
-printf '%s                             : %s\n' "${rawindex[@]}"
+#pause
+#printf '%s                             : %s\n' "${rawindex[@]}"
 itemid="$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")"
-printf '\n%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s/audiobook/%s/chapters\n' "$red" "$absserver" "$itemid"
+printf '%s\n%sThe index was generated from existing metadata.json;\n' "$tput0" "$red"
+[[ "$itemid" ]] && printf 'look up new chapter information at\ngoogle-chrome %s/audiobook/%s/chapters\n\n\n' "$absserver" "$itemid"
+[[ ! "$itemid" ]] && printf '%s%s not found in absdatabase.sqlite!%s\n%sCheck path and metadata.json file\n\n\n' "$bold" "$PWD" "$tput0" "$red"
 
-#printf '\n%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s%s/chapters' "$red" "$absserver" "$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")" # &&
-
-#      confirm "${bold}A metadata.json file exists with duplicate chapter information. Would you like to try to reindex the file after importing chapter information?${tput0}" &&
-#      reindex=true
-#echo "google-chrome $absserver"$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")"/chapters"
-#printf "$tput0"
-
-echo
 if [[ "$rmmatch" = true ]]
   then
-   printf '\n'
    writeindex "$reintitle"
 elif confirm "${bold}${red}Apply index? ${tput0}"
   then
-   echo
    writeindex "$reintitle"
 else
    mediainfo "$reintitle"
-   printf '%s\t\t\t: %s\n' "${rawindex[@]}"
+   printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
+   printf 'Not reindexing opus file with above index; exiting.'
    exit
 fi
 
@@ -271,7 +278,7 @@ opustags -i "$writetitle" "${args[@]}"
 printf '%s...Chapter info added...\n\n%s' "$red" "$tput0"
 
 }
-##writeindex()#################################################################################
+##--> writeindex() <--#################################################################################
 
 
 
@@ -284,7 +291,7 @@ printf '%s...Chapter info added...\n\n%s' "$red" "$tput0"
 [[ "$1" = "-y" ]] && shift && rmmatch=true
 [[ "$1" = "reindex" ]] && shift && reindex=true
 
-tmp="/tmp/indexopus-$(date +%s)"
+tmp="/tmp/indexopus-$stamp"
 
 if [[ ! -d "$tmp" ]]
   then
@@ -357,7 +364,7 @@ echo "$title"
 if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]
  then
    printf 'This directory already contains %s\n' "$ioutput"
-   if confirm "Overwrite the existing file? (y/n)"
+   if confirm "Overwrite the existing file? (y/n) "
     then
       printf '\n...Overwriting %s -- Audiobook.opus...\n' "$ititle"
     else
@@ -372,30 +379,22 @@ fi
            perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
            tail -n 1)
 
-printf '\n%sGenerating the index for %s -- Audiobook.opus from...\n\n' "$elipsis" "$ititle"
+printf '\n%sGenerating the index for %s -- Audiobook.opus from...%s\n\n' "$relipsis" "$ititle" "$tput0"
 
 createindex
 
 printf '%s:~%s~%s\n\n' "${createdindex[@]}"|paste|column -t -s "~"
-printf '\n...Concatenating %s -- Part ??: *.opus...\n\n' "$ititle"
+printf '\n%sConcatenating %s -- Part ??: *.opus...%s\n\n' "$relipsis" "$ititle" "$tput0"
 
-for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus)
- do
-   if [[ "$PWD/$f" == *\'* ]]
-    then
-       ff="$f"; dir="$PWD"
-       [[ "$f" == *\'* ]] && ff="${f//\'/\'\\\'\'}" || ff="$f"  #ffmpeg will not take filenames with ' in them, they must be quoted:
-       [[ "$PWD" = *\'* ]] && dir="${PWD//\'/\'\\\'\'}"
-       echo "file '$dir/$ff'" >> "$tmp/opusfiles"
-    else
-       echo "file '$PWD/$f'" >> "$tmp/opusfiles"
-    fi
-done
-
-ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "/tmp/$output"
+#concatination step:
+dirsize="$(du -csb *Part*opus|tail -n1)"
+dirsize="${dirsize%%$'\t'*}" #remove everything after first tab stop
+dirsize="$((dirsize/1000))" #convert bytes to KiB
+printf '%sparts=  %sKiB time=%s%s\n' "$red" "$dirsize" "$duration" "$tput0"
+ffmpeg -nostdin -hide_banner -v warning -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "/tmp/$output"
 [[ "$?" != 0 ]] && echo && echo "ffmpeg failed to concatinate; exit 1" && echo && exit 1
 
-printf '\n\n%sincorporating index into%s %s -- Audiobook.opus%s\n\n%s' "$relipsis" "$white" "$ititle" "$relipsis" "$tput0"
+printf '\n\n%sIncorporating index into%s %s -- Audiobook.opus%s\n\n%s' "$relipsis" "$white" "$ititle" "$relipsis" "$tput0"
 
 mv "/tmp/$output" "$output"
 
@@ -424,7 +423,7 @@ if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null
 
    # Print the aligned data using column, right justifying durations
    printf '%s\n' "${data[@]}" #| column -s "~" -t -R 2
-   echo
+   echo "$tput0 $white"
 elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null
      then
        printf 'Checking the output from ffprobe...\n\n'
@@ -450,7 +449,10 @@ printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 #exec 5<> "$tmp/5"
 (( $rmynres == 1 )) && echo "$tmp remains"
 
-[[ "$iorm" = true ]] && exit 2 || exit
+#clean up /tmp/indexopus-* files older than a day:
+find /tmp -iname "indexopus-1*" -mtime -1 -exec rm -rf {} 2>/dev/null \;
+
+[[ "$iorm" = true ]] && exit 2 || exit  # this has to be here so that it is passed back to m4b2opus
 
 exit
 
