@@ -30,6 +30,8 @@ breakout(){
 
 [[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
 
+[[ -n "$1" ]] && pidfile="$1"
+
 breakout
 rm "$pidfile"
 sleep 0.5s

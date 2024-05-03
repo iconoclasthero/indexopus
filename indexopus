@@ -193,7 +193,8 @@ done
 mediainfo "$reintitle"
 printf '%s%sProposed index for %s:%s\n' "$red" "$bold" "$reintitle" "${tput0}"
 printf "$bold"
-#printf '%s\t\t\t\t\t\t\t : %s\n' "${rawindex[@]}"
+printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
+pause
 printf '%s                             : %s\n' "${rawindex[@]}"
 itemid="$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")"
 printf '\n%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s/audiobook/%s/chapters\n' "$red" "$absserver" "$itemid"
@@ -228,12 +229,14 @@ if [[ -d "$tmp" ]] && [[ "$rmmatch" = true ]]
   then
     rm -r "$tmp"
     ls "$tmp" 2>/dev/null
+    rm *Part\ ??\:\ *.opus
 elif [[ -d "$tmp" ]]
   then
     echo "Contents of $tmp"
     ls "$tmp" 2>/dev/null
     echo
-    rmyn "${red}${bold}Remove temporary files? (y/n) ${tput0}" "Leaving temporary files in $tmp" rm -r "$tmp"
+    rmyn "${red}${bold}Remove temporary files? (y/n) ${tput0}" "Leaving temporary files in $tmp" rm -r "$tmp" *Part\ ??\:\ *.opus
+
 fi
 }
 ##recreateindex()##############################################################################
