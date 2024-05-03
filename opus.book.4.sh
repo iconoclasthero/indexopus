@@ -26,7 +26,8 @@ ffmpeg2(){
   for file in ${mediaext}
     do
       echo "${file%.*}" >> /tmp/mytmpfile
-      readarray -t ffoutput < <(ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "$filtercomplex" -c:a libopus -b:a 17k -frame_duration:a 60 -ar 24000 "${file%.*}.opus" 2>&1 >/dev/null)
+      readarray -t ffoutput < <(ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "$filtercomplex" -c:a libopus -b:a 17k -frame_duration:a 60 -ar 24k "${file%.*}.opus" 2>&1 >/dev/null)
+      # hmmm with the 2>&1 >/dev/null, I'm guessing that this is not going to work as a test anymore
       erfile="${ffoutput[0]}"; erfile="${erfile%%=*}"
       if [[ "$erfile" != "size" ]] && [[ "$erfile" != *already\ exists.\ Exiting* ]]
         then
@@ -78,21 +79,17 @@ stats(){
   printf '%s%% file size reduction\n' "$r"
 }
 
-
-function breakout(){
+breakout(){
   while IFS= read -r pid
    do
      [[ "$pid" = *"$script"* ]] || [[ "$pid" = *ffmpeg* ]] && echo "${pid% pts*}" >> "$pidfile"
   done< <(ps --tty $(tty) Sf)
-  opusbook4ka "$pidfile" ; }
-
-# opusbook4ka is a dependency
+  opusbook4ka "$pidfile" ; }   # opusbook4ka is a dependency
 
 ###START
 
 [[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
-rm /tmp/mytmpfile 2>/dev/null
-[[ -f "$pidfile" ]] && rm "$pidfile"
+rm /tmp/mytmpfile .opus.book.pids "$pidfile" 2>/dev/null
 startext=( ${mediaext} ); startext="${startext##*.}"
 filenum="$(ls ${mediaext}|wc -l)"
 [[ "$filenum" -lt "$threads" ]] && threads="$filenum"
@@ -101,22 +98,20 @@ printf '%s\n\nDuration of %s %s file(s) to convert: %s\n\n\n' "$(pwd)" "$filenum
 
 for ((i=0; i<"$threads"; i++))
  do
-  if [[ -n "$1" ]];
+  if [[ -n "$1" ]]
    then
      file="$1"
-     ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "$filtercomplex" -c:a libopus -b:a 17k -ar 24k -frame_duration:a 60 -ar 24000 "${file%.*}.opus"; exit
+     ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "$filtercomplex" -c:a libopus -b:a 17k -ar 24k -frame_duration:a 60 "${file%.*}.opus"
+     exit
    else
     ffmpeg2&    # call function to background to convert media files to opus, counter
   fi
-   \sleep 0.5s  #jic i run from cli
+    \sleep 0.5s  #\jic i run from cli
  done
 
 wait  #for the bacground operations to finish up
-
 #stats   #not being used right now.  maybe make a cli option?  maybe not?
-
 rm /tmp/mytmpfile .opus.book.pids "$pidfile" 2>/dev/null
-
 exit
 
 <!wait-n> Run up to 5 processes in parallel (bash 4.3): i=0 j=5; for elem in "${array[@]}"; do (( i++ < j )) || wait -n; my_job "$elem" & done; wait
