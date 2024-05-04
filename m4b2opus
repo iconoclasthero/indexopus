@@ -13,10 +13,12 @@ tput0="$(tput sgr0)" #clear tput
 red="$(tput setaf 9)" #red fg
 white="$(tput setaf 15)" #white fg
 relipsis="$red..."
+stamp="$(date +%s)"
+
 ##definitions#################################################################################
 
 pause(){ read -p "$*" ; }
-##pause()#####################################################################################
+##--> pause() <--#############################################################################
 
 
 fnrmr(){
@@ -82,16 +84,20 @@ for path in "$@"
 
 done
 }
-##--> fnrmr() <--#######################################################################################
+##--> fnrmr() <--###################################################################################
 
 editscript(){
   local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
      if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
      else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
   fi; }
-##--> editscript() <--################################################################################
+##--> editscript() <--##############################################################################
 
 filecheck(){
+   clifilename="$1"
+   [[ -d "$clifilename" ]] && isdir=true && clidir="$cilfilename" && cd "$clidir"
+   [[ -f "$clifilename" ]] && isfile=true && clidir="${clifilename%/*}" && cd "$clidir"
+
   if [[ ! -z "$1" ]] && [[ "$1" != *\ --\ Audiobook.m4b ]]
     then
       printf 'The file specified: %s\nis not in the correct format of\n* -- Audiobook.m4b, checking directory for an m4b file...' "$1"
@@ -155,11 +161,10 @@ m4bsplit(){
 
 #     Chapter #0:0: start 0.000000, end 1290.013333
 #       first   _     _     start    _     end
-local stamp bpath outputdur START first start end partnum n
+local bpath outputdur START first start end partnum n
 outputdir="$2"
 START=1
 bpath="$(basename "$PWD")"
-stamp="$(date +%s)"
 
 while [ "$#" -gt 0 ]; do
 
@@ -223,12 +228,14 @@ rmyn(){
 ##--> rmyn() <--######################################################################################
 
 
-
+##--> Main Code <--################################################################################
 ##--> m4b2opus <--####################################################################################
 
 [[ "$1" == @(edit|e|nano) ]] && editscript
 
 [[ "$1" == "-y" ]] && shift && rmmatch=true
+
+#[[ "$1" ]] && clifile "$1"
 
 filecheck "$1" && [[ ! "$?" == 0 ]] && exit
 
@@ -352,7 +359,7 @@ elif [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]
 # the 2>/dev/null does not work for rmyn -- rewrite!!
     rmyn "Remove the conversion ./m4a directory? " "...Leaving ./m4a" rm -r "$convertdir"/m4a #2>/dev/null
     [[ ! "$iorm" ]] && rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
-    fnrmr *m4b "$convertdir"   #rmr is a dependency
+    fnrmr *m4b "$convertdir" .tmp* #rmr is a dependency
     printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 else
     ls "$tmp" "$convertdir/m4a" 2>/dev/null
@@ -361,7 +368,7 @@ else
 # the 2>/dev/null does not work for rmyn -- rewrite!!
     rmyn "Remove the conversion ./m4a directory? " "...Leaving ./m4a" rm -r "$convertdir/m4a" #2>/dev/null
     [[ ! "$iorm" ]] && rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
-    fnrmr *m4b "$convertdir"
+    fnrmr *m4b "$convertdir" .tmp*
     printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 fi
 
