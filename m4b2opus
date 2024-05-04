@@ -95,32 +95,29 @@ editscript(){
 
 filecheck(){
    clifilename="$1"
-   [[ -d "$clifilename" ]] && isdir=true && clidir="$cilfilename" && cd "$clidir"
-   [[ -f "$clifilename" ]] && isfile=true && clidir="${clifilename%/*}" && cd "$clidir"
+   [[ -d "$clifilename" ]] && isdir=true && clidir="${clifilename%/*}" && cd "$clidir" && unset clifilename
+   [[ -f "$clifilename" ]] && isfile=true && clidir="${clifilename%/*}" && cd "$clidir" && clifilename="${clifilename##*/}"
 
-  if [[ ! -z "$1" ]] && [[ "$1" != *\ --\ Audiobook.m4b ]]
+  if [[ ! -z "$clifilename" ]] && [[ "$clifilename" != *\ --\ Audiobook.m4b ]]
     then
-      printf 'The file specified: %s\nis not in the correct format of\n* -- Audiobook.m4b, checking directory for an m4b file...' "$1"
-  elif [[ "$1" == *\ --\ Audiobook.m4b ]] && [[ -f "$1" ]]  #suggested this is poor design to ignore the input if it is not in the correct format.
+    printf 'The file specified: %s\nis not in the correct format of\n* -- Audiobook.m4b, checking directory for an m4b file...' "$clifilename"
+  elif [[ "$clifilename" == *\ --\ Audiobook.m4b ]] && [[ -f "$1" ]]
     then
-      m4bin="$1"
+    m4bin="$1"
   else
-      files=(*m4b)
-      if [[ -f "$files" ]] && [[ "${#files[@]}" == 1 ]]
-       then
-         if [[ "$files" == *\ --\ Audiobook.m4b ]]
-          then
-            m4bin="$files"
-         elif [[ "$files" == *m4b ]]
-          then
-            m4bin="${files/.m4b/ -- Audiobook.m4b}"
-            mv "$files" "$m4bin"
-         fi
-      else
-        echo "No single & appropriate input file found or specified, please check and retry..."
-        ls
-        exit 1
+    files=(*m4b)
+    if [[ -f "$files" ]] && [[ "${#files[@]}" == 1 ]]; then
+      if [[ "$files" == *\ --\ Audiobook.m4b ]]; then
+        m4bin="$files"
+      elif [[ "$files" == *m4b ]]; then
+        m4bin="${files/.m4b/ -- Audiobook.m4b}"
+        mv "$files" "$m4bin"
       fi
+    else
+      echo "No single & appropriate input file found or specified, please check and retry..."
+      ls
+      exit 1
+    fi
   fi; }
 ##--> filecheck() <--#################################################################################
 
@@ -252,7 +249,6 @@ printf '\n%sStarting .m4b file:%s' "$bold" "$tput0"
 printf ' %s%s%s%s\n' "$bold" "$red" "$m4bin" "$tput0"
 printf '%sStarting duration :%s' "$bold" "$tput0"
 printf ' %s%s%s\n' "$red" "$bold" "$m4bindur" "$tput0"
-
 title="${m4bin% -- *}"
 swd="$PWD"
 convertdir="$CACHE/m4b2opus-$title"
@@ -357,6 +353,7 @@ elif [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]
     checkdur
     printf '\n\n'
 # the 2>/dev/null does not work for rmyn -- rewrite!!
+    printf '%s-y/-f specified, but the durations do not match!\n%s' "$bold" "$tput0"
     rmyn "Remove the conversion ./m4a directory? " "...Leaving ./m4a" rm -r "$convertdir"/m4a #2>/dev/null
     [[ ! "$iorm" ]] && rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
     fnrmr *m4b "$convertdir" .tmp* #rmr is a dependency
@@ -372,7 +369,7 @@ else
     printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 fi
 
-
+exit
 
 
 
