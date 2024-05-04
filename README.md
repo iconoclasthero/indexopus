@@ -20,9 +20,10 @@ A config file is required at '$HOME/.config/indexopus.conf' with the following i
   absserver="https://web.address.com"
   abssqlite="/path/to/location/of/config/absdatabase.sqlite"
 
-# opus.book.4
+# opus.book.4 / opusbook4ka
 I use screen and opus.book.4 to manage the conversions for me.  The "4" refers to the number of cores I have and use.  
 YMMV, change the code to the number of parallel conversion jobs you want.
+opusbook4ka is the helper program that lets you break out of the background jobs...only need it if you need to ^C!
 
 # mediaduration, quartero4, chaptersplit
 I have included these separate utilities I've been using to split files into chapters from an embedded index.  
