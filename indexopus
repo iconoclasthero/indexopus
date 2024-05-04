@@ -15,10 +15,8 @@
 # https://mywiki.wooledge.org/BashFAQ/054 -- How can I tell whether a variable contains a valid number?
 
 
-
-
 shopt -s extglob nullglob dotglob
-scriptname=$(realpath "$0")
+scriptpath=$(realpath "$0")
 confpath="$HOME/.config/indexopus.conf"
 . "$confpath"
 ulon="$(tput smul)"  #underline on
@@ -28,12 +26,13 @@ white="$(tput setaf 15)" #white fg
 tput0="$(tput sgr0)" #reset tput changes
 bold="$(tput bold)" #bold on
 relipsis="$red..."
-stamp="$(date +%s)"
+stamp="$(date +%s)"  #sets datecode for all of indexopus - could use info from m4b2opus later
+tmp="/tmp/indexopus-$stamp" #this could change based on info from m4b2opus
 
 editscript(){
-  local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
-     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
-     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
+  local script path; script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
+     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptpath"); exit
+     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit;
   fi; }
 ##--> editscript() <--#################################################################################
 
@@ -115,7 +114,6 @@ chno=0
 for i in "$title -- Part "*.opus
  do
    chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna#*: }"
-
    if [[ "$t" != 0 ]]
     then
       ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
@@ -124,11 +122,11 @@ for i in "$title -- Part "*.opus
       createdindex+=( "$i" )
       createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
       createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
-
     else
       ts="00:00:00.000"
       printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> "$tmp/opusindex"
       printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
+#pause "$i"
       createdindex+=( "$i" )
       createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
       createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
@@ -175,6 +173,7 @@ reintitle=( *\ --\ Audiobook.opus )
 
 for ((chno=0;chno<"${#chap_titles[@]}";chno++))
  do
+   t="${chap_starts[$chno]}"
    if [[ "$t" != 0 ]]
     then
       ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
@@ -200,7 +199,6 @@ for ((chno=0;chno<"${#chap_titles[@]}";chno++))
       createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
       createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
    fi
-      t="${chap_starts[$chno]}"
 done
 
 #cat "$tmp/opusindex"
@@ -221,6 +219,7 @@ if [[ "$rmmatch" = true ]]
 elif confirm "${bold}${red}Apply index? ${tput0}"
   then
    writeindex "$reintitle"
+   rmmatch=true  #at this point, having said yes to apply index, yes the rest of the way.
 else
    mediainfo "$reintitle"
    printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
@@ -230,23 +229,24 @@ fi
 
 mediainfo *Audiobook.opus
 
-rmmatch=true
+rm -rf "$tmp"
+#probably no longer need to preserve the temp files.  they're mostly only necessary for debugging.
+#if [[ -d "$tmp" ]] && [[ "$rmmatch" = true ]]
+#  then
+#    rm  -rf "$tmp"
+#    ls "$tmp" 2>/dev/null
+##    rm *Part\ ??\:\ *.opus 2>/dev/null #probably don't need/want this here!
+#elif [[ -d "$tmp" ]]
+#  then
+#    echo "Contents of $tmp"
+#    ls "$tmp" 2>/dev/null
+#    echo
+#    rmyn "${red}${bold}Remove temporary files? (y/n) ${tput0}" "Leaving temporary files in $tmp" rm -rf "$tmp" *Part\ ??\:\ *.opus
+#
+#fi
 
-if [[ -d "$tmp" ]] && [[ "$rmmatch" = true ]]
-  then
-    rm -r "$tmp"
-    ls "$tmp" 2>/dev/null
-    rm *Part\ ??\:\ *.opus
-elif [[ -d "$tmp" ]]
-  then
-    echo "Contents of $tmp"
-    ls "$tmp" 2>/dev/null
-    echo
-    rmyn "${red}${bold}Remove temporary files? (y/n) ${tput0}" "Leaving temporary files in $tmp" rm -r "$tmp" *Part\ ??\:\ *.opus
-
-fi
 }
-##recreateindex()##############################################################################
+##reindex()####################################################################################
 
 writeindex(){
 local writetitle="$1"
@@ -257,7 +257,7 @@ if [[ "$(opustags "$writetitle")" = *CHAPTER* ]]
     printf '\n%s%s%s contains existing tags; removing...%s\n' "$relipsis" "$bold" "$title" "$tput0"
     tags=( $(opustags "$writetitle") )
     tags=( $(printf -- '-d%s\n' "${tags[@]%=*}"|\grep CHAPTER|sort -u) )
-    printf '\n%s%smediainfo of existing %s:%s\n' "$relipsis" "$bold" "$writetitle" "$tput0"
+    printf '\n%smediainfo of existing %s:%s\n' "$relipsis" "$writetitle" "$tput0"
     mediainfo "$writetitle"
     printf '\n%sremoving exiting CHAPTER tags with opustags...%s\n\n' "$relipsis" "$tput0"
     opustags "${tags[@]}" -i "$writetitle"
@@ -265,7 +265,7 @@ if [[ "$(opustags "$writetitle")" = *CHAPTER* ]]
       printf 'Error!\nCHAPTER tags still present in opus file.\n%s' "${ck4tags[@]}" &&
       exit
   else
-    printf '%s%sMediainfo of existing %s:%s\n' "$red" "$bold" "$writetitle" "$tput0"
+    printf '%smediainfo of existing %s:%s\n' "$relipsis" "$writetitle" "$tput0"
     mediainfo "$writetitle"
 fi
 
@@ -275,32 +275,25 @@ while read -r chaptag
  done < "$tmp/opusindex"
 
 opustags -i "$writetitle" "${args[@]}"
-printf '%s...Chapter info added...\n\n%s' "$red" "$tput0"
+printf '%sChapter info added...\n\n%s' "$relipsis" "$tput0"
 
 }
 ##--> writeindex() <--#################################################################################
 
 
 
-
-
-#### ---- Main Code ---- ####
+##--> Main Code <--####################################################################################
+##--> indexopus <--####################################################################################
 
 [[ "$1" = @(edit|e|nano) ]] && editscript
 
-[[ "$1" = "-y" ]] && shift && rmmatch=true
-[[ "$1" = "reindex" ]] && shift && reindex=true
+#better option handling needed
+[[ "$1" = "-y" ]] && shift && rmmatch=true    # this is to conrirm removal of temp files upon time match...and other stuff
+[[ "$1" = "reindex" ]] && shift && reindex=true  # this is when in the directory of `* Audiobook.opus; metadata.json` from audiobookshelf.
 
-tmp="/tmp/indexopus-$stamp"
+mkdir "$tmp" || printf '%s%sFailed to create %s!\nexit 1\n%s' "$red" "$bold" "$tmp" "$tput0" #&& exit
 
-if [[ ! -d "$tmp" ]]
-  then
-    mkdir "$tmp"
-  else
-    rmdir -r "$tmp" && mkdir "$tmp"
-fi
-
-if [[ "$reindex" = true ]]
+if [[ "$reindex" = true ]]   #if reindex is true, check for rmmatch and reindex.
  then
    [[ "$1" = "-y" ]] && shift && rmmatch=true
    reindex
@@ -308,7 +301,9 @@ if [[ "$reindex" = true ]]
    exit
 fi
 
-
+# this checks for a metadata.json, ideally from audiobookshelf.  there could be other metadata.json files
+# abs doesn't support json files with other names, nor is there anything in the json identifying it
+# as an abs file.  It does check the .json for the chapter index, so there's at least that...
 if [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].title' metadata.json)" ]]
   then
     reindex=true
@@ -321,7 +316,6 @@ if [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].title' metadata.json)" ]]
       confirm "${bold}Would you like to try to reindex the file after importing chapter information?${tput0}" &&
       reindex=true
 fi
-#      echo "${red}google-chrome $absserver"$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")"/chapters" &&
 
 if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) &> /dev/null
  then
@@ -368,7 +362,10 @@ if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]
     then
       printf '\n...Overwriting %s -- Audiobook.opus...\n' "$ititle"
     else
-      exit
+      [[ -f metadata.json ]] &&
+        confirm "$(printf '\nNot overwriting.\nA metadata.json file was found. Would you like to reindex the file?')" &&
+        reindex=true && overwrite=false ||
+        exit
    fi
 fi
 
@@ -382,7 +379,6 @@ fi
 printf '\n%sGenerating the index for %s -- Audiobook.opus from...%s\n\n' "$relipsis" "$ititle" "$tput0"
 
 createindex
-
 printf '%s:~%s~%s\n\n' "${createdindex[@]}"|paste|column -t -s "~"
 printf '\n%sConcatenating %s -- Part ??: *.opus...%s\n\n' "$relipsis" "$ititle" "$tput0"
 
@@ -390,9 +386,9 @@ printf '\n%sConcatenating %s -- Part ??: *.opus...%s\n\n' "$relipsis" "$ititle" 
 dirsize="$(du -csb *Part*opus|tail -n1)"
 dirsize="${dirsize%%$'\t'*}" #remove everything after first tab stop
 dirsize="$((dirsize/1000))" #convert bytes to KiB
-printf '%sparts=  %sKiB time=%s%s\n' "$red" "$dirsize" "$duration" "$tput0"
-ffmpeg -nostdin -hide_banner -v warning -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "/tmp/$output"
-[[ "$?" != 0 ]] && echo && echo "ffmpeg failed to concatinate; exit 1" && echo && exit 1
+printf '%sparts= %sKiB time=%s%s\n' "$red" "$dirsize" "$duration" "$tput0"
+[[ "$overwrite" != false ]] && ffmpeg -nostdin -hide_banner -v error -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "/tmp/$output"
+[[ "$overwrite" != false ]] && [[ "$?" != 0 ]] && echo && echo "ffmpeg failed to concatinate; exit 1" && echo && exit 1
 
 printf '\n\n%sIncorporating index into%s %s -- Audiobook.opus%s\n\n%s' "$relipsis" "$white" "$ititle" "$relipsis" "$tput0"
 
@@ -411,7 +407,7 @@ writeindex "$output"
 
 if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null
  then
-   printf '%schecking output from mediainfo...\n\n%s' "$relipsis" "$tput0"
+   printf '%sChecking output from mediainfo...\n\n%s' "$relipsis" "$tput0"
 
    outdur="$(mediainfo -f "$output"|grep Duration|head -n1)"
    outdur="${outdur#*: }"
@@ -443,14 +439,16 @@ fi
    exit
 
 [[ "$reindex" = true ]] && confirm "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info?%s' "${red}" "${bold}" "${tput0}")" && indexopus reindex
-rmyn "Remove temporary files? (y/n) " "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ ??:*.opus "$tmp" && iorm=true
-printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
+rmyn "${bold}${red}Remove temporary files? (y/n) ${tput0}" "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ ??:*.opus "$tmp" && iorm=true
+printf '\n\n%s...Done.\n\nPlease see %s/%s\n\n' "$relipsis" "$PWD" "$ioutput"
 
 #exec 5<> "$tmp/5"
 (( $rmynres == 1 )) && echo "$tmp remains"
 
 #clean up /tmp/indexopus-* files older than a day:
 find /tmp -iname "indexopus-1*" -mtime -1 -exec rm -rf {} 2>/dev/null \;
+
+printf '%s' "$tput0"
 
 [[ "$iorm" = true ]] && exit 2 || exit  # this has to be here so that it is passed back to m4b2opus
 
