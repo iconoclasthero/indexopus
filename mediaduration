@@ -10,7 +10,9 @@ finddur(){
                        tail -n 1)
                    )
     [[ "${tdurs[0]}" ]] && tdur=$(( 10#${tdurs[0]} + 10#${tdurs[1]} + 10#${tdurs[2]} )) || tdur=0
-    [[ "$tdur" -gt 0 ]] && printf 'Duration of .%s files: %s\n' "$1" "${tdurs[*]}"
+    [[ "$tdur" -gt 0 ]] && [[ "$1" != opus ]] &&
+      printf 'Duration of .%s files : %s\n' "$1" "${tdurs[*]}" ||
+      printf 'Duration of .%s files: %s\n' "$1" "${tdurs[*]}" 
 }
 
 

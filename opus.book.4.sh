@@ -2,7 +2,7 @@
 # nb: the swp file that editscript relies on is provided by nano
 # opusbook4ka is an external dependency
 
-trap '{ breakout; exit 1; }' INT
+trap '{ breakout -b; exit 1; }' INT
 shopt -s extglob nullglob
 scriptpath="$(realpath $0)"
 script="${scriptpath##*\/}"
@@ -17,6 +17,14 @@ relipsis="$red..."
 tput0="$(tput sgr0)"
 tmp="/tmp/opus.book.4-$stamp"
 
+## load functions #############################################################################
+## printline()
+## pause()
+## checkdur()
+. $HOME/bin/gits/indexopus/indexopus.lib
+
+
+
 editscript(){
   local scriptpath script path swp; scriptpath=$(realpath "$0" 2>/dev/null); script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
      [[ ! -e "$swp" ]] && (/usr/bin/nano "$scriptpath") && exit
@@ -30,15 +38,23 @@ ffmpegs(){
 ffmpeg2(){
  local startfile
   touch "$tmp"
-  for startfile in ${mediaext}
-    do
+  for startfile in ${mediaext}; do #do not quote; contains wildcard!
       file="${startfile%.*}"
       opusfile="$file.opus"
-     [[ "${outputarray[@]}" != *"$file"* ]] && outputarray+=("$file") #&& echo "$file"
-     outputfiles="$(<"$tmp")"
-     [[ "$outputfiles" != *"$file"* ]] && echo "${relipsis}Converting $file$tput0" |tee -a "$tmp"
-
-      readarray -t ffoutput < <(ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$startfile" -filter_complex "$filtercomplex" -c:a libopus -b:a 17k -frame_duration:a 60 -ar 24k "$opusfile" 2>&1 >/dev/null)
+      [[ "${outputarray[@]}" != *"$file"* ]] && outputarray+=("$file") #&& echo "$file"
+      outputfiles="$(<"$tmp")"
+      [[ "$outputfiles" != *"$file"* ]] && echo "${relipsis}Converting $file$tput0" >> "$tmp"
+      readarray -t ffoutput < <(ffmpeg -n \
+                                       -nostdin \
+                                       -hide_banner \
+                                       -loglevel error \
+                                       -stats \
+                                       -i "$startfile" \
+                                       -c:a libopus \
+                                       -b:a 17k \
+                                       -frame_duration:a 60 \
+                                       -ar 24k \
+                                       "$opusfile" 2>&1 >/dev/null)
 
 # hmmm with the 2>&1 >/dev/null, I'm guessing that this is not going to work as a test anymore
       erfile="${ffoutput[0]}"; erfile="${erfile%%=*}"
@@ -49,36 +65,6 @@ ffmpeg2(){
        fi
     done ; }
 
-
-checkdur(){
-  local m4as m4bs opuss mp3s checkdurexts
-  checkdurexts='@(m4a|m4b|mp3|opus)'
-  m4as=(*m4a)
-  m4bs=(*m4b)
-  opuss=(*opus)
-  mp3s=(*mp3)
-
-if [[ "$1" = $checkdurexts ]]
-  then
-  find -type f -iname "*.$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
-    perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
-    tail -n 1
-elif [[ "$1" = *.$checkdurexts ]]
-  then
-  printf '%s%s  %s\n%s' "$red" "$(mplayer -vo dummy -ao dummy -identify "$1" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$1" "$tput0"
-else
-    printf '\n%sDuration(s):%s\n' "$bold" "$tput0"
-    [[ "${#m4as[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white"  "${m4as[@]}" "$tput0"
-    [[ "${#m4bs[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${m4bs[@]}" "$tput0"
-    [[ "${#mp3s[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.mp3" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${mp3s[@]}" "$tput0"
-    [[ "${#opuss[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opuss[@]}" "$tput0"
- fi
-}
-##--> checkdur() <--###########################################################################
 
 stats(){
   if [[ "$file" ]]; then
@@ -119,45 +105,146 @@ stats(){
 ##--> stats() <--##############################################################################
 
 breakout(){
+  local breakout
+  while (( $# > 0 )); do
+    [[ "$1" = -a ]] && array=true && unset pidarray && shift
+    [[ "$1" = -b ]] && breakout=true && shift
+  done
+
   while IFS= read -r pid
    do
-     [[ "$pid" = *"$script"* ]] || [[ "$pid" = *ffmpeg* ]] && echo "${pid% pts*}" >> "$pidfile"
+#     [[ "$pid" = *"$script"* ]] || [[ "$pid" = *ffmpeg* ]] &&
+#       pidarray+=( "$(echo "${pid% pts*}" |tee -a "$pidfile")" )
+      [[ "$pid" = *"$script"* ]] || [[ "$pid" = *ffmpeg* ]] && echo "${pid% pts*}" >> "$pidfile"
+      [[ "$array" && "$pid" = *ffmpeg* ]] && pidarray+=( "${pid% pts*}" )
   done< <(ps --tty $(tty) Sf)
-  opusbook4ka "$pidfile" ; }   # opusbook4ka is a dependency
+
+  [[ "$breakout" ]] && [[ ! "$array" ]] &&
+     opusbook4ka "$pidfile" ; }   # opusbook4ka is a dependency
+
 ##--> braekout() <--###########################################################################
+
+progress() {
+  local opusdur="00:00:00" indur="$1"
+  local opuspresent ck4files
+  pidarray=true  # this shouldn't get set until breakout -a is run below...
+
+  progress_bar_sexagesimal(){  #this will probably get moved out at some point...
+    local elapsed_time="$1"
+    local target_time="$2"
+    local width=$(( $(tput cols) -6 ))
+    local elapsed_seconds="$(sex2sec "$elapsed_time")"
+    local target_seconds="$(sex2sec "$target_time")"
+    local percent=$(( (elapsed_seconds * 100) / target_seconds ))
+    local progress=$(( (width * percent) / 100 ))
+    local remainder=$(( width - progress ))
+    printf '\r%s[%s' "$bold" "$tput0"
+    for ((i=0; i<progress; i++)); do printf '%s—%s' "$red" "$tput0"; done
+    printf '%s>%s' "$red" "$tput0"
+    for ((i=0; i<remainder-1; i++)); do printf " "; done
+    printf '%s] %d%%%s' "$bold" "$percent" "$tput0"
+  }
+
+# figuring out a condition to end this loop is going to be an issue:
+# there are time discrepancies.  sometimes more than a minute now that i think about it...
+# though usually the opus files go over.  i need to come up with another boundary condition...
+# look for the pids?
+
+  while [[ "${indur%:*}" != "${opusdur%:*}" ]] &&
+    (( $(sex2sec "$opusdur") + 20 < $(sex2sec "$indur") )) &&
+    [[ "$pidarray" ]]; do
+
+      opusdur="$(mediaduration opus)"
+      tput cup "$(( $(tput lines) - 3 ))" 0
+
+      for ((i=0; i<4; i++)); do
+        tput cuu1 # Move cursor up one more line
+        tput el   # Clear the current line
+      done
+      (( "$(date +%s)" % 6 == 0 )) && echo "( • )( • )----ԅ(‾⌣‾ԅ)" || echo
+      [[ "$startext" != "flac" ]] && notflac=' '
+      printf '%sDuration of %s.%s files: %s\n%s' "$bold" "$notflac" "$startext" "$indur" "$tput0"
+      printf '%sDuration of .opus files: %s\n%s' "$bold" "$opusdur" "$tput0"
+      progress_bar_sexagesimal "$opusdur" "$indur"
+      breakout -a
+      sleep 1
+      tput cup 0 0
+      printf '%s\n' "${bannerarray[@]}"
+      outputfiles="$(<"$tmp")"
+      echo "$outputfiles"
+  done
+}
+
+
+#while [[ "${indur%:*}" != "${opusdur%:*}" ]] &&
+#  (( $(sex2sec "$opusdur") + 20 < $(sex2sec "$indur") ));
+#  if [[ "$first_call" != false ]]; then
+#    printf 'Duration of %s files : %s\n' "$startext" "$indur"
+#    first_call=false
+#  else
+#    if [[ "$opuspresent" != true ]]; then
+#      ck4files=( *opus )
+#      [[ "$ck4files" ]] && opusdur="$(mediaduration opus)" && opuspresent="true"
+#    else
+#      opusdur="$(mediaduration opus)"
+#    fi
+#    tput cuu1 # Move cursor up one more line
+#    tput el   # Clear the current line
+#    tput cuu1 # Move cursor up one more line
+#    tput el   # Clear the current line
+#  fi
+#  printf 'Duration of .opus files: %s\n' "$opusdur"
+#  [[ "$opusdur" ]] &&
+#  progress_bar_sexagesimal "$opusdur" "$indur"
+#  echo
+#  \sleep 10s
+#done ; }
+#
+
+
+###--> progress() <--#########################################################################
+
+
+
 
 
 ###--> Main Code <--###########################################################################
 ###--> opus.book.4 <--#########################################################################
 
-line="$(printf '%s%*s\n' "$red" "$(tput cols)"|tr ' ' "-")$tput0"
-printf '%s%s%s%s%s\n' "$line" "$tput0" "$bold" "$script" "$tput0"
+#line="$(printf '%s%*s\n' "$red" "$(tput cols)"|tr ' ' "-")$tput0"
+#printf '%s%s%s%s%s\n' "$line" "$tput0" "$bold" "$script" "$tput0"
 
-[[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
+echo
+bannerarray+=( "$(printline "${bold}  Welcome to ${white}opus.book.4  ${tput0}")" )
+echo "$bannerarray"
+echo
 
 mediafiles=( ${mediaext} )
-
 
 #test for more than one accptable media extension and fail if it finds more than one.
 for exts in "${mediafiles[@]}"
   do
     extensions+=( "${exts##*.}" )
   done
+
 (( $(printf '%s\n' "${extensions[@]}"|sort -u|wc -l) > 1 )) &&
-  printf '\n%sMore than one type of media file found!\nopus.book.4 cannot be launched from a folder where more than one type of media file is located.\nCorrect and try again.\n%sexit 1\n\n' "$bold" "$tput0" && exit 1
+  printf '\n%sMore than one type of media file found!\nopus.book.4 cannot be launched from a folder where more than one type of media file is located.\nCorrect and try again.\n%sexit 1\n\n' "$bold" "$tput0" &&
+  exit 1
 
 while (( $# > 0 ))
   do
-    [[ "$1" = "-h" || "$1" = "--help" ]] && help=true && shift
-    [[ "$1" = "-s" || "$1" = "--stats" ]] && statson=true && shift
-    [[ "$1" = "-f" || "$1" = "--force" ]] && overwrite=true && shift 	#this doesn't actually change what ffmpeg does yet!
-    startfile="$1" && file="$startfile" && opusfile="${file%.*}.opus"								#it's just letting me into the program atm
+    [[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
+    [[ "$1" == -d ]] && inputdur="$2" && shift
+    [[ "$1" = "-h" || "$1" = "--help" ]]  && help=true
+    [[ "$1" = "-s" || "$1" = "--stats" ]] && statson=true
+    [[ "$1" = "-f" || "$1" = "--force" ]] && overwrite=true          	#this doesn't actually change what ffmpeg does yet!
+    startfile="$1" && file="$startfile"   && opusfile="${file%.*}.opus"								#it's just letting me into the program atm
     shift
   done
 
 if [[ "$startfile" && ! -f "$startfile" && "$startfile" != $mediaext ]] || (( "${#mediafiles[@]}" == 0 ))
   then
-  echo "Usage: $0 [-s|--stats] [-f|--force] [-h|--help] <optional filename>"
+  echo "Usage: $0 [-d] "##:##:##" [-s|--stats] [-f|--force] [-h|--help] <optional filename>"
   echo "Files must be of $mediaext format."
   exit 1
 fi
@@ -168,40 +255,65 @@ filenum="$(ls ${mediaext}|wc -l)"							# how many of those files are there?
 
 [[ "$filenum" -lt "$threads" ]] && threads="$filenum"
 
-if  [[ "$startfile" ]] && [[ -f "$opusfile" ]] && [[ "$overwrite" != true ]]
-  then
+if  [[ "$startfile" ]] && [[ -f "$opusfile" ]] && [[ "$overwrite" != true ]]; then
   printf '\n%s%s%s exists!%s\n   %sexit 1\n\n%s' "$relipsis" "$bold" "$opusfile" "$white" "$tput0"
   echo "$line"
   exit 1
-elif [[ "$startfile" ]]
-  then
-  printf '\n%sConverting %s.\n   Duration: %s%s%s%s\n\n' "$relipsis" "$file" "$tput0" "$bold" "$(ffprobe -i "$file" -show_entries format=duration -v quiet -of csv="p=0" -sexagesimal|  awk -F: '{printf "%d:%d:%.2f\n", $1, $2, $3}')" "$tput0"
-  ffmpeg -y -nostdin -hide_banner -loglevel error -stats -i "$file" -filter_complex "$filtercomplex" -c:a libopus -b:a 17k -ar 24k -frame_duration:a 60 "${file%.*}.opus" 
+
+elif [[ "$startfile" ]]; then
+  printf '\n%sConverting: %s.\n     Duration: %s%s%s%s\n\n' "$relipsis" "$file" "$tput0" "$bold" "$(ffprobe -i "$file" -show_entries format=duration -v quiet -of csv="p=0" -sexagesimal |
+    awk -F: '{printf "%02d:%02d:%02.2f\n", $1, $2, $3}')" "$tput0"
+  ffmpeg -y \
+         -nostdin \
+         -hide_banner \
+         -loglevel error \
+         -stats \
+         -i "$file" \
+         -filter_complex "$filtercomplex" \
+         -c:a libopus \
+         -b:a 17k \
+         -ar 24k \
+         -frame_duration:a 60 \
+         "${file%.*}.opus"
   printf '\n%sDurations:\n%s' "$bold" "$tput0"
   checkdur "$startfile"
   checkdur "$opusfile"
+
 elif (( filenum > 0 ))
   then
 #need to add a formal confirm here at some point, but really, who's going to be doing this?
 #ffmpeg cannot overwrite here so probably have to exit if the files aren't deleted... further, we could actully compare the opus files that exist to the ones that are going to be converted...but since im not using find here, that probably donesnt matter.
-  if [[ "$overwrite" = true ]]
-    then
+  if [[ "$overwrite" = true ]]; then
     printf '\n%s%s invoked with --force|-f flag to overwrite existing .opus files.\n' "$red" "$script"
     printf '\n%sConfirm deletion of existing *.opus files prior to starting conversion!%s\n' "$bold" "$tput0"
     printf '\nIt'\''d be great if there was actually a confirm here... your shit'\''s deleted sucker!\n'
     printf 'FWIW, ffmpeg cannot be invoked with -y here because of the way multipe instances race.\n\n'
     rm -i *opus
   fi
-  printf '%sDuration of %s %s file(s) to convert: %s%s%s%s%s\n   in: %s%s\n\n' "$relipsis" "$filenum" "$startext" "$tput0" "$bold" "$(mediaduration "$startext")" "$tput0" "$red" "$PWD" "$tput0"
-  printf '%sConversion progress:\n%s'  "$relipsis" "$tput0"
-  for ((i=0; i<"$threads"; i++))
-    do
-      ffmpeg2&    # call function to background to convert media files to opus, counter
-      sleep 0.5s
-    done
+
+[[ ! "$inputdur" ]] && inputdur="$(mediaduration "$startext")"
+  bannerarray+=( "" )
+  bannerarray+=( "$(printf '%sDuration of %s %s file(s) to convert: %s%s%s%s%s\n...in: %s%s\n\n' \
+"$relipsis" "$filenum" "$startext" "$tput0" "$bold" "$inputdur" "$tput0" "$red" "$PWD" "$tput0")" )
+  bannerarray+=( "$(printf '%sConversion progress:\n%s'  "$relipsis" "$tput0")" )
+  printf '%s\n%sGathering files...\n%s' "${bannerarray[${#bannerarray[@]}-2]}" "$relipsis" "$tput0"
+
+  for ((i=0; i<"$threads"; i++)); do
+    ffmpeg2&    # call function to background to convert media files to opus, counter
+    sleep 0.5s
+  done
+
+  clear -x
+  progress "$inputdur"
   wait  #for the bacground operations to finish up
-  echo
+  clear -x
+  printf '%s\n' "${bannerarray[@]}"
+  outputfiles="$(<"$tmp")"
+  printf '%s\n\n%s' "$outputfiles"
   mediaduration #external dependency
+  echo
+  lsopus=( *opus )
+  printf '%s\n' "${lsopus[@]}"
 else
   # Check if filename is provided
     echo "Usage: $0 [-s|--stats] [-f|--force] <optional filename>"
@@ -211,9 +323,12 @@ fi
 [[ "$statson" = true ]] && stats
 
 rm /tmp/mytmpfile "$tmp" .opus.book.pids "$pidfile" 2>/dev/null
-echo "$line"
-exit
+echo
+printline "${bold}  Exiting (0) ${white} opus.book.4  ${tput0}"
+echo
+exit 0
 
+exit
 
 #some fun thoughts on parallel:
 #<!wait-n> Run up to 5 processes in parallel (bash 4.3): i=0 j=5; for elem in "${array[@]}"; do (( i++ < j )) || wait -n; my_job "$elem" & done; wait
@@ -221,5 +336,20 @@ exit
 #<ano> iconoclast_hero: if want to be sure ffmpeg converts only local files and doesn't follow other protocols e.g. https in m3u files etc, if plan to handle other (nested) protos than local files then can omit
 #<ano> iconoclast_hero: it will use 1 thread per conversion, so many parallel conversions as threads
 #<ano> can change nproc=$(nproc) with nproc="n_parallel_conversions_wanted"
+
+
+
+## Function to send data to file descriptor 3
+#send_to_fd3() {
+#    local data="$1"
+#    echo "$data" >&3
+#}
+#
+## Function to retrieve data from file descriptor 3
+#retrieve_from_fd3() {
+#    local data
+#    read -r data <&3
+#    echo "$data"
+#}
 
 

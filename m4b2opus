@@ -5,6 +5,7 @@
 #trap pause DEBUG
 shopt -s nullglob
 
+threads=4
 scriptname=$(realpath "$0")
 ulon=$(tput smul)  #underline on
 uloff=$(tput rmul) #underline off
@@ -14,24 +15,28 @@ red="$(tput setaf 9)" #red fg
 white="$(tput setaf 15)" #white fg
 relipsis="$red..."
 stamp="$(date +%s)"
-
 ##definitions#################################################################################
 
-pause(){ read -p "$*" ; }
-##--> pause() <--#############################################################################
 
+## load functions #############################################################################
+## printline()
+## pause()
+## checkdur()
+
+. $HOME/bin/gits/indexopus/indexopus.lib
 
 fnrmr(){
+  local red relipsis="${red}..."
+  [[ "$1" = "-r" ]] && red="${tput setaf 7}"
+
   fn_rmfile(){
-    printf "%s\n%s is a file:\n" "$bold" "$1"
+    printf '%s\n%s is a file:\n%s' "$relipsis" "$bold" "$1" "$white"
     ls -ltr "$1"
-    printf '\nrmr: remove this file? (y/n) %s' "$tput0"
-    old_stty_cfg=$(stty -g)
-# https://stackoverflow.com/questions/226703/how-do-i-prompt-for-yes-no-cancel-input-in-a-linux-shell-script
+    printf '%s\nrmr: remove this file? (y/n) %s' "$red" "$tput0"
+    old_stty_cfg=$(stty -g) # https://stackoverflow.com/questions/226703/how-do-i-prompt-for-yes-no-cancel-input-in-a-linux-shell-script
     stty raw -echo
     answer=$(head -c 1)
-    stty "$old_stty_cfg"
-# Careful playing with stty
+    stty "$old_stty_cfg"  # Careful playing with stty
 
     if [ "$answer" != "${answer#[Yy]}" ]
       then
@@ -39,12 +44,13 @@ fnrmr(){
       printf "\n\n"
       if [ ! -e "$1" ]
         then
-        printf "\nDone! File \"%s\" removed.\n\n" "$1"
+        printf '\n%sDone! File \"%s\" removed.\n\n%s' "$relipsis" "$1" "$tput0"
       else
-        printf "\n\n%s%s not removed, check permissions:\n\n" "$bold" "$1"; ls -ltr "$1"
+        printf "\n\n%s%s%s not removed, check permissions:\n\n%s" "$relipsis" "$bold" "$1" "$tput0"
+        ls -ltr "$1"
       fi
     else
-      printf '\n\n%sFiles remain:\n%s \n%s\n' "$red" "$(ls -ltr "$1")" "$tput0"
+      printf '\n\n%sFiles remain:\n%s \n%s\n' "$relipsis" "$(ls -ltr "$1")" "$tput0"
     fi
 
 #	There isn't really anything wrong with this code, but the above method removes the CR
@@ -57,7 +63,7 @@ fnrmr(){
 for path in "$@"
   do
     if [[ -d "$path" ]]; then
-	printf '%s\n' "$bold"
+	printf '%s%s\n' "$red" "$bold"
 	if rmdir "$path" 2>/dev/null; then
 	   printf 'Removing %s... \n\n$ ls %s/ \n\n' "$path" "$path"
 	else
@@ -69,9 +75,9 @@ for path in "$@"
 	fi
 
 	if [ ! -e "$path" ]; then
-      	   printf '\nDone!\n'
+      	   printf '%s\nDone!\n' "$relipsis"
       	else
-      	   printf '\n\n%sRemoval Failed!%s\n\n%s is still present check ownership and permissions:\n' "$bold" "$tput0" "$path"
+      	   printf '\n\n%s%sRemoval Failed!%s\n\n%s is still present check ownership and permissions:\n' "$relipsis" "$bold" "$tput0" "$path"
       	   ls -lad --color=always "$path"
 	fi
   elif [[ -f "$path" ]]; then
@@ -94,9 +100,9 @@ editscript(){
 ##--> editscript() <--##############################################################################
 
 filecheck(){
-   clifilename="$1"
-   [[ -d "$clifilename" ]] && isdir=true && clidir="${clifilename%/*}" && cd "$clidir" && unset clifilename
-   [[ -f "$clifilename" ]] && isfile=true && clidir="${clifilename%/*}" && cd "$clidir" && clifilename="${clifilename##*/}"
+   clifilename="$1"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
+   [[ -d "$clifilename" ]] && clidir="${clifilename%/*}" && cd "$clidir" && unset clifilename
+   [[ -f "$clifilename" ]] && clidir="${clifilename%/*}" && cd "$clidir" && clifilename="${clifilename##*/}"
 
   if [[ ! -z "$clifilename" ]] && [[ "$clifilename" != *\ --\ Audiobook.m4b ]]
     then
@@ -121,7 +127,7 @@ filecheck(){
   fi; }
 ##--> filecheck() <--#################################################################################
 
-calculatetime(){
+calctime(){
 duration=$(find -type f -name "$1" -print0 |
 xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
 perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
@@ -134,7 +140,7 @@ tail -n 1)
  [[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
  [[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
 
- printf "Duration %s\n" "$duration"
+# printf "Duration %s\n" "$duration"
 
  hours="${hours#0}"
  hourmin=$(( hours*60 ))
@@ -150,7 +156,7 @@ tail -n 1)
  divsec=$(python3 -c "print($totalsec/4)")
  ##echo "divsec $divsec"
 }
-##--> calculatetime{} <--#############################################################################
+##--> calctime{} <--#############################################################################
 
 m4bsplit(){
 # Original code from: http://crunchbang.org/forums/viewtopic.php?id=38748#p414992
@@ -190,33 +196,42 @@ done
 }
 ##--> m4bsplit() <--##################################################################################
 
-checkdur(){
-  local m4a m4b opus
-  m4a=(*m4a)
-  m4b=(*m4b)
-  opus=(*opus)
-
-if [[ "$1" ]]
-  then
-      find -type f -iname "*.$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
-  else
-    printf '\n%sDuration(s):%s\n' "$bold" "$tput0"
-    [[ "${#m4a[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white"  "${m4a[@]}" "$tput0"
-    [[ "${#m4b[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${m4b[@]}" "$tput0"
-    [[ "${#opus[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
- fi
-}
+#moved to indexopus.lib
+#checkdur(){
+#  local m4a m4b opus
+#  m4a=(*m4a)
+#  m4b=(*m4b)
+#  opus=(*opus)
+#
+#if [[ "$1" ]]
+#  then
+#      find -type f -iname "*.$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+#  else
+#    printf '\n%sDuration(s):%s\n' "$bold" "$tput0"
+#    [[ "${#m4a[@]}" -gt 0 ]] &&
+#      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white"  "${m4a[@]}" "$tput0"
+#    [[ "${#m4b[@]}" -gt 0 ]] &&
+#      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${m4b[@]}" "$tput0"
+#    [[ "${#opus[@]}" -gt 0 ]] &&
+#      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
+# fi
+#}
 ##--> checkdur() <--##################################################################################
 
 rmyn(){
+ local quiet
+ [[ "$1" = '-q' ]] && quiet=true && shift
   while true
   read -rp "$1" rmyn
    do
      case "$rmyn" in
-       [yY] ) "${@:3}"; break;;
+       [yY] ) #"${@:3}"; break;;
+         if [[ $quiet ]]; then
+            "${@:3}" >/dev/null
+          else
+            "${@:3}"
+          fi
+          break;;
        [nN] ) printf '%s\n' "$2"; break;;
           * ) printf "Invalid response...\n";;
      esac
@@ -225,13 +240,36 @@ rmyn(){
 ##--> rmyn() <--######################################################################################
 
 
+noindexsplit(){
+  local i n partno m4bin="$1" convertdir="$2"
+  printf '%s%sNo index found in %s!\n...%s%sThe item will be spiit into %s parts for efficient ffmpeg conversion.\n...Reindex later with chapter information pulled from the web.\n\n' "$relipsis" "$bold" "$m4bin" "$tput0" "$red" "$partno"
+    partno=1
+#    calctime "$m4bin"  #why?  i think this is the only call to calctime?  there's no need for it here...
+
+    for ((partno=1; partno < $(( threads + 1)); partno++ )); do
+       printf '%s%s: %s' "$relipsis" "$partno" "$tput0"
+       ffmpeg -n -nostdin -hide_banner -stats -v error -ss $(python -c "print(($partno-1)*$divsec)") -to $(python -c "print($partno*$divsec)") -i "$m4bin" -vn -acodec copy "$convertdir/${m4bin%% -- *} -- Part 0$partno.m4a"
+       printf '%s' "$tput0"
+    done
+    cd "$convertdir"
+    #for i in First Second Third Fourth
+    for ((i=1; i<=parts; i++)); do
+      i="$(printf '%02d\n' "$i")"
+      ((n++))
+      for f in *\ --\ Part\ 0"$n".*; do
+        mv "$f" "${f/./: Part $i.}"
+      done
+    done
+}
+
 ##--> Main Code <--################################################################################
 ##--> m4b2opus <--####################################################################################
+printline "${bold}  Welcome to ${white}m4b2opus  ${tput0}"
 
 [[ "$1" == @(edit|e|nano) ]] && editscript
 
 [[ "$1" == "-y" ]] && shift && rmmatch=true
-
+[[ "$1" == "--stats" ]] && shift && stats=true
 #[[ "$1" ]] && clifile "$1"
 
 filecheck "$1" && [[ ! "$?" == 0 ]] && exit
@@ -257,29 +295,12 @@ convertdir="$CACHE/m4b2opus-$title"
 
 [[ ! -d "$convertdir" ]] && mkdir "$convertdir"
 
-if [[ ! "$(mediainfo "$m4bin"|grep Menu)" =~ ^Menu ]]
-  then
-    qtcnt=1
-    calculatetime "$m4bin"
-    while [[ "$qtcnt" -lt 5 ]]
-      do
-       printf '%s: ' "$qtcnt"
-       ffmpeg -n -nostdin -hide_banner -stats -v error -ss $(python -c "print(($qtcnt-1)*$divsec)") -to $(python -c "print($qtcnt*$divsec)") -i "$m4bin" -vn -acodec copy "$convertdir/${m4bin%% -- *} -- Part 0$qtcnt.m4a"
-       ((qtcnt++))
-     done
-    cd "$convertdir"
-    for i in First Second Third Fourth
-      do
-        ((n++))
-        for f in *\ --\ Part\ 0"$n".*
-          do
-           mv "$f" "${f/./: $i Quarter.}"
-          done
-       done
-  else
-    m4bsplit "$m4bin" "$convertdir"
-    cd "$convertdir"
-    regexexp='.*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\ |\.]'
+if [[ ! "$(mediainfo "$m4bin"|grep Menu)" =~ ^Menu ]]; then  #process unindexed m4b files
+  noindexsplit "$m4bin" "$convertdir"
+else
+  m4bsplit "$m4bin" "$convertdir"
+  cd "$convertdir"
+  regexexp='.*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\ |\.]'
     for m4afile in *m4a
       do
         [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\.\ ] ]] &&
@@ -287,89 +308,100 @@ if [[ ! "$(mediainfo "$m4bin"|grep Menu)" =~ ^Menu ]]
       done
 fi
 
-cd "$convertdir"
 
-#probably remove the following 3 lines as the output is redundant.
-#printf '\n'
-#ls "$convertdir"
-#printf '\n'
+cd "$convertdir"
 
 echo
 [[ "$rmmatch" != true ]] && pause "${bold}${red}Control-Z to suspend to change to $convertdir and adjust chapter names?${tput0} "
 
-printf '\n'
-printf '%s\n----------  Calling external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
-opus.book.4  #this is a dependency; needs to be made a function?
-if (( "$?" > 1 ))
-  then
-    echo "opus.book.4 failed; exit 1"
+#opus.book.4##################################################################################
+echo
+printline "${bold}  Calling external dependency:${red} opus.book.4  ${tput0}"
+#printf '%s\n----------  Calling external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
+
+opus.book.4 -d "${m4bindur#*: }"  #this is a dependency; needs to be made a function?
+if (( "$?" > 1 ));  then
+  echo "opus.book.4 failed; exit 1"
 #    exit 1
 fi
-printf '\n'
-printf '%s\n----------  Leaving external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
+
+#printf '%s\n----------  Leaving external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
+printline "${bold}  Leaving external dependency: ${red} opus.book.4  ${tput0}"
 #opus.book.4##################################################################################
 
 clear -x
-
 [[ ! -d "$convertdir/m4a" ]] && mkdir "$convertdir/m4a"
 mv *.m4a ./m4a
 opuspartdur="$(checkdur opus)"
 m4bindur="${m4bindur#*: }"
 
-printf '\n%sDuration of the original m4b file: %s%s%s\n' "$bold" "$red" "$m4bindur" "$tput0"
+printf '%sDuration of the original m4b file: %s%s%s\n' "$bold" "$red" "$m4bindur" "$tput0"
 printf '%sDuration of the .opus part files: %s%s%s\n' "$bold" "$red" "$opuspartdur" "$tput0"
 
-printf '\n\n%s----------  Calling external dependency: %sindexopus%s  ----------\n' "$bold" "$red" "$tput0"
-printf '%s' "$white"  #does this help with the prompt disappearing after return from indexopus?
-echo                  # We'll see?
+##indexopus##################################################################################
+# Create a named pipe (FIFO)
+#mkfifo "$convertdir/mypipe"
+
+# Open the FIFO for writing
+#exec 3<> "$convertdir/mypipe"
+
+#printf '\n\n%s----------  Calling external dependency: %sindexopus%s  ----------\n' "$bold" "$red" "$tput0"
+printline "${bold}  Calling external dependency:${red} indexopus  ${tput0}"
+
 
 if [[ "$rmmatch" = true ]]
   then
-    indexopus -y "$title" 	# "$opuspartdur" is there realistically a way to pass the opus part durations?
+    indexopus -y -t "$title" -m "$convertdir" -s "$stamp"	-d "$opuspartdur"
   else
-    indexopus "$title" 		# this is a dependency, don't make a funciton.
+    indexopus -t "$title" -m "$convertdir" -s "$stamp" -d "$opuspartdur"
 fi
    ec4io="$?" 				# error code 4 indexopus
    [[ "$ec4io" = 2 ]] && iorm=true
    [[ "$ec4io" = 1 ]] && printf 'indexopus exited for some unknown reason with exit 1. investigate.\nexit 1' && exit 1
 
-printf '\n\n%s----------  Leaving external dependency: %sindexopus%s  ----------\n' "$bold" "$red" "$tput0"
+
+#printf '\n\n%s----------  Leaving external dependency: %sindexopus%s  ----------\n' "$bold" "$red" "$tput0"
+printline "${bold}  Leaving external dependency:${red} indexopus  ${tput0}"
 ##indexopus##################################################################################
 
+# Close the FIFO
+#  exec 3>&-
+#  rm "$convertdir/mypipe"
+
+
+tmp="/tmp/indexopus-$stamp"  #this probably doesn't exist...
 titleopus="$title -- Audiobook.opus"
-[[ ! -f "$titleopus" ]] && printf '%s%sWhere the fuck is %s?! Exiting (1)\n%s' "$bold" "$red" "$titleopus" "$tput0"
+
+[[ ! -f "$titleopus" ]] && printf '%s%sWhere the fuck is %s?! Exiting (1)\n%s' "$bold" "$red" "$titleopus" "$tput0" && exit 1
 mv "$titleopus" "$swd"
 cd "$swd"
 
-if [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" = "$(checkdur opus)" ]]
-  then
-    rm -r *m4b "$convertdir"
-    printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
-elif [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]
-  then
+printf '\n%sCleaning up remaining files:%s\n\n' "$red" "$tput0"
+ls "$tmp" "$convertdir/m4a" 2>/dev/null
+checkdur
+
+if [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" = "$(checkdur opus)" ]]; then
+  rm -r *m4b "$convertdir"
+  printf '\n\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
+else
+  if [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
     printf '%s%sThe m4b and opus audiobook durations do not match!\n' "$bold" "$red"
     printf '%s%sm4b2opus will not automatically delete starting and temporary files!\n' "$white" "$tput0"
-    ls "$tmp" "$convertdir/m4a" 2>/dev/null
-    checkdur
     printf '\n\n'
-# the 2>/dev/null does not work for rmyn -- rewrite!!
     printf '%s-y/-f specified, but the durations do not match!\n%s' "$bold" "$tput0"
-    rmyn "Remove the conversion ./m4a directory? " "...Leaving ./m4a" rm -r "$convertdir"/m4a #2>/dev/null
-    [[ ! "$iorm" ]] && rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
-    fnrmr *m4b "$convertdir" .tmp* #rmr is a dependency
-    printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
-else
-    ls "$tmp" "$convertdir/m4a" 2>/dev/null
-    checkdur
-    printf '\n\n'
+  fi
+
+  printf '\n\n'
 # the 2>/dev/null does not work for rmyn -- rewrite!!
-    rmyn "Remove the conversion ./m4a directory? " "...Leaving ./m4a" rm -r "$convertdir/m4a" #2>/dev/null
-    [[ ! "$iorm" ]] && rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$convertdir/$title"\ --\ Part\ ??:*.opus
-    fnrmr *m4b "$convertdir" .tmp*
-    printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
+  rmyn -q "${red}${bold}Remove the conversion ./m4a directory? ${tput0}" "${red}...Leaving ./m4a.${tput0}" rm -r "$convertdir/m4a"
+  [[ ! "$iorm" ]] && rmyn -q "${red}${bold}Remove $ititle -- Part *.opus files? ${tput0}" "${red}...Leaving $ititle -- Part *.opus files...${tput0}" rm "$convertdir/$title"\ --\ Part\ ??:*.opus
+  rmyn "${red}${bold}Remove the starting $m4bin? " "${red}Leaving starting $m4bin${tput0}" rm "$m4bin"
+  for i in *m4b "$convertdir" .tmp* "$tmp"; do [[ -a "$i" ]] && fnrmr "$i"; done
+  printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 fi
 
-exit
+printline "${bold}  Exiting (0) ${white}m4b2opus  ${tput0}"
+exit 0
 
 
 

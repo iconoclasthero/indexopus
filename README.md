@@ -11,6 +11,8 @@ depends: opustag, ffmpeg/ffprobe
 optional: mediainfo
 
 **Files need to be in the format of 'Title -- Part ##: Chapter Title.opus'** 
+There is some correction for common variations I've run into, but ultimately it will be in this format.
+
 `$ indexopus` 
 You can specify the title with `$ indexopus <title>`; m4b2opus passes indexopus the title that way.
 
@@ -19,7 +21,7 @@ This has been reworked to include a reindex option that will take an audiobooksh
 A config file is required at '$HOME/.config/indexopus.conf' with the following information:
 ```
 absserver="https://web.address.com"
-bssqlite="/path/to/location/of/config/absdatabase.sqlite"
+abssqlite="/path/to/location/of/config/absdatabase.sqlite"
 ```
 
 # opus.book.4 / opusbook4ka
