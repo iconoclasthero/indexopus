@@ -2,28 +2,41 @@
 # nb: the swp file that editscript relies on is provided by nano
 # opusbook4ka is an external dependency
 
+# Invokes breakout function upon INT/^C
 trap '{ breakout -b; exit 1; }' INT
-shopt -s extglob nullglob
+pidfile="/tmp/.opus.book.pids"
+
+# global shopt settings.  nullglob causes unwanted things with ls, so it needs to be reconsidered
+shopt -s extglob nullglob   # as a global option
+
+#Who am I?
 scriptpath="$(realpath $0)"
 script="${scriptpath##*\/}"
-pidfile="/tmp/.opus.book.pids"
-threads=4
+
+
+threads=4 # number of parallel threads
+bfreq=12 # flashing frequency (( $(date +%s) % bfreq == 0 )) && ...
+sexpattern='^([0-9]|[0-9][0-9]|[0-9][0-9][0-9]):([0-5]?[0-9]):([0-5]?[0-9])$'   # RegEx pattern to match a sexagesimal:
 mediaext="*.@(flac|mp3|MP3|wav|m4?|ogg|MP4|mp4|wma)"
 filtercomplex="compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0"
-stamp="$(date +%s)"
+
 bold="$(tput bold)"
-red="$(tput setaf 9)"
 relipsis="$red..."
 tput0="$(tput sgr0)"
+red="$(tput setaf 1)"
+
+
+stamp="$(date +%s)"
 tmp="/tmp/opus.book.4-$stamp"
 
 ## load functions #############################################################################
-## printline()
-## pause()
-## checkdur()
+## editscript()
+## printline()  <title for line>... probably shouldn't say calling external dependency?
+## pause()      [prompt required]
+## checkdur()   <optional extension>
+## sex2sec()    "##:##:##"
+
 . $HOME/bin/gits/indexopus/indexopus.lib
-
-
 
 editscript(){
   local scriptpath script path swp; scriptpath=$(realpath "$0" 2>/dev/null); script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
@@ -161,17 +174,18 @@ progress() {
         tput cuu1 # Move cursor up one more line
         tput el   # Clear the current line
       done
-      (( "$(date +%s)" % 6 == 0 )) && echo "( • )( • )----ԅ(‾⌣‾ԅ)" || echo
+      (( "$(date +%s)" % bfreq == 0 )) && echo "( • )( • )----ԅ(‾⌣‾ԅ)" || echo
       [[ "$startext" != "flac" ]] && notflac=' '
       printf '%sDuration of %s.%s files: %s\n%s' "$bold" "$notflac" "$startext" "$indur" "$tput0"
       printf '%sDuration of .opus files: %s\n%s' "$bold" "$opusdur" "$tput0"
-      progress_bar_sexagesimal "$opusdur" "$indur"
+      [[ "$opusdur" =~ $sexpattern && "$indur" =~ $sexpattern ]] &&
+         progress_bar_sexagesimal "$opusdur" "$indur"
       breakout -a
-      sleep 1
       tput cup 0 0
       printf '%s\n' "${bannerarray[@]}"
       outputfiles="$(<"$tmp")"
       echo "$outputfiles"
+      sleep 4
   done
 }
 
@@ -233,18 +247,18 @@ for exts in "${mediafiles[@]}"
 
 while (( $# > 0 ))
   do
-    [[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
-    [[ "$1" == -d ]] && inputdur="$2" && shift
-    [[ "$1" = "-h" || "$1" = "--help" ]]  && help=true
-    [[ "$1" = "-s" || "$1" = "--stats" ]] && statson=true
-    [[ "$1" = "-f" || "$1" = "--force" ]] && overwrite=true          	#this doesn't actually change what ffmpeg does yet!
-    startfile="$1" && file="$startfile"   && opusfile="${file%.*}.opus"								#it's just letting me into the program atm
+    [[ "$1" == @(edit|e|-e) ]] && editscript
+    [[ "$1" = "-d" ]] && shift && inputdur="$1" && shift && pause "$1; $2"
+    [[ "$1" = "-h" || "$1" = "--help" ]]  && shift && help=true
+    [[ "$1" = "-s" || "$1" = "--stats" ]] && shift && statson=true
+    [[ "$1" = "-f" || "$1" = "--force" ]] && shift && overwrite=true     #this doesn't actually change what ffmpeg does yet!
+    startfile="$1" && file="$startfile" && opusfile="${file%.*}.opus"								#it's just letting me into the program atm
     shift
   done
-
+pause "$([[ "$startfile" ]] && echo ".$startfile.")"
 if [[ "$startfile" && ! -f "$startfile" && "$startfile" != $mediaext ]] || (( "${#mediafiles[@]}" == 0 ))
   then
-  echo "Usage: $0 [-d] "##:##:##" [-s|--stats] [-f|--force] [-h|--help] <optional filename>"
+  echo "Usage: $0 [edit|e|-e] [-d] "##:##:##" [-s|--stats] [-f|--force] [-h|--help] <optional filename>"
   echo "Files must be of $mediaext format."
   exit 1
 fi

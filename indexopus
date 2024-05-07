@@ -383,6 +383,7 @@ if [[ "$reindex" = true ]]   #if reindex is true, check for rmmatch and reindex.
 fi
 
 
+    opusarray=( *.opus )
 
 
 # this checks for a metadata.json, ideally from audiobookshelf.  there could be other metadata.json files
@@ -391,8 +392,7 @@ fi
 if [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].title' metadata.json)" ]]
   then
     reindex=true
-    ckjson=( *opus )
-    [[ "$(jq -r '.chapters[0] | .title' metadata.json)".opus == "${ckjson[0]}" ]] ||
+    [[ "$(jq -r '.chapters[0] | .title' metadata.json)".opus == "${opusarray[0]}" ]] ||
       [[ "$(jq -r '.chapters[0] | .title' metadata.json)" == "001" ]] &&
       reindex=false
     [[ "$reindex" = false ]] &&
@@ -409,6 +409,14 @@ if ! compgen -G @(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus) &> /dev/
        for renopus in *Disc\ ??.opus; do [[ -f "$renopus" ]] && mv "$renopus" "${renopus/ Disc / Part }"; done
        for renopus in *-Part??.opus; do [[ -f "$renopus" ]] && mv "$renopus" "${renopus/-Part/ -- Part 00: Part }"; done
    fi
+
+pause "$(printf '%s\n' "${opusarray[@]}")"
+
+if [[ "${opusarray[@]}" =~ '^(.+ - \d{2}\.opus)$' ]]; then
+ for renopus in *\ -\ {?..???}.opus; do
+  mv "$renopus" "${renopus/ - / -- Part 00: Part }"
+ done
+fi
 
    renopus=( *\ --\ Part\ *.opus )
 

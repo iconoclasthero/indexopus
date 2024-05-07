@@ -310,7 +310,6 @@ fi
 
 
 cd "$convertdir"
-
 echo
 [[ "$rmmatch" != true ]] && pause "${bold}${red}Control-Z to suspend to change to $convertdir and adjust chapter names?${tput0} "
 
@@ -319,6 +318,7 @@ echo
 printline "${bold}  Calling external dependency:${red} opus.book.4  ${tput0}"
 #printf '%s\n----------  Calling external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
 
+pause "opus.book.4 -d "${m4bindur#*: }"  #this is a dependency; needs to be made a function?"
 opus.book.4 -d "${m4bindur#*: }"  #this is a dependency; needs to be made a function?
 if (( "$?" > 1 ));  then
   echo "opus.book.4 failed; exit 1"
