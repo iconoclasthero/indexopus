@@ -22,7 +22,6 @@ stamp="$(date +%s)"
 ## printline()
 ## pause()
 ## checkdur()
-
 . $HOME/bin/gits/indexopus/indexopus.lib
 
 fnrmr(){
@@ -128,17 +127,38 @@ filecheck(){
 ##--> filecheck() <--#################################################################################
 
 calctime(){
-duration=$(find -type f -name "$1" -print0 |
-xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
-perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
-tail -n 1)
- hours=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' | tail -n 1)
- minutes=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' | tail -n 1)
- seconds=$(find -type f -name "*$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' | tail -n 1)
+  duration=$(find -type f -name "$1" -print0 |
+			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
+			tail -n 1)
+  hours=$(find -type f -name "$1" -print0 |
+			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' |
+			tail -n 1)
+  minutes=$(find -type f -name "$1" -print0 |
+			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' |
+			tail -n 1)
+  seconds=$(find -type f -name "*$1" -print0 |
+			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' |
+			tail -n 1)
 
- [[ "$hours" =~ "0*(.*)" ]] && hours=${BASH_REMATCH[1]}
- [[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
- [[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
+  [[ "$hours" =~ "0*(.*)" ]] && hours=${BASH_REMATCH[1]}
+  [[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
+  [[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
+
+#BASH_REMATCH is an array variable in Bash that contains the results of the most recent pattern match operation performed using the =~ operator with the [[ ... ]] conditional expression.
+#
+#When you use =~ to match a pattern against a string, Bash populates the BASH_REMATCH array with the text that matches the pattern. The first element (BASH_REMATCH[0]) contains the portion of the string that matches the entire regular expression, while subsequent elements (BASH_REMATCH[1], BASH_REMATCH[2], etc.) contain the portions of the string that match the corresponding capture groups in the regular expression.
+#
+#Here's a breakdown of how BASH_REMATCH is populated:
+#
+#BASH_REMATCH[0]: Contains the portion of the string that matches the entire regular expression.
+#BASH_REMATCH[1]: Contains the portion of the string that matches the first capture group ( ... ).
+#BASH_REMATCH[2]: Contains the portion of the string that matches the second capture group ( ... ), if present.
+#and so on...
+#In the script provided earlier, we used BASH_REMATCH[1] to extract the content inside double quotes. If the pattern \"(.*)\" matches successfully, the content inside the double quotes is captured and stored in BASH_REMATCH[1].
 
 # printf "Duration %s\n" "$duration"
 
@@ -196,28 +216,6 @@ done
 }
 ##--> m4bsplit() <--##################################################################################
 
-#moved to indexopus.lib
-#checkdur(){
-#  local m4a m4b opus
-#  m4a=(*m4a)
-#  m4b=(*m4b)
-#  opus=(*opus)
-#
-#if [[ "$1" ]]
-#  then
-#      find -type f -iname "*.$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
-#  else
-#    printf '\n%sDuration(s):%s\n' "$bold" "$tput0"
-#    [[ "${#m4a[@]}" -gt 0 ]] &&
-#      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white"  "${m4a[@]}" "$tput0"
-#    [[ "${#m4b[@]}" -gt 0 ]] &&
-#      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${m4b[@]}" "$tput0"
-#    [[ "${#opus[@]}" -gt 0 ]] &&
-#      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
-# fi
-#}
-##--> checkdur() <--##################################################################################
-
 rmyn(){
  local quiet
  [[ "$1" = '-q' ]] && quiet=true && shift
@@ -244,8 +242,8 @@ noindexsplit(){
   local i n partno m4bin="$1" convertdir="$2"
   printf '%s%sNo index found in %s!\n...%s%sThe item will be spiit into %s parts for efficient ffmpeg conversion.\n...Reindex later with chapter information pulled from the web.\n\n' "$relipsis" "$bold" "$m4bin" "$tput0" "$red" "$partno"
     partno=1
-#    calctime "$m4bin"  #why?  i think this is the only call to calctime?  there's no need for it here...
-
+    calctime "$m4bin"  #why?  i think this is the only call to calctime?  there's no need for it here...
+                       #oh contrare! this is what provides $divsec and the script fails without that line!
     for ((partno=1; partno < $(( threads + 1)); partno++ )); do
        printf '%s%s: %s' "$relipsis" "$partno" "$tput0"
        ffmpeg -n -nostdin -hide_banner -stats -v error -ss $(python -c "print(($partno-1)*$divsec)") -to $(python -c "print($partno*$divsec)") -i "$m4bin" -vn -acodec copy "$convertdir/${m4bin%% -- *} -- Part 0$partno.m4a"
@@ -264,13 +262,16 @@ noindexsplit(){
 
 ##--> Main Code <--################################################################################
 ##--> m4b2opus <--####################################################################################
-printline "${bold}  Welcome to ${white}m4b2opus  ${tput0}"
+
+printline "${bold}  Welcome to ${white}$script  ${tput0}"
 
 [[ "$1" == @(edit|e|nano) ]] && editscript
 
 [[ "$1" == "-y" ]] && shift && rmmatch=true
 [[ "$1" == "--stats" ]] && shift && stats=true
 #[[ "$1" ]] && clifile "$1"
+
+#[[ "$rmmatch" ]] && pause "$bold$red$scriptname will overwrite upon matches."
 
 filecheck "$1" && [[ ! "$?" == 0 ]] && exit
 
@@ -318,7 +319,6 @@ echo
 printline "${bold}  Calling external dependency:${red} opus.book.4  ${tput0}"
 #printf '%s\n----------  Calling external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
 
-pause "opus.book.4 -d "${m4bindur#*: }"  #this is a dependency; needs to be made a function?"
 opus.book.4 -d "${m4bindur#*: }"  #this is a dependency; needs to be made a function?
 if (( "$?" > 1 ));  then
   echo "opus.book.4 failed; exit 1"
@@ -330,8 +330,9 @@ printline "${bold}  Leaving external dependency: ${red} opus.book.4  ${tput0}"
 #opus.book.4##################################################################################
 
 clear -x
-[[ ! -d "$convertdir/m4a" ]] && mkdir "$convertdir/m4a"
-mv *.m4a ./m4a
+#need to renable rmyn below if these are uncommented
+#[[ ! -d "$convertdir/m4a" ]] && mkdir "$convertdir/m4a"
+#mv *.m4a ./m4a
 opuspartdur="$(checkdur opus)"
 m4bindur="${m4bindur#*: }"
 
@@ -372,17 +373,22 @@ printline "${bold}  Leaving external dependency:${red} indexopus  ${tput0}"
 tmp="/tmp/indexopus-$stamp"  #this probably doesn't exist...
 titleopus="$title -- Audiobook.opus"
 
-[[ ! -f "$titleopus" ]] && printf '%s%sWhere the fuck is %s?! Exiting (1)\n%s' "$bold" "$red" "$titleopus" "$tput0" && exit 1
+[[ ! -f "$titleopus" ]] &&
+   printf '%s%sError: Where the fuck is %s?! Exiting (1)\n%s' "$bold" "$red" "$titleopus" "$tput0" &&
+     printline "$scriptname" &&
+     exit 1
+
 mv "$titleopus" "$swd"
 cd "$swd"
 
 printf '\n%sCleaning up remaining files:%s\n\n' "$red" "$tput0"
 ls "$tmp" "$convertdir/m4a" 2>/dev/null
 checkdur
-
-if [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" = "$(checkdur opus)" ]]; then
-  rm -r *m4b "$convertdir"
-  printf '\n\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
+#(( $(bc <<< "scale=3; ($var1 - $var2) / $var2 > 0.001") ))
+  if [[ "$rmmatch" = true ]] && (( $(bc <<< "scale=3; ($(sex2sec "$(checkdur m4b)") - $(sex2sec "$(checkdur opus)")) / $(sex2sec "$(checkdur opus)") > 0.001") )); then
+    rm -r *m4b "$convertdir"
+    printf '\n\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
+    exit
 else
   if [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
     printf '%s%sThe m4b and opus audiobook durations do not match!\n' "$bold" "$red"
@@ -393,7 +399,7 @@ else
 
   printf '\n\n'
 # the 2>/dev/null does not work for rmyn -- rewrite!!
-  rmyn -q "${red}${bold}Remove the conversion ./m4a directory? ${tput0}" "${red}...Leaving ./m4a.${tput0}" rm -r "$convertdir/m4a"
+#  rmyn -q "${red}${bold}Remove the conversion ./m4a directory? ${tput0}" "${red}...Leaving ./m4a.${tput0}" rm -r "$convertdir/m4a"
   [[ ! "$iorm" ]] && rmyn -q "${red}${bold}Remove $ititle -- Part *.opus files? ${tput0}" "${red}...Leaving $ititle -- Part *.opus files...${tput0}" rm "$convertdir/$title"\ --\ Part\ ??:*.opus
   rmyn "${red}${bold}Remove the starting $m4bin? " "${red}Leaving starting $m4bin${tput0}" rm "$m4bin"
   for i in *m4b "$convertdir" .tmp* "$tmp"; do [[ -a "$i" ]] && fnrmr "$i"; done

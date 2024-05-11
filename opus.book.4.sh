@@ -3,7 +3,7 @@
 # opusbook4ka is an external dependency
 
 # Invokes breakout function upon INT/^C
-trap '{ breakout -b; exit 1; }' INT
+trap '{ breakout -B; exit 1; }' INT
 pidfile="/tmp/.opus.book.pids"
 
 # global shopt settings.  nullglob causes unwanted things with ls, so it needs to be reconsidered
@@ -13,11 +13,11 @@ shopt -s extglob nullglob   # as a global option
 scriptpath="$(realpath $0)"
 script="${scriptpath##*\/}"
 
-
 threads=4 # number of parallel threads
 bfreq=12 # flashing frequency (( $(date +%s) % bfreq == 0 )) && ...
+rfreq=45 # tput reset frequency...  ca. period...
 sexpattern='^([0-9]|[0-9][0-9]|[0-9][0-9][0-9]):([0-5]?[0-9]):([0-5]?[0-9])$'   # RegEx pattern to match a sexagesimal:
-mediaext="*.@(flac|mp3|MP3|wav|m4?|ogg|MP4|mp4|wma)"
+mediaext="*.@(flac|mp3|MP3|wav|m4?|ogg|MP4|mp4|wma)"   #DO NOT INCLUDE OPUS FILES IN THIS
 filtercomplex="compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0"
 
 bold="$(tput bold)"
@@ -81,8 +81,8 @@ ffmpeg2(){
 
 stats(){
   if [[ "$file" ]]; then
-      printf 'mediaduration %s\n %s' "$file" "$(mediaduration "$file")"
-      printf 'mediaduration %s\n %s' "$opusfile" "$(mediaduration "$opusfile")"
+    printf 'mediaduration %s\n %s' "$file" "$(mediaduration "$file")"
+    printf 'mediaduration %s\n %s' "$opusfile" "$(mediaduration "$opusfile")"
   else
     startbitrate="${mediafiles[0]}"
     startbitrate="$(ffprobe -v error -i "$startbitrate" -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1)"
@@ -121,14 +121,17 @@ breakout(){
   local breakout
   while (( $# > 0 )); do
     [[ "$1" = -a ]] && array=true && unset pidarray && shift
-    [[ "$1" = -b ]] && breakout=true && shift
+    [[ "$1" = -B ]] && breakout=true && shift
+    [[ "$1" = -b ]] && breakother=true && other="$2" && shift && shift
+    shift
   done
 
   while IFS= read -r pid
    do
 #     [[ "$pid" = *"$script"* ]] || [[ "$pid" = *ffmpeg* ]] &&
 #       pidarray+=( "$(echo "${pid% pts*}" |tee -a "$pidfile")" )
-      [[ "$pid" = *"$script"* ]] || [[ "$pid" = *ffmpeg* ]] && echo "${pid% pts*}" >> "$pidfile"
+      [[ "$other" && "$pid" = *"$other"* ]] || [[ "$pid" = *"$script"* ]] || [[ "$pid" = *ffmpeg* ]] && echo "${pid% pts*}" >> "$pidfile"
+
       [[ "$array" && "$pid" = *ffmpeg* ]] && pidarray+=( "${pid% pts*}" )
   done< <(ps --tty $(tty) Sf)
 
@@ -140,6 +143,9 @@ breakout(){
 progress() {
   local opusdur="00:00:00" indur="$1"
   local opuspresent ck4files
+  [[ ! "$bfreq" =~ [[:digit:]]+ ]] && bfreq=12 # flashing frequency (( $(date +%s) % bfreq == 0 )) && .
+  [[ ! "$rfreq" =~ [[:digit:]]+ ]] && bfreq=6 # flashing frequency (( $(date +%s) % bfreq == 0 )) && .
+
   pidarray=true  # this shouldn't get set until breakout -a is run below...
 
   progress_bar_sexagesimal(){  #this will probably get moved out at some point...
@@ -162,14 +168,17 @@ progress() {
 # there are time discrepancies.  sometimes more than a minute now that i think about it...
 # though usually the opus files go over.  i need to come up with another boundary condition...
 # look for the pids?
+ 
+  lines="$(tput lines)"
 
   while [[ "${indur%:*}" != "${opusdur%:*}" ]] &&
-    (( $(sex2sec "$opusdur") + 20 < $(sex2sec "$indur") )) &&
+###    pause "\$(sex2sec "${opusdur@A}") "$(sex2sec "${opusdur}")""
+#pause "opusdur= $opusdur"
+#sexopusdur="$(( $(sex2sec "$opusdur") + 20 ))"
+#pause "sexopusdur= $sexopusdur"
+    (( $(( "$(sex2sec "$opusdur")" + 20 )) < $(sex2sec "$indur") )) &&
     [[ "$pidarray" ]]; do
-
-      opusdur="$(mediaduration opus)"
       tput cup "$(( $(tput lines) - 3 ))" 0
-
       for ((i=0; i<4; i++)); do
         tput cuu1 # Move cursor up one more line
         tput el   # Clear the current line
@@ -184,8 +193,11 @@ progress() {
       tput cup 0 0
       printf '%s\n' "${bannerarray[@]}"
       outputfiles="$(<"$tmp")"
-      echo "$outputfiles"
-      sleep 4
+      echo "$outputfiles"|tail -n $(( "$(tput lines)" - 15 ))
+      sleep 12
+      opusdur="$(mediaduration opus)"
+#      (( "$(date +%s)" % "$rfreq" == 0 )) && $(tput reset); clear -x
+      [[ "$lines" != "$(tput lines)" ]] && lines="$(tput lines)" && $(tput reset); clear -x
   done
 }
 
@@ -225,19 +237,15 @@ progress() {
 ###--> Main Code <--###########################################################################
 ###--> opus.book.4 <--#########################################################################
 
-#line="$(printf '%s%*s\n' "$red" "$(tput cols)"|tr ' ' "-")$tput0"
-#printf '%s%s%s%s%s\n' "$line" "$tput0" "$bold" "$script" "$tput0"
-
 echo
-bannerarray+=( "$(printline "${bold}  Welcome to ${white}opus.book.4  ${tput0}")" )
+bannerarray+=( "$(printline "${bold}  Welcome to ${white}${script} ${tput0}")" )
 echo "$bannerarray"
 echo
 
 mediafiles=( ${mediaext} )
 
 #test for more than one accptable media extension and fail if it finds more than one.
-for exts in "${mediafiles[@]}"
-  do
+for exts in "${mediafiles[@]}"; do
     extensions+=( "${exts##*.}" )
   done
 
@@ -248,14 +256,15 @@ for exts in "${mediafiles[@]}"
 while (( $# > 0 ))
   do
     [[ "$1" == @(edit|e|-e) ]] && editscript
-    [[ "$1" = "-d" ]] && shift && inputdur="$1" && shift && pause "$1; $2"
+    [[ "$1" = "-d" ]] && shift && inputdur="$1" && shift
     [[ "$1" = "-h" || "$1" = "--help" ]]  && shift && help=true
     [[ "$1" = "-s" || "$1" = "--stats" ]] && shift && statson=true
     [[ "$1" = "-f" || "$1" = "--force" ]] && shift && overwrite=true     #this doesn't actually change what ffmpeg does yet!
-    startfile="$1" && file="$startfile" && opusfile="${file%.*}.opus"								#it's just letting me into the program atm
+    [[ "$1" = "-b" || "$1" = "--break" ]] && shift && break-m4b2opus=true && trap '{ breakout -B -b m4b2opus; exit 1; }' INT
+    startfile="$1" && file="$startfile" && opusfile="${file%.*}.opus"	 #it's just letting me into the program atm
     shift
   done
-pause "$([[ "$startfile" ]] && echo ".$startfile.")"
+
 if [[ "$startfile" && ! -f "$startfile" && "$startfile" != $mediaext ]] || (( "${#mediafiles[@]}" == 0 ))
   then
   echo "Usage: $0 [edit|e|-e] [-d] "##:##:##" [-s|--stats] [-f|--force] [-h|--help] <optional filename>"
@@ -265,6 +274,7 @@ fi
 
 rm /tmp/mytmpfile .opus.book.pids "$pidfile" 2>/dev/null  	# clean any old files that will be in the way
 startext=( ${mediaext} ); startext="${startext##*.}"		# define what the starting extension is in dir
+mediafiles=
 filenum="$(ls ${mediaext}|wc -l)"							# how many of those files are there?
 
 [[ "$filenum" -lt "$threads" ]] && threads="$filenum"
@@ -301,11 +311,17 @@ elif (( filenum > 0 ))
     printf '\n%s%s invoked with --force|-f flag to overwrite existing .opus files.\n' "$red" "$script"
     printf '\n%sConfirm deletion of existing *.opus files prior to starting conversion!%s\n' "$bold" "$tput0"
     printf '\nIt'\''d be great if there was actually a confirm here... your shit'\''s deleted sucker!\n'
-    printf 'FWIW, ffmpeg cannot be invoked with -y here because of the way multipe instances race.\n\n'
-    rm -i *opus
+    eza --color=always
+    if confirm "rm *opus? (y/n) "; then
+      rm *opus 2>/dev/null || exit 1
+    else
+      printf 'FWIW, ffmpeg cannot be invoked with -y here because of the way multipe instances race.\n%s will exit now' "$script"
+      exit 1
+    fi
   fi
 
 [[ ! "$inputdur" ]] && inputdur="$(mediaduration "$startext")"
+
   bannerarray+=( "" )
   bannerarray+=( "$(printf '%sDuration of %s %s file(s) to convert: %s%s%s%s%s\n...in: %s%s\n\n' \
 "$relipsis" "$filenum" "$startext" "$tput0" "$bold" "$inputdur" "$tput0" "$red" "$PWD" "$tput0")" )
@@ -338,7 +354,7 @@ fi
 
 rm /tmp/mytmpfile "$tmp" .opus.book.pids "$pidfile" 2>/dev/null
 echo
-printline "${bold}  Exiting (0) ${white} opus.book.4  ${tput0}"
+printline "${bold}  Exiting (0) ${white} ${script}  ${tput0}"
 echo
 exit 0
 
