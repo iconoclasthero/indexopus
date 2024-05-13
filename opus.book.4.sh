@@ -143,6 +143,9 @@ breakout(){
 progress() {
   local opusdur="00:00:00" indur="$1"
   local opuspresent ck4files
+  opuspresent=( *\ --\ Part\ ??\:\ *.opus )
+
+  [[ "$opuspresent" ]] && opusdur="$(checkdur opus)"
   [[ ! "$bfreq" =~ [[:digit:]]+ ]] && bfreq=12 # flashing frequency (( $(date +%s) % bfreq == 0 )) && .
   [[ ! "$rfreq" =~ [[:digit:]]+ ]] && bfreq=6 # flashing frequency (( $(date +%s) % bfreq == 0 )) && .
 
@@ -172,10 +175,6 @@ progress() {
   lines="$(tput lines)"
 
   while [[ "${indur%:*}" != "${opusdur%:*}" ]] &&
-###    pause "\$(sex2sec "${opusdur@A}") "$(sex2sec "${opusdur}")""
-#pause "opusdur= $opusdur"
-#sexopusdur="$(( $(sex2sec "$opusdur") + 20 ))"
-#pause "sexopusdur= $sexopusdur"
     (( $(( "$(sex2sec "$opusdur")" + 20 )) < $(sex2sec "$indur") )) &&
     [[ "$pidarray" ]]; do
       tput cup "$(( $(tput lines) - 3 ))" 0
@@ -197,7 +196,7 @@ progress() {
       sleep 12
       opusdur="$(mediaduration opus)"
 #      (( "$(date +%s)" % "$rfreq" == 0 )) && $(tput reset); clear -x
-      [[ "$lines" != "$(tput lines)" ]] && lines="$(tput lines)" && $(tput reset); clear -x
+      [[ "$lines" != "$(tput lines)" ]] && lines="$(tput lines)" && tput reset; clear -x
   done
 }
 

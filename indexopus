@@ -18,11 +18,14 @@
 
 shopt -s extglob nullglob dotglob
 scriptpath=$(realpath "$0")
+scriptname="${scriptpath##*\/}"
 confpath="$HOME/.config/indexopus.conf"
 . "$confpath"                                 #this needs to move.
 . "$HOME/bin/gits/indexopus/indexopus.lib"
 ulon="$(tput smul)"  #underline on
 uloff="$(tput rmul)" #underline off
+iton="$(tput sitm)" #italics on
+itoff="$(tput ritm)" #italics off
 red="$(tput setaf 9)" #red fg
 white="$(tput setaf 15)" #white fg
 tput0="$(tput sgr0)" #reset tput changes
@@ -118,7 +121,7 @@ rmyn(){
 
 gettitle(){
 [[ ! -n "$title" ]] && titles=(*Part\ ??*.opus) && title="${titles[0]% -- Part*}"
-ititle="${ulon}$title${uloff}"
+ititle="${iton}$title${itoff}"
 output="$title -- Audiobook.opus"
 ioutput="$ititle -- Audiobook.opus"
 }
@@ -200,31 +203,16 @@ reindex(){
   if [[ -f "chapters.json" ]] && [[ ! $(grep '{"error":"Chapters not found"}' "chapters.json") ]]; then
     readarray -t chap_titles < <(jq -r '.chapters[] | .title' "chapters.json" 2>/dev/null)
     readarray -t chap_starts < <(jq -r '.chapters[] | .startOffsetMs' "chapters.json" 2>/dev/null)
-#    for ((i=0; i<"${#chap_starts[@]}"; i++));
-#      do
-#        chap_starts[i]=$(echo $(( chap_starts[i] / 1000 )) )
-#      done
-
-#  for ((i=0; i<"${#chap_starts[@]}"; i++)); do
-#    seconds=$(echo "scale=3; ${chap_starts[i]} / 1000" | bc)
-#    chap_starts[i]=$(echo $seconds | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
-#  done
-
   for ((i=0; i<"${#chap_starts[@]}"; i++)); do
     sec=$(( chap_starts[i] / 1000 ))
     ms=$(( chap_starts[i] % 1000 ))
     chap_starts[i]="${sec}.${ms}"
   done
 
-#    pause "$(printf '%s\n' "${chap_starts[@]}")"
-#    pause "$(printf '%s\n' "${chap_titles[@]}")"
-
   else
     readarray -t chap_titles < <(jq -r '.chapters[] | .title' "metadata.json" 2>/dev/null)
     readarray -t chap_starts < <(jq -r '.chapters[] | .start' "metadata.json" 2>/dev/null)
   fi
-
-#pause $(printf '%s - %s\n' "${chap_titles}" "${chap_titles}")
 
  [[ ! "${chap_titles[@]}" ]] || [[ ! "${chap_starts[@]}" ]] &&
     printf 'Error with %s/metadata.json; check and retry.\nexit 1' "$PWD" &&
@@ -332,7 +320,6 @@ writeindex(){
   printf '%sChapter info added...\n%s' "$relipsis" "$tput0"
   printf '%sStripping MP4 tags%s\n%s' "$relipsis" "$relipsis" "$tput0"
   [[ "$rmmatch" != 'true' ]] &&
-#     pause "$(printf '%sStripping MP4 tags%s\n%s' "$relipsis" "$relipsis" "$tput0")"
   mp4grep="$(IFS=\|; echo "${remove_mp4tags[*]}")"
 
 #  This is method one to remove the unwanted mp4 tags:
@@ -392,7 +379,7 @@ writeindex(){
 #              mv "$i" "${i/ -- Part / -- Part $n: Part }"
 #            done
 #        else
-#          printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${ulon}" "${uloff}"
+#          printf 'This directory does not contain files in the format of %s<Title>%s -- Part ##:<Chapter Title>.opus\nPlease check the directory this script was launched from to make sure it contains the proper files.\n' "${iton}" "${itoff}"
 #          exit
 #      fi
 #   fi
@@ -498,7 +485,7 @@ else
 ##--> indexopus <--####################################################################################
 
 echo
-printline "${bold}  Welcome to ${white}indexopus  ${tput0}"
+printline "${bold}  Welcome to ${red}indexopus  ${tput0}"
 echo
 
 # Parse command-line options
@@ -582,7 +569,7 @@ gettitle "$title"
 
 if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]
  then
-   printf 'This directory already contains %s\n' "$ioutput"
+   printf 'This directory already contains %s\n\n' "$ioutput"
    if confirm "Overwrite the existing file? (y/n) "
     then
       printf '\n%sOverwriting %s -- Audiobook.opus...%s\n' "$relipsis" "$ititle" "${tput0}"
@@ -590,7 +577,8 @@ if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]
       [[ -f metadata.json ]] &&
         confirm "$(printf '\nNot overwriting.\nA metadata.json file was found. Would you like to reindex the file?')" &&
         reindex=true && overwrite=false ||
-        exit
+        printf '\n%s\n\n' "$(printline "  Exiting ${scriptname}: ${red}user abort. exit (130)${tput0}  ")"
+        exit 130
    fi
 fi
 
@@ -603,21 +591,24 @@ fi
 
 printf '\n%sGenerating the index for %s -- Audiobook.opus from...%s\n\n' "$relipsis" "$ititle" "$tput0"
 
+rm opusindex opusfiles 2>/dev/null
+
 createindex
 
-####
-#this needs to be reordered around here...  want to get some confirmation we're going to be doing this before we concatinate.
-
-
 printf '%s:~%s~%s\n\n' "${createdindex[@]}"|paste|column -t -s "~"
-printf '%s%sProposed index for %s:%s%s\n' "$red" "$bold" "$reintitle" "${tput0}" "$bold"
-printf '%s .. %s\n' "${rawindex[@]}"
+printf '\n%s%sProposed index for %s:%s%s\n' "$red" "$bold" "$ititle" "${tput0}" "$bold"
 
+printf '%s .. %s\n' "${rawindex[@]}"  # DO NOT touch this line
+echo
 
-[[ "$rmmatch" != "true" ]] && $( confirm "Continue with concatination? (y/Y)/(n/N)" || exit )
+if [[ "$rmmatch" != "true" ]] &&
+   ! $(confirm "Continue with concatination? (y/n) "); then
+   printf '\n\nWell why are you here then?%s\n\n' "$tput0"
+   printline "  ${bold}Leaving ${scriptname}: ${red}User abort. exit (130)  ${tput0}$(echo)"
+   exit 130
+fi
 
-
-printf '\n%sConcatenating %s -- Part ??: *.opus...%s\n\n' "$relipsis" "$ititle" "$tput0"
+printf '\n\n%sConcatenating %s -- Part ??: *.opus...%s\n\n' "$relipsis" "$ititle" "$tput0"
 
 #concatination step:
 dirsize="$(du -csb *Part*opus|tail -n1)"
@@ -625,7 +616,17 @@ dirsize="${dirsize%%$'\t'*}" #remove everything after first tab stop
 dirsize="$((dirsize/1000))"  #convert bytes to KiB
 printf '%sparts=  %sKiB time=%s%s\n' "$red" "$dirsize" "$duration" "$tput0"
 [[ "$overwrite" != false ]] && ffmpeg -nostdin -hide_banner -v error -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output"
-[[ "$overwrite" != false ]] && [[ "$?" != 0 ]] && echo && echo "ffmpeg failed to concatinate; exit 1" && echo && exit 1
+
+if [[ "$overwrite" != false ]] && [[ "$?" != 0 ]]; then
+  printf "\nffmpeg failed to concatinate; exit 1\n\n" && exit 1
+fi
+
+if [[ ! -f "$tmp/$output" ]]; then
+   printf '\n\n\n%s%sWhere the fuck is %s/%s?\nexit 1' "$tmp/$output"
+   printline "Leaving $scriptname: error, exit 1!"
+   exit 1
+fi
+
 
 printf '\n\n%sIncorporating index into%s %s -- Audiobook.opus%s\n\n%s' "$relipsis" "$white" "$ititle" "$relipsis" "$tput0"
 

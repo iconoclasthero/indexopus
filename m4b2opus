@@ -6,7 +6,8 @@
 shopt -s nullglob
 
 threads=4
-scriptname=$(realpath "$0")
+scriptpath="$(realpath "$0")"
+scriptname="${scriptpath##*\/}"
 ulon=$(tput smul)  #underline on
 uloff=$(tput rmul) #underline off
 bold="$(tput bold)"  #bold on
@@ -252,7 +253,7 @@ noindexsplit(){
     cd "$convertdir"
     #for i in First Second Third Fourth
     for ((i=1; i<=parts; i++)); do
-      i="$(printf '%02d\n' "$i")"
+      printf -v i '%02d\n' "$i"
       ((n++))
       for f in *\ --\ Part\ 0"$n".*; do
         mv "$f" "${f/./: Part $i.}"
@@ -263,6 +264,7 @@ noindexsplit(){
 ##--> Main Code <--################################################################################
 ##--> m4b2opus <--####################################################################################
 
+echo
 printline "${bold}  Welcome to ${white}$script  ${tput0}"
 
 [[ "$1" == @(edit|e|nano) ]] && editscript
@@ -270,8 +272,6 @@ printline "${bold}  Welcome to ${white}$script  ${tput0}"
 [[ "$1" == "-y" ]] && shift && rmmatch=true
 [[ "$1" == "--stats" ]] && shift && stats=true
 #[[ "$1" ]] && clifile "$1"
-
-#[[ "$rmmatch" ]] && pause "$bold$red$scriptname will overwrite upon matches."
 
 filecheck "$1" && [[ ! "$?" == 0 ]] && exit
 
@@ -301,6 +301,7 @@ if [[ ! "$(mediainfo "$m4bin"|grep Menu)" =~ ^Menu ]]; then  #process unindexed 
 else
   m4bsplit "$m4bin" "$convertdir"
   cd "$convertdir"
+  (( $(ls *m4a|wc -l) > 99 )) && for i in *\ --\ Part\ ??\:\ *.m4a; do mv "$i" "${i/Part /Part 0}"; done
   regexexp='.*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\ |\.]'
     for m4afile in *m4a
       do
@@ -320,13 +321,13 @@ printline "${bold}  Calling external dependency:${red} opus.book.4  ${tput0}"
 #printf '%s\n----------  Calling external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
 
 opus.book.4 -d "${m4bindur#*: }"  #this is a dependency; needs to be made a function?
-if (( "$?" > 1 ));  then
-  echo "opus.book.4 failed; exit 1"
-#    exit 1
+if (( "$?" > 0 ));  then
+  printf '%s\n\nopus.book.4 failed; exit 1\n\n%s' "$bold" "$tput0"
+  printline "  Leaving $scriptname: Error!  "
+  exit 1
 fi
 
-#printf '%s\n----------  Leaving external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
-printline "${bold}  Leaving external dependency: ${red} opus.book.4  ${tput0}"
+printline "${bold}  Returning from external dependency: ${red} opus.book.4  ${tput0}"
 #opus.book.4##################################################################################
 
 clear -x
@@ -340,14 +341,9 @@ printf '%sDuration of the original m4b file: %s%s%s\n' "$bold" "$red" "$m4bindur
 printf '%sDuration of the .opus part files: %s%s%s\n' "$bold" "$red" "$opuspartdur" "$tput0"
 
 ##indexopus##################################################################################
-# Create a named pipe (FIFO)
-#mkfifo "$convertdir/mypipe"
-
-# Open the FIFO for writing
-#exec 3<> "$convertdir/mypipe"
-
-#printf '\n\n%s----------  Calling external dependency: %sindexopus%s  ----------\n' "$bold" "$red" "$tput0"
+echo
 printline "${bold}  Calling external dependency:${red} indexopus  ${tput0}"
+echo
 
 
 if [[ "$rmmatch" = true ]]
@@ -358,16 +354,13 @@ if [[ "$rmmatch" = true ]]
 fi
    ec4io="$?" 				# error code 4 indexopus
    [[ "$ec4io" = 2 ]] && iorm=true
-   [[ "$ec4io" = 1 ]] && printf 'indexopus exited for some unknown reason with exit 1. investigate.\nexit 1' && exit 1
+   [[ "$ec4io" = 1 ]] && printf 'How the hell did you manage to get here?!' && exit
+   [[ "$ec4io" = 130 ]] && printf '%sindexopus was aborted by user, exit (130). Investigate...\n%s\n%s\n\n' "$bold" "$tput0" "$(printline "  ${bold}Leaving ${scriptname}: ${red}indexopus aborted, exit (1)${tput0}  ")" && exit
 
 
-#printf '\n\n%s----------  Leaving external dependency: %sindexopus%s  ----------\n' "$bold" "$red" "$tput0"
-printline "${bold}  Leaving external dependency:${red} indexopus  ${tput0}"
+printline "${bold}  Returning from external dependency:${red} indexopus  ${tput0}"
 ##indexopus##################################################################################
 
-# Close the FIFO
-#  exec 3>&-
-#  rm "$convertdir/mypipe"
 
 
 tmp="/tmp/indexopus-$stamp"  #this probably doesn't exist...
@@ -379,32 +372,42 @@ titleopus="$title -- Audiobook.opus"
      exit 1
 
 mv "$titleopus" "$swd"
+opusparts=( *opus )
 cd "$swd"
 
-printf '\n%sCleaning up remaining files:%s\n\n' "$red" "$tput0"
-ls "$tmp" "$convertdir/m4a" 2>/dev/null
-checkdur
-#(( $(bc <<< "scale=3; ($var1 - $var2) / $var2 > 0.001") ))
-  if [[ "$rmmatch" = true ]] && (( $(bc <<< "scale=3; ($(sex2sec "$(checkdur m4b)") - $(sex2sec "$(checkdur opus)")) / $(sex2sec "$(checkdur opus)") > 0.001") )); then
+[[ ! "$rmmatch"=true ]] && pause "Need to check to see if $tmp is being created... when indexopus isn't run with -y"
+
+checkdur # probably do something different here since you have m4bindur and have to calc opusdur...
+opusdursec="$(sex2sec "$(checkdur opus)")"
+m4bindursec="$(sex2sec $m4bindur)"
+if [[ "$rmmatch" = true ]] && (( opusdursec > 0 )); then
+  verifydur=$(bc <<< "scale=4; ($m4bindursec - $opusdursec) / $opusdursec " ); verifydur="${verifydur/#-}"
+  verifydur="${verifydur/#-}"
+  if [[ $(bc <<< "scale=4; $verifydur < 0.001") ]]; then
     rm -r *m4b "$convertdir"
-    printf '\n\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
+    [[ "$m4bindursec" != "$opusdursec" ]] &&
+       printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tput sitm)" "$(tput ritm)" "$tput0" ||
+      printf '%sDurations match!%s\n' "$relipsis" "$tput0"
+    printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
     exit
-else
-  if [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
+  elif [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
     printf '%s%sThe m4b and opus audiobook durations do not match!\n' "$bold" "$red"
     printf '%s%sm4b2opus will not automatically delete starting and temporary files!\n' "$white" "$tput0"
     printf '\n\n'
     printf '%s-y/-f specified, but the durations do not match!\n%s' "$bold" "$tput0"
   fi
+fi
+
+  printf '\n%sCleaning up remaining files:%s\n\n' "$red" "$tput0"
+#  ls "$tmp" "$convertdir" 2>/dev/null
 
   printf '\n\n'
 # the 2>/dev/null does not work for rmyn -- rewrite!!
 #  rmyn -q "${red}${bold}Remove the conversion ./m4a directory? ${tput0}" "${red}...Leaving ./m4a.${tput0}" rm -r "$convertdir/m4a"
-  [[ ! "$iorm" ]] && rmyn -q "${red}${bold}Remove $ititle -- Part *.opus files? ${tput0}" "${red}...Leaving $ititle -- Part *.opus files...${tput0}" rm "$convertdir/$title"\ --\ Part\ ??:*.opus
+  [[ ! "$iorm" ]] && [[ "$opusparts" ]] && rmyn -q "${red}${bold}Remove $ititle -- Part *.opus files? ${tput0}" "${red}...Leaving $ititle -- Part *.opus files...${tput0}" rm "$convertdir/$title"\ --\ Part\ ??:*.opus
   rmyn "${red}${bold}Remove the starting $m4bin? " "${red}Leaving starting $m4bin${tput0}" rm "$m4bin"
-  for i in *m4b "$convertdir" .tmp* "$tmp"; do [[ -a "$i" ]] && fnrmr "$i"; done
+  for i in "$convertdir" .tmp* "$tmp"; do [[ -a "$i" ]] && fnrmr "$i"; done
   printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
-fi
 
 printline "${bold}  Exiting (0) ${white}m4b2opus  ${tput0}"
 exit 0
