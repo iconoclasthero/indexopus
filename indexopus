@@ -402,11 +402,11 @@ if [[ "${opusarray[@]}" =  *\ --\ @(Chapter|Part|Disc)\ @(??|???).opus* ]]; then
     echo
 
     # Confirm the rename
-    [[ ! "$rmmatch" ]] && confirm "${bold}Continue with Proposed Rename? (Y/N)/(y/n) " &&
+    [[ ! "$rmmatch" ]] && confirm "${bold}Continue with Proposed Rename? (y/n) " &&
     for i in "${!confirm_rename[@]}"; do
         [[ "$i" = *\ @(Chapter|Disc)\ @(??|???).opus ]] &&
         mv "$i" "${confirm_rename["$i"]}"
-    done
+    done || exit
 
 #  if [[ "${opusarray[@]}" =  *\ --\ @(Chapter|Part|Disc)\ @(??|???).opus* ]]; then
 #    for i in "${opusarray[@]}"; do
@@ -431,7 +431,7 @@ if [[ "${opusarray[@]}" =  *\ --\ @(Chapter|Part|Disc)\ @(??|???).opus* ]]; then
           printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "$newname" "$tput0"
     done
       echo
-      [[ ! "$rmmatch" ]] && confirm "${bold}Continue with Proposed Rename" &&
+      [[ ! "$rmmatch" ]] && confirm "${bold}Continue with Proposed Rename? (y/n) " &&
       for i in *-Part??.opus; do
         n="${i%.opus}"; n="${n##*-Part}"
         [[ "$i" = *\ @(Chapter|Disc)\ @(??|???).opus ]] &&
@@ -446,22 +446,19 @@ else
           printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "$newname" "$tput0"
         fi
       done
-      for i in *\ -\ @(?|??|???).opus; do
         if [[ "$rmmatch" != true ]]; then
             # Ask for confirmation before renaming
             echo
-            [[ "$rmmatch" ]] && confirm "Continue with proposed rename?" &&
+            confirm "Continue with proposed rename? (y/n) " &&
             for opusfile in *"$ext"; do
                 [[ -f "$opusfile" ]] && mv "$opusfile" "${opusfile/ - / -- Part }"
-            done ||
-            exit
+            done || exit
         else
             for opusfile in *"$ext"; do
                 [[ -f "$opusfile" ]] && mv "$opusfile" "${opusfile/ - / -- Part }"
             done ||
             exit
         fi
-      done
     fi
 
     # Check if files match the expected naming pattern after renaming
