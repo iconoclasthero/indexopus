@@ -143,7 +143,9 @@ breakout(){
 progress() {
   local opusdur="00:00:00" indur="$1"
   local opuspresent ck4files
-  opuspresent=( *\ --\ Part\ ??\:\ *.opus )
+  opuspresent=( *.opus )  #this is used for just run of the mill conversions and there's no
+                          #filename check before it gets here so using the *\ --\ Part\ ???.opus
+                          #glob will fail for random mp3s that haven't been run through indexopus
 
   [[ "$opuspresent" ]] && opusdur="$(checkdur opus)"
   [[ ! "$bfreq" =~ [[:digit:]]+ ]] && bfreq=12 # flashing frequency (( $(date +%s) % bfreq == 0 )) && .

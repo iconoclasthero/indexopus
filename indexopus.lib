@@ -1,0 +1,163 @@
+#!/bin/bash
+# nb: the swp file that editscript relies on is provided by nano
+
+scriptpath="$(realpath "$0" 2>/dev/null)"
+script="${scriptpath##*\/}"
+ulon="$(tput smul)"  #underline on
+uloff="$(tput rmul)" #underline off
+red="$(tput setaf 9)" #red fg
+green="$(tput setaf 2)" #green fg
+white="$(tput setaf 15)" #white fg
+tput0="$(tput sgr0)" #reset tput changes
+bold="$(tput bold)" #bold on
+relipsis="$red..."
+
+function tlpp {
+
+local    scriptname="${0##*/}"
+local    shells="^bash|^init|^screen|^sh|^ssh|^su|${scriptname}"
+local    pid=${1:-$$}
+local    pidname="`ps --no-heading -o %c -p ${pid}`"
+local    stat=($(</proc/${pid}/stat))
+         tlpp_ppid=${stat[3]}
+local    ppidname="`ps --no-heading -o %c -p ${tlpp_ppid}`"
+         isclitest="`echo "${ppidname}" | grep -iv -E "${shells}"`"
+
+    until [ "${tlpp_ppid}" -eq "1" ] || [ "${iscli}" = "1" ]; do
+            if [[ -n "${isclitest}" ]]; then
+                    iscli="1"
+                 else
+                    iscli="0"
+                    tlpp ${tlpp_ppid}
+            fi
+    done
+ [[ "$iscli" ]] && return "$iscli"
+}
+
+editscript(){
+  local scriptpath script path swp; scriptpath=$(realpath "$0" 2>/dev/null); script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
+     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptpath") && exit
+     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit ; }
+
+printline(){
+  local lead linetitle leader strippedleader leader_length remaining_width line
+  #line="$(printf '%s%*s\n' "$red" "$(tput cols)"|tr ' ' "-")$tput0"
+  linetitle="$1"
+
+  # Define the lead including formatting
+  lead="${red}---------${white}${bold}"
+
+  # Define the title and leader including formatting
+  [[ -n "$1" ]] &&
+  linetitle="$1" ||
+  linetitle="${bold} $scriptpath $tput0"
+  leader="$lead$linetitle"
+
+  # Strip control characters from the leader
+  strippedleader=$(printf '%s' "$leader" | perl -pe 's/\e\[?.*?[\@-~]//g')
+
+  # Calculate the remaining width after accounting for the leader
+  remainingwidth=$(( $(tput cols) - ${#strippedleader} ))
+
+  # Construct the line
+  line="${leader}${red}$(printf '%*s' "$remainingwidth" | tr ' ' '-')${tput0}"
+  echo "$line"
+}
+
+sex2sec(){
+  local time="$1";
+  [[ ! "$time" =~ [[:digit:]]{2}:[[:digit:]]{2}:[[:digit:]]{2} ]] && time='00:00:00' #&& pause "${time@A}"
+  local hours=$(echo "$time" | awk -F: '{print $1}');   #pause "$hours"
+  local minutes=$(echo "$time" | awk -F: '{print $2}'); #pause "$minutes"
+  local seconds=$(echo "$time" | awk -F: '{print $3}'); #pause "$seconds"
+  local total_seconds=$(( (10#$hours * 3600) + (10#$minutes * 60) + (10#$seconds) ));
+# pause "no sec $(local total_seconds=$(( (10#$hours * 3600) + (10#$minutes * 60) )) )"
+#  pause "no min $(local total_seconds=$(( (10#$hours * 3600) + (10#$seconds) )) )"
+#  pause "no hours $(local total_seconds=$(( (10#$minutes * 60) + (10#$seconds) )) )"
+  echo "$total_seconds" ;  }
+##--> sexagesimal_to_sec() <--##################################################################
+
+checkdur(){  #came from opus.book.4
+  local m4as m4bs opuss mp3s checkdurexts
+  checkdurexts='@(m4a|m4b|mp3|opus)'
+  m4as=(*m4a)
+  m4bs=(*m4b)
+  opuss=(*opus)
+  mp3s=(*mp3)
+
+if [[ "$1" = $checkdurexts ]]
+  then
+  find -type f -iname "*.$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+    perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
+    tail -n 1
+elif [[ "$1" = *.$checkdurexts ]]
+  then
+  printf '%s%s  %s\n%s' "$red" "$(mplayer -vo dummy -ao dummy -identify "$1" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$1" "$tput0"
+else
+    printf '\n%sDuration(s):%s\n' "$bold" "$tput0"
+    [[ "${#m4as[@]}" -gt 0 ]] &&
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white"  "${m4as[@]}" "$tput0"
+    [[ "${#m4bs[@]}" -gt 0 ]] &&
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${m4bs[@]}" "$tput0"
+    [[ "${#mp3s[@]}" -gt 0 ]] &&
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.mp3" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${mp3s[@]}" "$tput0"
+    [[ "${#opuss[@]}" -gt 0 ]] &&
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opuss[@]}" "$tput0"
+ fi
+}
+##--> checkdur() <--###########################################################################
+
+fnboobs(){
+echo "( • )( • )----ԅ(‾⌣‾ԅ)"
+}
+##--> fnboobs() <--###########################################################################
+
+
+
+##--> indexopus.lib <--###########################################################################
+##--> Main Code <--###########################################################################
+
+
+#tlpp; echo "$? $0 $iscli"
+#[[ -t 1 ]] && echo "[[ -t 1 ]] returned true"
+#read -rp "$?"
+
+#https://mywiki.wooledge.org/BashFAQ/109
+#if [[ $- != *i* ]]; then
+#  echo "Run from cli"
+#fi
+#<emanuele6> like, a shell is not interactive when $- != *i*
+#<emanuele6> it is interactive when  $- = *i*
+#<iconoclast_hero> i understood more what you meant by internative...
+#<emanuele6> you can also check   $- = *i* && $- = *s*   for interactive shell that is reading stdin
+#<emanuele6> and you can add   $- = *i* && $- = *s* && -t 0   for interactive shell that is reading directly from a terminal via stdin
+##if [[ $- != *i* ]]; then
+#  echo "$0 believes it was called from the cli!"
+#fi
+#if tlpp || [[ "${0##*/}" = "indexopus.lib" ]] || [[ $- != *i* ]]; then
+
+#tlpp
+
+#if [[ $? ]]; then
+if [[ $- = *i* && $- = *s* && -t 0 ]]; then
+  echo "$0 believes it was called from the cli!"
+  unalias pause 2>/dev/null
+  [[ "$apause" ]] && echo "unaliased $apause"
+  alias mpause="mpcP pause"
+  printline
+fi
+
+pause(){ read -rp "$*" ;}
+#ps -o stat= -p $$
+#ps -o stat= -p $PPID
+#printf '%s %s\n' "$(ps -o stat= -p $$)" "$(ps -o stat= -p $PPID)"
+#pause "$(ps -o stat= -p $$) $(ps -o stat= -p $PPID)"
+#pause "$( [[ -t 1 ]] && echo terminal || echo script)"
+#printline
+
+#pause "$(ps -o stat= -p $PPID) $(ps -o stat= -p $$)"
+
+[[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
+
+
+
