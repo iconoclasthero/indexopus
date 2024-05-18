@@ -518,7 +518,7 @@ if [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].title' metadata.json)" ]]
       [[ "$(jq -r '.chapters[0] | .title' metadata.json)" == "001" ]] &&
       reindex=false
     [[ "$reindex" = false ]] &&
-      printf '%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s%s/chapters\n\n' "$red" "$absserver" "$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")" &&
+      printf '%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s/audiobook/%s/chapters\n\n' "$red" "$absserver" "$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$PWD';" ".exit")" &&
       confirm "${bold}Would you like to try to reindex the file after importing chapter information?${tput0}" &&
       reindex=true
 fi
