@@ -192,7 +192,7 @@ reindex(){
 
 
   if [[ ! -f "chapters.json" ]]; then
-    if confirm "${bold}No chapters.json; retrieve chapter info from the web?${tput0}"; then
+    if confirm "${bold}No chapters.json; retrieve chapter info from the web? ${tput0}"; then
 
       curl -X POST "$absserver/api/items/$(itemid)/scan"   -H "Authorization: Bearer $abstoken" -sSo /dev/null
       curl "$absserver/api/search/chapters?asin=$(jq -r '.asin' metadata.json)"   -H "Authorization: Bearer $abstoken" -sSo chapters.json
@@ -279,7 +279,7 @@ reindex(){
     else
       mediainfo "$reintitle"
       printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
-      if confirm "Would you like to start over so you can look up chapter information in audiobookshelf?"; then
+      if confirm "Would you like to start over so you can look up chapter information in audiobookshelf?  "; then
         indexopus reindex
         exit
       else
@@ -523,7 +523,7 @@ if [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].title' metadata.json)" ]]
     [[ "$reindex" = false ]] &&
 
     printf '%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s/audiobook/%s/chapters\n\n' "$red" "$absserver" "$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$sqlitepwd';" ".exit")" &&
-      [[ ! "$rmmatch" = true ]] && confirm "${bold}Would you like to try to reindex the file after importing chapter information?${tput0}" &&
+      [[ ! "$rmmatch" = true ]] && confirm "${bold}Would you like to try to reindex the file after importing chapter information? ${tput0}" &&
       reindex=true
 fi
 
@@ -638,7 +638,7 @@ if [[ "$rmmatch" = true && "$duration" = "$outdur" ]]; then
   exit 0
 fi
 
-[[ "$reindex" = true ]] && confirm "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info?%s' "${red}" "${bold}" "${tput0}")" && indexopus reindex
+[[ "$reindex" = true ]] && confirm "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info? %s' "${red}" "${bold}" "${tput0}")" && indexopus reindex
 
 #this isnt working right tonight and it is late.
 #this was "$reindex" != true...  changing to "$rmmatch":

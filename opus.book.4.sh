@@ -46,7 +46,17 @@ editscript(){
 pause(){ read -rp "$*" ; }
 
 ffmpegs(){
-   ffmpeg -n -nostdin -hide_banner -loglevel error -stats -i "$1" -filter_complex "$filtercomplex" -c:a libopus -b:a 17k -frame_duration:a 60 "${1%.*}.opus" ; }
+   ffmpeg -n \
+          -nostdin \
+          -hide_banner \
+          -loglevel error \
+          -stats -i "$1" \
+          -filter_complex "$filtercomplex" \
+          -c:a libopus \
+          -b:a 17k \
+          -frame_duration:a 60 \
+          -ar 24k \
+          "${1%.*}.opus" ; }
 
 ffmpeg2(){
  local startfile
@@ -131,7 +141,6 @@ breakout(){
 #     [[ "$pid" = *"$script"* ]] || [[ "$pid" = *ffmpeg* ]] &&
 #       pidarray+=( "$(echo "${pid% pts*}" |tee -a "$pidfile")" )
       [[ "$other" && "$pid" = *"$other"* ]] || [[ "$pid" = *"$script"* ]] || [[ "$pid" = *ffmpeg* ]] && echo "${pid% pts*}" >> "$pidfile"
-
       [[ "$array" && "$pid" = *ffmpeg* ]] && pidarray+=( "${pid% pts*}" )
   done< <(ps --tty $(tty) Sf)
 
@@ -251,7 +260,7 @@ for exts in "${mediafiles[@]}"; do
   done
 
 (( $(printf '%s\n' "${extensions[@]}"|sort -u|wc -l) > 1 )) &&
-  printf '\n%sMore than one type of media file found!\nopus.book.4 cannot be launched from a folder where more than one type of media file is located.\nCorrect and try again.\n%sexit 1\n\n' "$bold" "$tput0" &&
+  printf '\n%sMore than one type of media file found!\nopus.book.4 cannot be launched from a folder where more than one type of media file is located.\nCorrect and try again.\n\n%s\n\n%sexit 1\n\n' "$bold" "$PWD" "$tput0" &&
   exit 1
 
 while (( $# > 0 ))
