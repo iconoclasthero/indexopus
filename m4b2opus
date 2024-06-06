@@ -189,8 +189,7 @@ local bpath outputdur START first start end partnum n
 outputdir="$2"
 START=1
 bpath="$(basename "$PWD")"
-
-while [ "$#" -gt 0 ]; do
+#while [ "$#" -gt 0 ]; do
 
 ffmpeg -i "$1" 2> ".tmp$stamp"
 
@@ -212,8 +211,8 @@ done <".tmp$stamp"
 
 rm ".tmp$stamp"
 
-shift
-done
+#shift
+#done
 }
 ##--> m4bsplit() <--##################################################################################
 

@@ -31,36 +31,18 @@ if [ -n "$1" ];
  then
   find -type f -name "*.$1" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
 else
+
+
 #mp3
- [[ "${exts[@]}" =~ mp3 ]] && finddur mp3 #printf "Duration of .mp3 files: " && find -type f -iname "*.mp3" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |tail -n 1
-#mp3 too
-# [[ "${exts[@]}" =~ mp3 ]] && printf "Duration of .mp3 files: " && find -type f -iname "*.mp3" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
-# [[ "${exts[@]}" =~ mp3 ]] && printf "Duration of .mp3 files: " && find -type f -iname "*.mp3" -print0 -exec sh -c 'while IFS= read -r -d '' {}; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 {} 2>/dev/null; done' | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
+ [[ "${exts[@]}" =~ mp3 ]] && finddur mp3
+
 #m4a
- [[ "${exts[@]}" =~ m4a ]] && finddur m4a # printf "Duration of .m4a files: " && find -type f -iname "*.m4a" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+ [[ "${exts[@]}" =~ m4a ]] && finddur m4a
 #m4b
  [[ "${exts[@]}" =~ m4b ]] && finddur m4b
 
-# [[ "${exts[@]}" =~ m4b ]] &&
-#    printf "Duration of .m4b files: " &&
-#    find -type f -iname "*.m4b" -print0 2>/dev/null |
-#    xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
-#    perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
-#    tail -n 1
-
 #flac
 [[ "${exts[@]}" =~ flac ]] && finddur flac
-
-#if [[ "${exts[@]}" =~ flac ]]
-#  then
-#    tdur=$(find -type f -iname "*.flac" -print0  2>/dev/null |
-#    xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
-#    perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
-#    tail -n 1)
-#    [[ "${tdur##*:}" -gt 0 ]] && printf 'Duration of .flac files: %s' "$tdur"
-#  fi
-
-# [[ "${exts[@]}" =~ flac ]] && printf "Duration of .flac (ffmpeg) files: " && find -type f -iname "*.flac" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
 
 #ogg
 [[ "${exts[@]}" =~ ogg ]] && finddur ogg
@@ -72,14 +54,79 @@ else
  [[ "${exts[@]}" =~ avi ]] && finddur avi #printf "Duration of .avi files: " && find -type f -iname "*.avi" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
 
 #shn -- ffmpeg doesn't seem to work with this...
-# [[ "${exts[@]}" =~ shn ]] && printf "Duration of .shn files: " && find -type f -iname "*.shn" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+ [[ "${exts[@]}" =~ shn ]] && printf "Duration of .shn files: " && find -type f -iname "*.shn" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
 # [[ "${exts[@]}" =~ shn ]] && printf "Duration of .shn files: ffmpeg" && find -type f -iname "*.shn" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
 
 #wav -- ffmpeg usually has trouble with this
  [[ "${exts[@]}" =~ wav ]] && finddur wav #printf "Duration of .wav files: " && find -type f -iname "*.wav" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
-# [[ "${exts[@]}" =~ wav ]] && printf "Duration of .wav files: " && find -type f -iname "*.wav" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
+
+ [[ "${exts[@]}" =~ wav ]] && printf "Duration of .wav files: " && find -type f -iname "*.wav" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+
+ [[ "${exts[@]}" =~ wav ]] && printf "Duration of .wav files: " && find -type f -iname "*.wav" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
+
 #opus
- [[ "${exts[@]}" =~ opus ]] && finddur opus #printf "Duration of .opus files: " && find -type f -iname "*.opus" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
-# [[ "${exts[@]}" =~ opus ]] && printf "Duration of .opus files: " && find -type f -iname "*.opus" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
+ [[ "${exts[@]}" =~ opus ]] && finddur opus
+
 fi
 
+exit
+
+#cleaned up above and left the before below commented out:
+#----------------------
+#
+#
+#
+#
+##mp3
+# [[ "${exts[@]}" =~ mp3 ]] && finddur mp3 #printf "Duration of .mp3 files: " && find -type f -iname "*.mp3" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |tail -n 1
+##mp3 too
+## [[ "${exts[@]}" =~ mp3 ]] && printf "Duration of .mp3 files: " && find -type f -iname "*.mp3" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
+## [[ "${exts[@]}" =~ mp3 ]] && printf "Duration of .mp3 files: " && find -type f -iname "*.mp3" -print0 -exec sh -c 'while IFS= read -r -d '' {}; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 {} 2>/dev/null; done' | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
+##m4a
+# [[ "${exts[@]}" =~ m4a ]] && finddur m4a # printf "Duration of .m4a files: " && find -type f -iname "*.m4a" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+##m4b
+# [[ "${exts[@]}" =~ m4b ]] && finddur m4b
+#
+## [[ "${exts[@]}" =~ m4b ]] &&
+##    printf "Duration of .m4b files: " &&
+##    find -type f -iname "*.m4b" -print0 2>/dev/null |
+##    xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+##    perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
+##    tail -n 1
+#
+##flac
+#[[ "${exts[@]}" =~ flac ]] && finddur flac
+#
+##if [[ "${exts[@]}" =~ flac ]]
+##  then
+##    tdur=$(find -type f -iname "*.flac" -print0  2>/dev/null |
+##    xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+##    perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
+##    tail -n 1)
+##    [[ "${tdur##*:}" -gt 0 ]] && printf 'Duration of .flac files: %s' "$tdur"
+##  fi
+#
+## [[ "${exts[@]}" =~ flac ]] && printf "Duration of .flac (ffmpeg) files: " && find -type f -iname "*.flac" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
+#
+##ogg
+#[[ "${exts[@]}" =~ ogg ]] && finddur ogg
+#
+##mp4
+# [[ "${exts[@]}" =~ mp4 ]] && finddur mp4 #printf "Duration of .mp4 files: " && find -type f -iname "*.mp4" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+#
+##avi
+# [[ "${exts[@]}" =~ avi ]] && finddur avi #printf "Duration of .avi files: " && find -type f -iname "*.avi" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+#
+##shn -- ffmpeg doesn't seem to work with this...
+## [[ "${exts[@]}" =~ shn ]] && printf "Duration of .shn files: " && find -type f -iname "*.shn" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+## [[ "${exts[@]}" =~ shn ]] && printf "Duration of .shn files: ffmpeg" && find -type f -iname "*.shn" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
+#
+##wav -- ffmpeg usually has trouble with this
+# [[ "${exts[@]}" =~ wav ]] && finddur wav #printf "Duration of .wav files: " && find -type f -iname "*.wav" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+## [[ "${exts[@]}" =~ wav ]] && printf "Duration of .wav files: " && find -type f -iname "*.wav" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
+##opus
+# [[ "${exts[@]}" =~ opus ]] && finddur opus #printf "Duration of .opus files: " && find -type f -iname "*.opus" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+## [[ "${exts[@]}" =~ opus ]] && printf "Duration of .opus files: " && find -type f -iname "*.opus" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
+#fi
+#
+#
