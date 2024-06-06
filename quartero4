@@ -186,7 +186,7 @@ while (( $count < $((1+$threads)) ))
   do
      #echo '>>>>>       ffmpeg -i "$wholefile" -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -acodec copy "${wholefile%.*} -- Part 0$count.$ext" '
      #ffmpeg -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$whilefile" -acodec copy "${wholefile%.*} -- Part 0$count.$ext"
-pause "$(python -c "print(($count-1)*$divsec)")"
+#pause "$(python -c "print(($count-1)*$divsec)")"
     ffmpeg -n -nostdin -hide_banner -stats -v error -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$wholefile" -vn -acodec copy "$tmp/${wholefile%% -- *} -- Part 0$count.$outext"
     ((count++))
   done

@@ -356,81 +356,107 @@ writeindex(){
 
 ##--> writeindex() <--#################################################################################
 
+
+
 rename() {
   ext=opus #local?
   declare -A confirm_rename
+  declare -A parts
+  local hundreds
+
+boobs() { pause "( • )( • )----ԅ(‾⌣‾ԅ)" ; }
+
+mvopus() {
+      echo
+      [[ "$rmmatch" = true ]] || confirm "${bold}Continue with Proposed Rename (y/n) ${tput0}" &&
+      for i in "${!confirm_rename[@]}"; do
+        mv "$i" "${confirm_rename["$i"]}"
+      done || exit 1
+}
+
 
   if [[ "${opusarray[@]}" =  *\ --\ @(Chapter|Part|Disc)\ @(??|???).opus* ]]; then
     for i in "${opusarray[@]}"; do
-        n="${i%.opus}"; n="${n##* }"
-        title="${i% -- *}"
-        order="${i##* -- }"
-        newname="${i/ -- @(Part|Chapter|Disc) / -- Part $n: Part }"
-        # Display the proposed rename
-        confirm_rename["$i"]="$newname"
-        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "$newname" "$tput0"
+      n="${i%.opus}"; n="${n##* }"
+      title="${i% -- *}"
+      order="${i##* -- }"
+      newname="${i/ -- @(Part|Chapter|Disc) / -- Part $n: Part }"
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
     done
-    echo
 
-    [[ "$rmmatch" = true ]] || confirm "${bold}Continue with Proposed Rename? (y/n) " &&
-    for i in "${!confirm_rename[@]}"; do
-      [[ "$i" = *\ @(@(C|c)hapter|@(D|d)isc|@(P|p)art)\ @(??|???).opus ]] &&
-        mv "$i" "${confirm_rename["$i"]}"
-    done || exit
+    mvopus
 
-  elif [[ "${opusarray[@]}" = *-Part@(??|???).opus ]]; then
+#    echo
+#
+#    [[ "$rmmatch" = true ]] || confirm "${bold}Continue with Proposed Rename? (y/n) " &&
+#    for i in "${!confirm_rename[@]}"; do
+#      [[ "$i" = *\ @(@(C|c)hapter|@(D|d)isc|@(P|p)art)\ @(??|???).opus ]] &&
+#        mv "$i" "${confirm_rename["$i"]}"
+#    done || exit 1
+
+  elif [[ "${opusarray[@]}" = *-Part@(??|???).opus* ]]; then
     for i in *-Part??.opus; do
       n="${i%.opus}"; n="${n##*-Part}"
-          newname="${i/-Part/ -- Part $n: Part }"
-          printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "$newname" "$tput0"
+      newname="${i/-Part/ -- Part $n: Part }"
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
     done
-      echo
-      [[ "$rmmatch" = true ]] || confirm "${bold}Continue with Proposed Rename? (y/n) " &&
-      for i in *-Part??.opus; do
-        n="${i%.opus}"; n="${n##*-Part}"
-        [[ "$i" = *\ @(Chapter|Disc)\ @(??|???).opus ]] &&
-          mv "$i" "${i/-Part/ -- Part $n: Part }"
-       done
+
+    mvopus
+
+  elif [[ "${opusarray[@]}" = *\ Part\ @(?|??|???).opus\ * ]]; then
+#
+#   this is logic to add double or triple digits to all the part numbers.
+#
+    for i in "${opusarray[@]}"; do n="${i%.opus}"; n="${n##* }"; parts["$i"]="$n"; done
+    (( "$(printf %s\\n "${parts[@]}"|sort|tail -n1)" > 99 )) && hundreds=true
+#
+#
+#
+
+    for i in "${opusarray[@]}"; do
+      n="${i%.opus}"; n="${n##* }"; [[ "$hundreds" = true ]] && n="$(printf %03d "$n")" || n="$(printf %02d "$n")"
+      newname="${i% *}"; newname="${newname% @(p|P)art*} -- Part $n: Part $n.opus"
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+    mvopus
+
   elif [[ "${opusarray[@]}" =~ .+[[:space:]]-[[:space:]][[:digit:]]{1,3}\.opus ]]; then
     regex=".+[[:space:]]-[[:space:]][[:digit:]]{1,3}\.opus"
-      for i in *\ -\ @(?|??|???).opus; do
-          n="${i%.opus}"; n="${n##* - }"
-          newname="${i/ - / -- Part $n: Part }"
-          printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "$newname" "$tput0"
-      done
-        if [[ "$rmmatch" != true ]]; then
-            # Ask for confirmation before renaming
-            echo
-            confirm "Continue with proposed rename? (y/n) " &&
-            for opusfile in *"$ext"; do
-                [[ -f "$opusfile" ]] && mv "$opusfile" "${opusfile/ - / -- Part }"
-            done || exit
-        else
-            for opusfile in *"$ext"; do
-                [[ -f "$opusfile" ]] && mv "$opusfile" "${opusfile/ - / -- Part }"
-            done ||
-            exit
-        fi
+    for i in *\ -\ @(?|??|???).opus; do
+      n="${i%.opus}"; n="${n##* - }"
+      (( n < 10 ))
+      newname="${i/ - / -- Part $n: Part }"
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+
+    mvopus
+
   elif [[ "${opusarray[@]}" =~ .+[[:space:]][[:digit:]]{1,3}\.opus ]]; then
-#    regex=".+[[:space:]]-[[:space:]][[:digit:]]{1,3}\.opus"
     regex=".+[[:space:]][[:digit:]]{1,3}\.opus"
     for i in "${opusarray[@]}"; do
-          n="${i%.opus}"; n="${n##* }"
-          newname="${i% *}"; newname="$newname -- Part $n: Part $n.opus"
-          printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "$newname" "$tput0"
-          confirm_rename["$i"]="$newname"
+      newname="${i% *}"; newname="$newname -- Part $n: Part $n.opus"
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
     done
-    echo
-    # Confirm the rename
-    [[ "$rmmatch" = true ]] || confirm "${bold}Continue with Proposed Rename? (y/n) " &&
-    for i in "${!confirm_rename[@]}"; do
-     [[ "$i" =~ $regex ]] &&
-        mv "$i" "${confirm_rename["$i"]}"
-    done || exit
+
+    mvopus
+
+  elif [[ "${opusarray[@]}" =~ [[:digit:]]{1,3}\ -\ (.+)\.opus ]]; then
+    regex="[[:digit:]]{1,3}\ -\ (.+)\.opus"
+    for i in "${opusarray[@]}"; do
+      n="${i%% *}"
+      newname="${i%.opus}"; newname="${newname#* - } -- Part $n: Part $n.opus"
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+
+    mvopus
 
   fi
-
-
 
     # Check if files match the expected naming pattern after renaming
     renopus=( *\ --\ Part\ *.opus )
