@@ -67,7 +67,7 @@ ffmpeg2(){
       [[ "${outputarray[@]}" != *"$file"* ]] && outputarray+=("$file") #&& echo "$file"
       outputfiles="$(<"$tmp")"
       [[ "$outputfiles" != *"$file"* ]] && echo "${relipsis}Converting $file$tput0" >> "$tmp"
-      readarray -t ffoutput < <(ffmpeg -n \
+      readarray -d $'\r' -t ffoutput < <(ffmpeg -n \
                                        -nostdin \
                                        -hide_banner \
                                        -loglevel error \
@@ -81,7 +81,27 @@ ffmpeg2(){
 
 # hmmm with the 2>&1 >/dev/null, I'm guessing that this is not going to work as a test anymore
       erfile="${ffoutput[0]}"; erfile="${erfile%%=*}"
-      if [[ "$erfile" != "size" ]] && [[ "$erfile" != *already\ exists.\ Exiting* ]]
+
+#
+# Going to change the logic of this test to say if the erfile is not equal to "size", whatever the fuck that was/is doing...
+#
+#      if [[ "$erfile" != "size" ]] && [[ "$erfile" != *already\ exists.\ Exiting* ]]
+#
+# So instead of using the first line of the output from ffmpeg, it looks like i should use the last because if there's a
+# recoverable error, e.g., this bullshit:
+#$ printf %s\\n "${ffoutput[0]}"
+#Incorrect BOM value
+#Error reading comment frame, skipped
+#File 'Book-Part04.opus' already exists. Exiting.
+#Error opening output file Book-Part04.opus
+#$ declare -p ffoutput
+#declare -a ffoutput=([0]=$'Incorrect BOM value\nError reading comment frame, skipped\nFile \'Book-Part04.opus\' already exists. Exiting.\nError opening output file Book-Part04.opus.\n')
+#
+#it will still pass if it can convert...
+#
+#
+
+      if [[ "${ffoutput[-1]}" != size\=\ * ]] && [[ "$erfile" != *already\ exists.\ Exiting* ]]
         then
           printf '%s\n%s\n' "${ffoutput[@]}" "Error: exiting."
           exit 1
@@ -313,10 +333,10 @@ elif [[ "$startfile" ]]; then
   checkdur "$startfile"
   checkdur "$opusfile"
 
-elif (( filenum > 0 ))
-  then
+elif (( filenum > 0 )); then
 #need to add a formal confirm here at some point, but really, who's going to be doing this?
 #ffmpeg cannot overwrite here so probably have to exit if the files aren't deleted... further, we could actully compare the opus files that exist to the ones that are going to be converted...but since im not using find here, that probably donesnt matter.
+
   if [[ "$overwrite" = true ]]; then
     printf '\n%s%s invoked with --force|-f flag to overwrite existing .opus files.\n' "$red" "$script"
     printf '\n%sConfirm deletion of existing *.opus files prior to starting conversion!%s\n' "$bold" "$tput0"

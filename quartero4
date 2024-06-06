@@ -213,7 +213,11 @@ mediaduration
 
 printf '#####################################################\nentering indexopus\n#####################################################\n\n'
 
-indexopus -y "$title" && (($?==1)) && echo "indexopus failed, exit 1" && exit 1
+indexopus -y -t "$title" || { echo "indexopus failed, exit 1" ; exit 1; }
+
+#indexopus -y -t "$title"
+#ioexit="$?"
+#(( ioexit==1 )) && echo "indexopus failed, exit 1" && exit 1
 
 
 printf '#####################################################\nleaving indexopus\n#####################################################\n\n'
@@ -225,7 +229,9 @@ printf '#####################################################\nleaving indexopus
 
 
 printf '\n%smoving ./tmp/%s -- Audiobook.opus to %s%s\n\n' "$relipsis" "$ititle" "$SWD" "$tput0"
+
 mv *\ Audiobook.opus "$SWD"
+
 lsopus=( *opus )
 ((${#lsopus[@]} > 0)) &&
   printf '%sopus files still remain in ./tmp!\nls *opus:\n%s' "$relipsis" "$tput0" &&
