@@ -246,7 +246,7 @@ noindexsplit(){
                        #oh contrare! this is what provides $divsec and the script fails without that line!
     for ((partno=1; partno < $(( threads + 1)); partno++ )); do
        printf '%s%s: %s' "$relipsis" "$partno" "$tput0"
-       ffmpeg -n -nostdin -hide_banner -stats -v error -ss $(python -c "print(($partno-1)*$divsec)") -to $(python -c "print($partno*$divsec)") -i "$m4bin" -vn -acodec copy "$convertdir/${m4bin%% -- *} -- Part 0$partno.m4a"
+       ffmpeg -n -nostdin -hide_banner -stats -v error -ss $(python3 -c "print(($partno-1)*$divsec)") -to $(python3 -c "print($partno*$divsec)") -i "$m4bin" -vn -acodec copy "$convertdir/${m4bin%% -- *} -- Part 0$partno.m4a"
        printf '%s' "$tput0"
     done
     cd "$convertdir"
@@ -295,6 +295,8 @@ convertdir="$CACHE/m4b2opus-$title"
 
 [[ ! -d "$convertdir" ]] && mkdir "$convertdir"
 
+[[ ! -d "$convertdir" ]] && echo "Could not create $convertdir. Please investigate. (exit 1)" && exit 1
+
 if [[ ! "$(mediainfo "$m4bin"|grep Menu)" =~ ^Menu ]]; then  #process unindexed m4b files
   noindexsplit "$m4bin" "$convertdir"
 else
@@ -319,7 +321,7 @@ echo
 printline "${bold}  Calling external dependency:${red} opus.book.4  ${tput0}"
 #printf '%s\n----------  Calling external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
 
-opus.book.4 -d "${m4bindur#*: }"  #this is a dependency; needs to be made a function?
+opus.book.4 --stats -d "${m4bindur#*: }"  #this is a dependency; needs to be made a function?
 if (( "$?" > 0 ));  then
   printf '%s\n\nopus.book.4 failed; exit 1\n\n%s' "$bold" "$tput0"
   printline "  Leaving $scriptname: Error!  "
@@ -377,10 +379,16 @@ cd "$swd"
 [[ ! "$rmmatch"=true ]] && pause "Need to check to see if $tmp is being created... when indexopus isn't run with -y"
 
 checkdur # probably do something different here since you have m4bindur and have to calc opusdur...
+         # yeah, this is a terrible idea.  do this by heand instead of relying on something no
+         # indended for this
+echo "Duration(s):"
+#echo "${red}${bold}${tput0}$(m4bindur) the $m4bin"  #this threw an error saying m4bindur could not be found: not a function?
+echo "${red}${bold}${tput0}$m4bindur the $m4bin"     #removed the () from above.
+echo "${red}${bold}${tput0}$(checkdur opus) $titleopus"
 opusdursec="$(sex2sec "$(checkdur opus)")"
 m4bindursec="$(sex2sec $m4bindur)"
 if [[ "$rmmatch" = true ]] && (( opusdursec > 0 )); then
-  verifydur=$(bc <<< "scale=4; ($m4bindursec - $opusdursec) / $opusdursec " ); verifydur="${verifydur/#-}"
+  verifydur=$(bc <<< "scale=4; ($m4bindursec - $opusdursec) / $opusdursec " )
   verifydur="${verifydur/#-}"
   if [[ $(bc <<< "scale=4; $verifydur < 0.001") ]]; then
     rm -r *m4b "$convertdir"

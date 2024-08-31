@@ -12,7 +12,7 @@ tput0="$(tput sgr0)" #reset tput changes
 bold="$(tput bold)" #bold on
 relipsis="$red..."
 
-function tlpp {
+tlpp(){
 
 local    scriptname="${0##*/}"
 local    shells="^bash|^init|^screen|^sh|^ssh|^su|${scriptname}"

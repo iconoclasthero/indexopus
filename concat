@@ -1,0 +1,42 @@
+#!/bin/bash
+# nb: the swp file that editscript relies on is provided by nano
+
+editscript(){
+  local scriptpath script path swp; scriptpath=$(realpath "$0" 2>/dev/null); script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
+     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptpath") && exit
+     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit ;}
+
+pause(){ read -rp "$*" ; }
+
+[[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
+
+title="${1%.*}"
+#ext="m4b"
+ext="opus"
+#ext="flac"
+#ext="mp3"
+#ext="${1##*.}"
+scriptname="$(realpath $0)"
+
+
+#for i in {000..104}; do
+#for f in *$i.ts; do printf %s\n file '%s\n' "$PWD"/"$f";done;
+#ffmpeg -f concat -safe 0 -i <(for f in ./*.$1; do echo "file '$PWD/$f'"; done) -acodec libopus -b:a 17k "$2"
+#ffmpeg -f concat -safe 0 -i <(for f in ./*.$1; do echo "file '$PWD/$f'"; done) -acodec libopus -b:a 24k "$2"
+#ffmpeg -hide_banner -stats -f concat -safe 0 -i <(for f in *.mp3; do echo "file '$PWD/$f'"; done) -acodec copy "/dev/shm/cache/1.mp3"
+#done
+#for i in {00..18}; do cd $i; 
+#for d in */; do
+#cd "$d"
+if [[ "$ext" == "flac" ]]; then
+ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) "$title.$ext"
+elif [[ "$2" == "-y" ]]; then
+ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -y -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) -acodec copy "$title.$ext"
+else
+ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) -acodec copy "$title.$ext"
+fi
+#cd -
+#done
+
+#for i in {01..11} ; do for f in "$i.mp3"; do printf "file '%s\n'*Rabbit\ Remembered\ *$i*"; ffmpeg -n -f concat -safe 0 -i <(for f in *Remembered\ *$i*.mp3; do printf "file '%s$PWD/$f'\\n"; done) -acodec libopus -b:a 17k "Rabbit Remembered -- Chapter 0$i.opus"; done
+

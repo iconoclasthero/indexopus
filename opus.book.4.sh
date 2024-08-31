@@ -286,11 +286,11 @@ for exts in "${mediafiles[@]}"; do
 while (( $# > 0 ))
   do
     [[ "$1" == @(edit|e|-e) ]] && editscript
+    [[ "$1" = @(-s|--stats) ]] && shift && statson=true
     [[ "$1" = "-d" ]] && shift && inputdur="$1" && shift
-    [[ "$1" = "-h" || "$1" = "--help" ]]  && shift && help=true
-    [[ "$1" = "-s" || "$1" = "--stats" ]] && shift && statson=true
-    [[ "$1" = "-f" || "$1" = "--force" ]] && shift && overwrite=true     #this doesn't actually change what ffmpeg does yet!
-    [[ "$1" = "-b" || "$1" = "--break" ]] && shift && break-m4b2opus=true && trap '{ breakout -B -b m4b2opus; exit 1; }' INT
+    [[ "$1" = @(-h|--help) ]]  && shift && help=true
+    [[ "$1" = @(-f|--force) ]] && shift && overwrite=true     #this doesn't actually change what ffmpeg does yet!
+    [[ "$1" = @(-b|--break) ]] && shift && break-m4b2opus=true && trap '{ breakout -B -b m4b2opus; exit 1; }' INT
     startfile="$1" && file="$startfile" && opusfile="${file%.*}.opus"	 #it's just letting me into the program atm
     shift
   done
@@ -304,7 +304,7 @@ fi
 
 rm /tmp/mytmpfile .opus.book.pids "$pidfile" 2>/dev/null  	# clean any old files that will be in the way
 startext=( ${mediaext} ); startext="${startext##*.}"		# define what the starting extension is in dir
-mediafiles=
+#mediafiles=                                                 # why the fuck is this here?  there should be no reason to unset mediafiles AND this isn't the way to do it anyway...
 filenum="$(ls ${mediaext}|wc -l)"							# how many of those files are there?
 
 [[ "$filenum" -lt "$threads" ]] && threads="$filenum"

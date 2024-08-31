@@ -1,0 +1,98 @@
+#!/bin/bash
+# nb: the swp file that editscript relies on is provided by nano
+
+editscript(){
+  local scriptpath script path swp; scriptpath=$(realpath "$0" 2>/dev/null); script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
+     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptpath") && exit
+     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit ;}
+
+pause(){ read -rp "$*" < /dev/tty; }
+
+yn(){
+  local yn
+  while true; do
+    read -p "$1 (y/n) " yn
+      case $yn in
+        [yY] )
+              return 0 ;;  # Success (true)
+        [nN] )
+              return 1 ;;  # Failure (false)
+           * )
+              echo "Please answer y or n." ;;
+      esac
+  done
+}
+
+
+[[ "$1" == @(edit|e|-e) ]] && editscript
+
+if ! command -v mediainfo &> /dev/null; then
+    mi=false
+    if ! command -v ffprobe &> /dev/null; then
+    echo "mediainfo and ffprobe could not be found. Please install one to continue."
+    exit 1
+    fi
+else
+    mi=true
+fi
+
+
+changerate=false
+
+for i in *flac;
+ do
+  [[ ! -w "$i" || ! -w "$PWD" ]] && printf \\nFix\ permissions\!\\n && exit 1
+
+  if "$mi"; then
+    bits=$(mediainfo --Output='Audio;%BitDepth%' "$i")
+    Hz=$(mediainfo --Output='Audio;%SamplingRate%' "$i")
+  else
+    bits=$(ffprobe -v error -select_streams a:0 -show_entries stream=bits_per_raw_sample -of default=noprint_wrappers=1:nokey=1 "$i")
+    Hz=$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate -of default=noprint_wrappers=1:nokey=1 "$i")
+  fi
+
+  if (( bits <= 16 )) || (( Hz < 48000 )); then
+  # over=true
+  # (( Hz == 48000 )) && yn "File is $bits/$Hz, continue with processing?" && over=false
+  # if "$over"; then
+      kHz=$(( Hz / 1000 ))
+      kHzr=$(( Hz % 1000 ))
+      kHzr="${kHzr%%0*}"
+      [[ "$kHzr" ]] && kHz="$kHz.$kHzr"
+      printf 'The file, %s, does not appear to be above 16/48 bits/kHz:\n Bit rate   : %s bits\n Sample rate: %s kHz\n' "$i" "$bits" "$kHz"
+      printf 'Please investigate. (exit 1)\n'
+      exit 1
+  # fi
+  fi
+
+  if (( Hz != 48000 )) && (( Hz != 41000 )); then
+    printf 'The sample rate is %s Hz.\n' "$Hz"
+    if (( Hz > 48000 )) && ! "$changerate" ; then
+      if yn "Do you want to set the sample rate to 48000 Hz?"; then
+        Hz=48000
+        changerate=true
+      else
+        printf 'Please investigate. (exit 1)'
+        exit 1
+      fi
+    elif (( Hz > 48000 )) && "$changerate"; then
+      Hz=48000
+    fi
+  fi
+
+  if [[ "$i" = *".24."* ]]
+    then
+      flac24="$i"
+      flac16="${flac24/.24.flac/.flac}"
+      ffmpeg -hide_banner -nostdin -i "$flac24" -af aresample=osf=s16:dither_method=triangular_hp -n -ar "$Hz" "$flac16"
+  else
+    flac16="$i"
+    flac24="${i/.flac/.24.flac}"
+    mv "$i" "$flac24"
+    ffmpeg -hide_banner -nostdin -i "$flac24" -af aresample=osf=s16:dither_method=triangular_hp -n -ar "$Hz" "$flac16"
+  fi
+done
+
+mkdir "24-bit"
+mv *.24.flac "24-bit"
+rmr 24-bit

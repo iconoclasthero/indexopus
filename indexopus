@@ -362,42 +362,82 @@ rename() {
   ext=opus #local?
   declare -A confirm_rename
   declare -A parts
-  local hundreds
-
-boobs() { pause "( • )( • )----ԅ(‾⌣‾ԅ)" ; }
+  local hundreds width length
 
 mvopus() {
+  max_length=0
+  width=$(tput cols)
+  for i in "${confirm_rename[@]}"; do
+    rnlength="${#i}"
+    if (( rnlength > max_length )); then
+      max_length=$rnlength
+    fi
+  done
+
+   length=$((${#i} + max_length + 10))
+   offset=$(( width - max_length - 2 ))
+   for i in "${!confirm_rename[@]}"; do
+      if (( length > width )); then
+#       printf '%s    %s---->%s\n  %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+        for key in "${!confirm_rename[@]}"; do break; done
+        if [[ "$key" =~ .+\ -\ .+\.opus && ! "$key" =~ .+\ --\ .+\.opus ]]; then
+          printrn+=( "$(printf '  %s    %s---->%s   %s%s\n%s' "${i##* - }" "$bold" "$tput0" "$red" "${confirm_rename["$i"]##* -- }" "$tput0")" )
+        else
+          printrn+=( "$(printf '  %s    %s---->%s   %s%s\n%s' "${i##* -- }" "$bold" "$tput0" "$red" "${confirm_rename["$i"]##* -- }" "$tput0")" )
+#       printrn1+=( "$(printf '%s    %s---->%s\n%*s%s%s\n%s' "$i" "$bold" "$tput0" "$offset" "" "$red" "${confirm_rename["$i"]}" "$tput0")" )
+        fi
+
+
+
+      else
+        unset printrn1 printrn2
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      fi
+    done
+#      [[ "$printrn1" ]] && printf %s\\n "${printrn1[@]}"
+   (( length > width )) && printf '%s --\n' "${opusarray[0]% -- *}"
+      [[ "$printrn" ]] && printf %s "${printrn[@]}"
+
       echo
       [[ "$rmmatch" = true ]] || confirm "${bold}Continue with Proposed Rename (y/n) ${tput0}" &&
       for i in "${!confirm_rename[@]}"; do
         mv "$i" "${confirm_rename["$i"]}"
       done || exit 1
-}
 
+}  #end of mvopus
+   ##############
 
-  if [[ "${opusarray[@]}" =  *\ --\ @(Chapter|Part|Disc)\ @(??|???).opus* ]]; then
+  if [[ "$opusarray" =~ .+\ --\ ((C|c)hapter|(P|p)art|(D|d)isc)\ [[:digit:]]{1,3}\.opus ]]; then
     for i in "${opusarray[@]}"; do
       n="${i%.opus}"; n="${n##* }"
+      [[ "$n" =~ \ [[:digit:]]\.opus ]] && n="0$n"
       title="${i% -- *}"
       order="${i##* -- }"
-      newname="${i/ -- @(Part|Chapter|Disc) / -- Part $n: Part }"
+      newname="${i/ -- @(Part|Chapter|Disc) */ -- Part $n: Part $n.opus}"
       confirm_rename["$i"]="$newname"
-      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
-    done
+     done
 
     mvopus
 
-#    echo
-#
-#    [[ "$rmmatch" = true ]] || confirm "${bold}Continue with Proposed Rename? (y/n) " &&
-#    for i in "${!confirm_rename[@]}"; do
-#      [[ "$i" = *\ @(@(C|c)hapter|@(D|d)isc|@(P|p)art)\ @(??|???).opus ]] &&
-#        mv "$i" "${confirm_rename["$i"]}"
-#    done || exit 1
+  elif [[ "$opusarray" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc)\ [[:digit:]]{1,3}\.opus ]]; then
+    for i in "${opusarray[@]}"; do
+      n="${i%.opus}"; n="${n##* }"
+      [[ "$n" =~ \ [[:digit:]]\.opus ]] && n="0$n"
+      title="${i% - *}"
+      order="${i##* - }"
+      newname="${i/ - @(Part|Chapter|Disc) */ -- Part $n: Part $n.opus}"
+      confirm_rename["$i"]="$newname"
+     done
 
-  elif [[ "${opusarray[@]}" = *-Part@(??|???).opus* ]]; then
-    for i in *-Part??.opus; do
+    mvopus
+
+
+
+  elif [[ "${opusarray[@]}" =~ .+-(p|P)art[[:digit:]]{1,3}\.opus ]]; then
+#    for i in *-Part??.opus; do
+    for i in "${opusarray[@]}"; do
       n="${i%.opus}"; n="${n##*-Part}"
+      [[ "$n" =~ [[:digit:]] ]] && n="0$n"
       newname="${i/-Part/ -- Part $n: Part }"
       confirm_rename["$i"]="$newname"
       printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
@@ -405,14 +445,13 @@ mvopus() {
 
     mvopus
 
-  elif [[ "${opusarray[@]}" = *\ Part\ @(?|??|???).opus\ * ]]; then
-#
+  elif [[ "$opusarray" = .+\ Part\ [[:digit:]]{1,3}\.opus ]]; then
+
 #   this is logic to add double or triple digits to all the part numbers.
-#
+
     for i in "${opusarray[@]}"; do n="${i%.opus}"; n="${n##* }"; parts["$i"]="$n"; done
     (( "$(printf %s\\n "${parts[@]}"|sort|tail -n1)" > 99 )) && hundreds=true
-#
-#
+
 #
 
     for i in "${opusarray[@]}"; do
@@ -423,14 +462,16 @@ mvopus() {
     done
     mvopus
 
+
   elif [[ "${opusarray[@]}" =~ .+[[:space:]]-[[:space:]][[:digit:]]{1,3}\.opus ]]; then
     regex=".+[[:space:]]-[[:space:]][[:digit:]]{1,3}\.opus"
     for i in *\ -\ @(?|??|???).opus; do
       n="${i%.opus}"; n="${n##* - }"
-      (( n < 10 ))
+      (( 10#$n < 10 ))
+      [[ $n =~ ^[0-9]+$ ]] || pause "There's probably a problem, here's the value of \$n: $n"
       newname="${i/ - / -- Part $n: Part }"
       confirm_rename["$i"]="$newname"
-      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+#      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
     done
 
     mvopus
@@ -445,11 +486,33 @@ mvopus() {
 
     mvopus
 
+ ###############################################################################################################
+ ## The above pattern search fails on file names with this pattern.  This would, in theory, be pretty hard
+ ## to come up with a regex for without somehow checking for those digits at the beginning.
+ ## it is a terrible naming format and hopefully will not be run across much.  Regardless,
+ ## THE CURRENT SCRIPT CANNOT ACCOMIDATE THIS FILE PATTERN AND IT MUST BE MANUALLY CHANGED FOR NOW.
+ ## '001 Barry Posen - Restraint_ A New Foundation for U.S. Grand Strategy - Opening Credits.opus'
+ ## '002 Barry Posen - Restraint_ A New Foundation for U.S. Grand Strategy - Chapter 1.opus'
+ ## ⋮
+ ## '018 Barry Posen - Restraint_ A New Foundation for U.S. Grand Strategy - Chapter 17.opus'
+ ## '019 Barry Posen - Restraint_ A New Foundation for U.S. Grand Strategy - End Credits.opus'
+ ###############################################################################################################
+
   elif [[ "${opusarray[@]}" =~ [[:digit:]]{1,3}\ -\ (.+)\.opus ]]; then
     regex="[[:digit:]]{1,3}\ -\ (.+)\.opus"
     for i in "${opusarray[@]}"; do
       n="${i%% *}"
       newname="${i%.opus}"; newname="${newname#* - } -- Part $n: Part $n.opus"
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+
+    mvopus
+
+  elif [[ "$opusarray" =~ .+_[[:digit:]]{1,3}\.opus ]]; then
+    for i in "${opusarray[@]}"; do
+      n="${i%.opus}"; n="${n##*_}"
+      newname="${i%_*} -- Part $n: Part $n.opus"
       confirm_rename["$i"]="$newname"
       printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
     done
