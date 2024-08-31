@@ -30,8 +30,14 @@ YMMV, change the code to the number of parallel conversion jobs you want.
 opusbook4ka is the helper program that lets you break out of the background jobs...only need it if you need to ^C!
 
 # mediaduration, quartero4, chaptersplit
-I have included these separate utilities I've been using to split files into chapters from an embedded index.  
+I have included these separate utilities I've been using to split files into chapters from an embedded index.
 As shown in the code, it is not mine originally and I haven't cleaned it up at all, but should you want to run a conversion step in parallel before using indexopus to stitch the constiuent parts up again, this will do that, but presently the split files are going to /dev/shm/cache/convert which may or may not be where _you_ want them to go.  Adjust outputdir="/dev/shm/cache/convert" if you like (it should work fine on Ubuntu which includes /dev/shm by default; if left here, the conversion will be done on a scratch tmpfs ram drive).
 
 # m4b2opus-no-chap-check
 Not sure what this does anymore...  If you figure it out, lemme know.
+
+# concat
+Sort of a rough script for concatenating audiofiles. It should be set up to do whatever ffmpeg can do. There may be problems with files containing `'` because ffmpeg can't handle them.
+
+# downconvert
+Not really something that belongs in this repo, but it was untracked in `~/bin/` and that made me nervous so here we are with a file to convert flacs down to 16 bit/48 kHz.
