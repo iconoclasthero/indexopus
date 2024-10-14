@@ -1,5 +1,8 @@
 #!/bin/bash
 # nb: the swp file that editscript relies on is provided by nano
+red="$(tput setaf 9)"
+bold="$(tput bold)"
+tput0="$(tput sgr0)"
 
 editscript(){
   local scriptpath script path swp; scriptpath=$(realpath "$0" 2>/dev/null); script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
@@ -51,7 +54,8 @@ for i in *flac;
     Hz=$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate -of default=noprint_wrappers=1:nokey=1 "$i")
   fi
 
-  if (( bits <= 16 )) || (( Hz < 48000 )); then
+#  if (( bits <= 16 )) || (( Hz < 48000 )); then
+  if (( bits <= 16 )) || (( Hz < 44100 )); then
   # over=true
   # (( Hz == 48000 )) && yn "File is $bits/$Hz, continue with processing?" && over=false
   # if "$over"; then
@@ -59,8 +63,21 @@ for i in *flac;
       kHzr=$(( Hz % 1000 ))
       kHzr="${kHzr%%0*}"
       [[ "$kHzr" ]] && kHz="$kHz.$kHzr"
-      printf 'The file, %s, does not appear to be above 16/48 bits/kHz:\n Bit rate   : %s bits\n Sample rate: %s kHz\n' "$i" "$bits" "$kHz"
-      printf 'Please investigate. (exit 1)\n'
+      printf '%s%sThe file, %s%s%s%s, %s%sdoes not appear to be above 16/48 bits/kHz:%s\n Bit rate   : %s bits\n Sample rate: %s kHz\n%s%sPlease investigate. (exit 1)\n\n%s' \
+       "$bold" \
+       "$red" \
+       "$tput0" \
+       "$bold" \
+       "$i" \
+       "$tput0" \
+       "$bold" \
+       "$red" \
+       "$tput0" \
+       "$bits" \
+       "$kHz" \
+       "$bold" \
+       "$red" \
+       "$tput0"
       exit 1
   # fi
   fi

@@ -23,7 +23,7 @@ stamp="$(date +%s)"
 ## printline()
 ## pause()
 ## checkdur()
-. $HOME/bin/gits/indexopus/indexopus.lib
+. "$HOME/bin/gits/indexopus/indexopus.lib"
 
 fnrmr(){
   local red relipsis="${red}..."
@@ -314,7 +314,7 @@ fi
 
 cd "$convertdir"
 echo
-[[ "$rmmatch" != true ]] && pause "${bold}${red}Control-Z to suspend to change to $convertdir and adjust chapter names?${tput0} "
+[[ "$rmmatch" != true ]] && pause "${bold}${red}Control-Z to suspend and adjust chapter names in $convertdir? $tput0"
 
 #opus.book.4##################################################################################
 echo
