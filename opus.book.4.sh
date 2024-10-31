@@ -21,9 +21,9 @@ mediaext="*.@(flac|mp3|MP3|wav|m4?|ogg|MP4|mp4|wma)"   #DO NOT INCLUDE OPUS FILE
 filtercomplex="compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0"
 
 bold="$(tput bold)"
+red="$(tput setaf 1)"
 relipsis="$red..."
 tput0="$(tput sgr0)"
-red="$(tput setaf 1)"
 
 
 stamp="$(date +%s)"
@@ -196,13 +196,14 @@ progress() {
     printf '%s>%s' "$red" "$tput0"
     for ((i=0; i<remainder-1; i++)); do printf " "; done
     printf '%s] %d%%%s' "$bold" "$percent" "$tput0"
+
   }
 
 # figuring out a condition to end this loop is going to be an issue:
 # there are time discrepancies.  sometimes more than a minute now that i think about it...
 # though usually the opus files go over.  i need to come up with another boundary condition...
 # look for the pids?
- 
+
   lines="$(tput lines)"
 
   while [[ "${indur%:*}" != "${opusdur%:*}" ]] &&
@@ -221,13 +222,15 @@ progress() {
          progress_bar_sexagesimal "$opusdur" "$indur"
       breakout -a
       tput cup 0 0
-      printf '%s\n' "${bannerarray[@]}"
+#      printf '%s\n' "${bannerarray[@]}"
+      printf %s\\n\\n "$updatebanner"
       outputfiles="$(<"$tmp")"
       echo "$outputfiles"|tail -n $(( "$(tput lines)" - 15 ))
       sleep 12
       opusdur="$(mediaduration opus)"
 #      (( "$(date +%s)" % "$rfreq" == 0 )) && $(tput reset); clear -x
-      [[ "$lines" != "$(tput lines)" ]] && lines="$(tput lines)" && tput reset; clear -x
+      [[ "$lines" != "$(tput lines)" ]] && lines="$(tput lines)" && tput reset
+      clear -x
   done
 }
 
@@ -267,33 +270,31 @@ progress() {
 ###--> Main Code <--###########################################################################
 ###--> opus.book.4 <--#########################################################################
 
-echo
-bannerarray+=( "$(printline "${bold}  Welcome to ${white}${script} ${tput0}")" )
-echo "$bannerarray"
-echo
+printf \\n
+bannerarray=( "$(printline "${bold}  Welcome to ${white}${script} ${tput0}")" )
+printf %s\\n\\n "${bannerarray[@]}"
 
 mediafiles=( ${mediaext} )
 
 #test for more than one accptable media extension and fail if it finds more than one.
 for exts in "${mediafiles[@]}"; do
     extensions+=( "${exts##*.}" )
-  done
+done
 
 (( $(printf '%s\n' "${extensions[@]}"|sort -u|wc -l) > 1 )) &&
   printf '\n%sMore than one type of media file found!\nopus.book.4 cannot be launched from a folder where more than one type of media file is located.\nCorrect and try again.\n\n%s\n\n%sexit 1\n\n' "$bold" "$PWD" "$tput0" &&
   exit 1
 
-while (( $# > 0 ))
-  do
-    [[ "$1" == @(edit|e|-e) ]] && editscript
-    [[ "$1" = @(-s|--stats) ]] && shift && statson=true
-    [[ "$1" = "-d" ]] && shift && inputdur="$1" && shift
-    [[ "$1" = @(-h|--help) ]]  && shift && help=true
-    [[ "$1" = @(-f|--force) ]] && shift && overwrite=true     #this doesn't actually change what ffmpeg does yet!
-    [[ "$1" = @(-b|--break) ]] && shift && break-m4b2opus=true && trap '{ breakout -B -b m4b2opus; exit 1; }' INT
-    startfile="$1" && file="$startfile" && opusfile="${file%.*}.opus"	 #it's just letting me into the program atm
-    shift
-  done
+while (( $# > 0 )); do
+  [[ "$1" == @(edit|e|-e) ]] && editscript
+  [[ "$1" = @(-s|--stats) ]] && shift && statson=true
+  [[ "$1" = "-d" ]] && inputdur="$2" && shift 2
+  [[ "$1" = @(-h|--help) ]]  && shift && help=true
+  [[ "$1" = @(-f|--force) ]] && shift && overwrite=true   #this doesn't actually change what ffmpeg does yet!
+  [[ "$1" = @(-b|--break) ]] && shift && break-m4b2opus=true && trap '{ breakout -B -b m4b2opus; exit 1; }' INT
+  startfile="$1" && file="$startfile" && opusfile="${file%.*}.opus"	 #it's just letting me into the program atm
+  shift
+done
 
 if [[ "$startfile" && ! -f "$startfile" && "$startfile" != $mediaext ]] || (( "${#mediafiles[@]}" == 0 ))
   then
@@ -352,22 +353,38 @@ elif (( filenum > 0 )); then
 
 [[ ! "$inputdur" ]] && inputdur="$(mediaduration "$startext")"
 
-  bannerarray+=( "" )
-  bannerarray+=( "$(printf '%sDuration of %s %s file(s) to convert: %s%s%s%s%s\n...in: %s%s\n\n' \
-"$relipsis" "$filenum" "$startext" "$tput0" "$bold" "$inputdur" "$tput0" "$red" "$PWD" "$tput0")" )
-  bannerarray+=( "$(printf '%sConversion progress:\n%s'  "$relipsis" "$tput0")" )
-  printf '%s\n%sGathering files...\n%s' "${bannerarray[${#bannerarray[@]}-2]}" "$relipsis" "$tput0"
+#  bannerarray=( "$(printf '%sDuration of %s %s file(s) to convert: %s%s%s%s%s\n...in: %s%s\n\n' \
+#"$relipsis" "$filenum" "$startext" "$tput0" "$bold" "$inputdur" "$tput0" "$red" "$PWD" "$tput0")" )
+#  bannerarray+=( "$(printf '%sConversion progress:\n%s'  "$relipsis" "$tput0")" )
+#  printf '%s\n%sGathering files...\n%s' "${bannerarray[${#bannerarray[@]}-2]}" "$relipsis" "$tput0"
+
+printf '%sDuration of %s%s %s%s file(s) to convert: %s%s%s%s%s\n...in: %s%s%s\n\n' \
+   "$relipsis" \
+   "$white" \
+   "$filenum" \
+   "$startext" \
+   "$red" \
+   "$tput0" \
+   "$bold" \
+   "$inputdur" \
+   "$tput0" \
+   "$red" \
+   "$white" \
+   "$PWD" \
+   "$tput0"
 
   for ((i=0; i<"$threads"; i++)); do
     ffmpeg2&    # call function to background to convert media files to opus, counter
     sleep 0.5s
   done
 
+  updatebanner="$(printline "$bold Converting $filenum $startext files of duration $inputdur$tput0")"
   clear -x
   progress "$inputdur"
   wait  #for the bacground operations to finish up
   clear -x
-  printf '%s\n' "${bannerarray[@]}"
+###  printf '%s\n' "${bannerarray[@]}"
+  printf %s\\n "$updatebanner"
   outputfiles="$(<"$tmp")"
   printf '%s\n\n%s' "$outputfiles"
   mediaduration #external dependency
@@ -384,7 +401,7 @@ fi
 
 rm /tmp/mytmpfile "$tmp" .opus.book.pids "$pidfile" 2>/dev/null
 echo
-printline "${bold}  Exiting (0) ${white} ${script}  ${tput0}"
+printline "$bold  Exiting (0) $white $script  $tput0"
 echo
 exit 0
 

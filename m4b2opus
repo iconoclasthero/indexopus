@@ -319,7 +319,6 @@ echo
 #opus.book.4##################################################################################
 echo
 printline "${bold}  Calling external dependency:${red} opus.book.4  ${tput0}"
-#printf '%s\n----------  Calling external dependency: %sopus.book.4%s  ----------\n' "$bold" "$red" "$tput0"
 
 opus.book.4 --stats -d "${m4bindur#*: }"  #this is a dependency; needs to be made a function?
 if (( "$?" > 0 ));  then
@@ -344,7 +343,6 @@ printf '%sDuration of the .opus part files: %s%s%s\n' "$bold" "$red" "$opuspartd
 ##indexopus##################################################################################
 echo
 printline "${bold}  Calling external dependency:${red} indexopus  ${tput0}"
-echo
 
 
 if [[ "$rmmatch" = true ]]

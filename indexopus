@@ -35,6 +35,11 @@ stamp="$(date +%s)"  #sets datecode for all of indexopus - could use info from m
 tmp="/tmp/indexopus-$stamp" #this could change based on info from m4b2opus
 remove_mp4tags=("major_brand" "minor_version" "compatible_brands" "encoded_by" 'OverDrive MediaMarkers' "handler_name" "vendor_id")
 
+
+####this needs to be done better, but for now if the dependencies aren't here, i want it to just exit the script
+! command -v opustags > /dev/null && apt install opustags
+! command -V opustags > /dev/null && { echo "opustags missing; exit 1"; exit 1; }
+
 editscript(){
   local script path; script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
      if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptpath"); exit
@@ -330,7 +335,8 @@ writeindex(){
   opustags -i "$output" "${args[@]}"
   printf '%sChapter info added...\n%s' "$relipsis" "$tput0"
   printf '%sStripping MP4 tags%s\n%s' "$relipsis" "$relipsis" "$tput0"
-  [[ "$rmmatch" != 'true' ]] &&
+
+#  [[ "$rmmatch" != 'true' ]] &&    ####why the fuck is this here?
   mp4grep="$(IFS=\|; echo "${remove_mp4tags[*]}")"
 
 #  This is method one to remove the unwanted mp4 tags:
@@ -350,6 +356,8 @@ writeindex(){
     mp4args+=(-i "$output")    # Should I also use readarray here?  difference?
     opustags "${mp4argss[@]}"
   fi
+
+
 
 }
 
@@ -408,24 +416,27 @@ mvopus() {
    ##############
 
   if [[ "$opusarray" =~ .+\ --\ ((C|c)hapter|(P|p)art|(D|d)isc)\ [[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 1."
     for i in "${opusarray[@]}"; do
       n="${i%.opus}"; n="${n##* }"
       [[ "$n" =~ \ [[:digit:]]\.opus ]] && n="0$n"
       title="${i% -- *}"
       order="${i##* -- }"
-      newname="${i/ -- @(Part|Chapter|Disc) */ -- Part $n: Part $n.opus}"
+      newname="${i/ -- @(@(p|P)art|@(c|C)hapter|@(d|D)isc) */ -- Part $n: Part $n.opus}"
       confirm_rename["$i"]="$newname"
      done
 
     mvopus
 
   elif [[ "$opusarray" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc)\ [[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 2."
     for i in "${opusarray[@]}"; do
       n="${i%.opus}"; n="${n##* }"
-      [[ "$n" =~ \ [[:digit:]]\.opus ]] && n="0$n"
+#      [[ "$n" =~ \ [[:digit:]]\.opus ]] && n="0$n"  #this won't work, .opus was removed but the logic's wrong too
+      (( "${#n}" == 1 )) && n="0$n"
       title="${i% - *}"
       order="${i##* - }"
-      newname="${i/ - @(Part|Chapter|Disc) */ -- Part $n: Part $n.opus}"
+      newname="${i/ - @(@(P|p)art|@(c|C)hapter|@(d|D)isc) */ -- Part $n: Part $n.opus}"
       confirm_rename["$i"]="$newname"
      done
 
@@ -434,11 +445,12 @@ mvopus() {
 
 
   elif [[ "${opusarray[@]}" =~ .+-(p|P)art[[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 3."
 #    for i in *-Part??.opus; do
     for i in "${opusarray[@]}"; do
       n="${i%.opus}"; n="${n##*-Part}"
       [[ "$n" =~ [[:digit:]] ]] && n="0$n"
-      newname="${i/-Part/ -- Part $n: Part }"
+      newname="${i/-@(p|P)art/ -- Part $n: Part }"
       confirm_rename["$i"]="$newname"
       printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
     done
@@ -446,6 +458,7 @@ mvopus() {
     mvopus
 
   elif [[ "$opusarray" = .+\ Part\ [[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 4."
 
 #   this is logic to add double or triple digits to all the part numbers.
 
@@ -464,6 +477,7 @@ mvopus() {
 
 
   elif [[ "${opusarray[@]}" =~ .+[[:space:]]-[[:space:]][[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 5."
     regex=".+[[:space:]]-[[:space:]][[:digit:]]{1,3}\.opus"
     for i in *\ -\ @(?|??|???).opus; do
       n="${i%.opus}"; n="${n##* - }"
@@ -477,8 +491,10 @@ mvopus() {
     mvopus
 
   elif [[ "${opusarray[@]}" =~ .+[[:space:]][[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 6:"
     regex=".+[[:space:]][[:digit:]]{1,3}\.opus"
     for i in "${opusarray[@]}"; do
+      n="${i##* }"; n="${n%.opus}"; (( "${#n}" < 2 )) && n="0$n"
       newname="${i% *}"; newname="$newname -- Part $n: Part $n.opus"
       confirm_rename["$i"]="$newname"
       printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
@@ -499,6 +515,7 @@ mvopus() {
  ###############################################################################################################
 
   elif [[ "${opusarray[@]}" =~ [[:digit:]]{1,3}\ -\ (.+)\.opus ]]; then
+    echo "Using rename pattern 7:"
     regex="[[:digit:]]{1,3}\ -\ (.+)\.opus"
     for i in "${opusarray[@]}"; do
       n="${i%% *}"
@@ -510,6 +527,7 @@ mvopus() {
     mvopus
 
   elif [[ "$opusarray" =~ .+_[[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 8:"
     for i in "${opusarray[@]}"; do
       n="${i%.opus}"; n="${n##*_}"
       newname="${i%_*} -- Part $n: Part $n.opus"
@@ -518,6 +536,19 @@ mvopus() {
     done
 
     mvopus
+
+  elif [[ "$opusarray" =~ .+\ \([[:digit:]]{1,3}\)\.opus ]]; then
+    echo "Using rename pattern 9:"
+    for i in "${opusarray[@]}"; do
+#     n="${i%).opus}"; n="${n:0:-3}-- ${n: -2}"
+      n="${i%).opus}.opus"; n="$(echo "$n"|rev)"; n="$(echo "${n/\( / traP :00 traP -- }"|rev)"
+#      newname="${i%_*} -- Part $n: Part $n.opus"
+      newname="$n"
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+
+   mvopus
 
   fi
 
@@ -662,10 +693,10 @@ printf '%s .. %s\n' "${rawindex[@]}"  # DO NOT touch this line
 echo
 
 if [[ "$rmmatch" != "true" ]] &&
-   ! $(confirm "Continue with concatination? (y/n) "); then
-   printf '\n\nWell why are you here then?%s\n\n' "$tput0"
-   printline "  ${bold}Leaving ${scriptname}: ${red}User abort. exit (130)  ${tput0}$(echo)"
-   exit 130
+  ! $(confirm "Continue with concatination? (y/n) "); then
+  printf '\n\nWell why are you here then?%s\n\n' "$tput0"
+  printline "  ${bold}Leaving ${scriptname}: ${red}User abort. exit (130)  ${tput0}$(echo)"
+  exit 130
 fi
 
 printf '\n\n%sConcatenating %s -- Part ??: *.opus...%s\n\n' "$relipsis" "$ititle" "$tput0"
@@ -674,23 +705,91 @@ printf '\n\n%sConcatenating %s -- Part ??: *.opus...%s\n\n' "$relipsis" "$ititle
 dirsize="$(du -csb *Part*opus|tail -n1)"
 dirsize="${dirsize%%$'\t'*}" #remove everything after first tab stop
 dirsize="$((dirsize/1000))"  #convert bytes to KiB
-printf '%sparts=  %sKiB time=%s%s\n' "$red" "$dirsize" "$duration" "$tput0"
-[[ "$overwrite" != false ]] && ffmpeg -nostdin -hide_banner -v error -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output"
+#printf %sPart\ files\:\\n%s  "$red" "$tput0"
+#printf '%ssize   %s: %sKiB\n%stime   %s: %s\n' \
+#       "$red" \
+#       "$tput0" \
+#       "$dirsize" \
+#       "$red" \
+#       "$tput0" \
+#       "$duration"
+
+#[[ "$overwrite" != false ]] && ffout="$(ffmpeg -nostdin -hide_banner -v error -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
+[[ "$overwrite" != false ]] && ffout="$(ffmpeg -nostdin -hide_banner -v info -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
+
+#ffout="$(printf %s|tail -n2|head -n1)"
+#ffout="$(printf %s|tail -n2|head -n1)"
+
+if [[ "$ffout" =~ $'\r' ]]; then declare -p ffout; ffout="${ffout#*$'\r'}"; fi
+
+ffsize=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^size=/) {print $(1+i)} }' <<< "$ffout" | sed 's/size=//')
+ffsize="${ffsize%KiB}"
+fftime=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^time=/) {print $i} }' <<< "$ffout" | sed 's/time=//')
+ffbitrate=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^bitrate=/) {print $(i+1)} }' <<< "$ffout" | sed 's/bitrate=//')
+ffspeed=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^speed=/) {print $i} }' <<< "$ffout" | sed 's/speed=//')
+
+#printf %s\\nConcatanated\ file\:\\n%s "$red" "$tput0"
+#printf '%ssize   %s: %s\n' "$red" "$tput0" "$ffsize"
+#printf '%stime   %s: %s\n' "$red" "$tput0" "$fftime"
+#printf '%sbitrate%s: %s\n' "$red" "$tput0" "$ffbitrate"
+#printf '%sspeed  %s: %s\n' "$red" "$tput0" "$ffspeed"
+
+labelwidth=12
+valuewidth=15
+totalwidth=$((labelwidth + valuewidth + 5))
+
+printf "\n%-${totalwidth}s    | %-${totalwidth}s\n" "${red}Concatenated file${tput0}:" "${red}Part files${tput0}:"
+#printf "\n%-${totalwidth}s  | %-${totalwidth}s\n" "${red}Concatenated file:${tput0}" "${red}Part files:${tput0}"
+
+printf "%-${labelwidth}s %-${valuewidth}s | %-${labelwidth}s %s\n" \
+  "${red}size   ${tput0}:" "$ffsize KiB" "${red}size${tput0}:" "${dirsize} KiB"
+
+#printf "\n%-${totalwidth}s | %-${totalwidth}s\n" "${red}Concatenated file:${tput0}" "${red}Part files:${tput0}"
+
+
+printf "%-${labelwidth}s %-${valuewidth}s | %-${labelwidth}s %s\n" \
+  "${red}time   ${tput0}:" "$fftime" "${red}time${tput0}:" "$duration"
+
+printf "%-${labelwidth}s %-${valuewidth}s |\n" \
+  "${red}bitrate${tput0}:" "$ffbitrate"
+
+#printf "%s%-${labelwidth}s %s%-${valuewidth}s |\n" \
+#  "$red" "speed  :" "$tput0" "$ffspeed"
+printf "%-${labelwidth}s %-${valuewidth}s |\n" \
+ "${red}speed  ${tput0}:" "$ffspeed"
+
+printf '\n%sSize reduction%s: %s KiB / %s%%\n' "$red" "$tput0" "$(( dirsize - ffsize ))" "$(( ( 100*${dirsize} - 100 * ${ffsize%KiB} ) / ${dirsize} ))"
+
+#pause "ffmpeg output: $(declare -p ffout)"
 
 if [[ "$overwrite" != false ]] && [[ "$?" != 0 ]]; then
   printf "\nffmpeg failed to concatinate; exit 1\n\n" && exit 1
 fi
 
 if [[ ! -f "$tmp/$output" ]]; then
-   printf '\n\n\n%s%sWhere the fuck is %s/%s?\nexit 1%s' "$red" "$bold" "$tmp" "$output" "$tput0"
-   printline "Leaving $scriptname: error, exit 1!"
-   exit 1
+  printf '\n\n\n%s%sWhere the fuck is %s/%s?\nexit 1%s' "$red" "$bold" "$tmp" "$output" "$tput0"
+  printline "Leaving $scriptname: error, exit 1!"
+  exit 1
 fi
-
 
 printf '\n\n%sIncorporating index into%s %s -- Audiobook.opus%s\n\n%s' "$relipsis" "$white" "$ititle" "$relipsis" "$tput0"
 
-mv "$tmp/$output" "$output"
+#mvout="$(mv "$tmp/$output" "$output" 2>&1)"
+#mvec="$?"
+#
+#pause "$tmp/$output $PWD/$output $mvec $mvout"
+#
+#if (( mvec == 0 )); then
+#  echo "File moved successfully."
+#else
+#  if echo "$mvout" | grep -q "are the same file"; then
+#    echo "Source and destination files are identical. Deleting the source file."
+#    rm "$tmp/$output"
+#  else
+#    echo "Error: $mvout"
+#    exit 1
+#  fi
+#fi
 
 writeindex "$output"
 
