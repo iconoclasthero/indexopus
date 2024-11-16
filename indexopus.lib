@@ -11,6 +11,7 @@ white="$(tput setaf 15)" #white fg
 tput0="$(tput sgr0)" #reset tput changes
 bold="$(tput bold)" #bold on
 relipsis="$red..."
+mediagroup='media'
 
 tlpp(){
 
@@ -38,6 +39,18 @@ editscript(){
   local scriptpath script path swp; scriptpath=$(realpath "$0" 2>/dev/null); script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
      [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptpath") && exit
      printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit ; }
+
+if ! command -v own &> /dev/null; then
+  own(){
+  if [[ $(pwd) = "/library/"* ]] || [[ $(pwd) = "$HOME"* ]] || [[ $(pwd) = "/dev/shm/cache"* ]] || [[ "$1" = "--force" ]]; then
+    sudo find . ! -user "$USER" ! -iname metadata.json -exec chown -R "$USER":media "{}" \;
+    sudo find . ! -group "$mediagroup" -exec chgrp -R "$mediagroup" "{}" \;
+    sudo find . -type d ! -perm 775 -exec chmod 775 "{}" \;
+    sudo find . -type f ! -perm 664 -exec chmod 664 "{}" \;
+    sudo chown "$USER":"$mediagroup" .
+  fi
+  }
+fi
 
 printline(){
   local lead linetitle leader strippedleader leader_length remaining_width line

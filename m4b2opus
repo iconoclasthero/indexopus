@@ -104,7 +104,7 @@ filecheck(){
    [[ -d "$clifilename" ]] && clidir="${clifilename%/*}" && cd "$clidir" && unset clifilename
    [[ -f "$clifilename" ]] && clidir="${clifilename%/*}" && cd "$clidir" && clifilename="${clifilename##*/}"
 
-  if [[ ! -z "$clifilename" ]] && [[ "$clifilename" != *\ --\ Audiobook.m4b ]]
+  if [[ -n "$clifilename" ]] && [[ "$clifilename" != *\ --\ Audiobook.m4b ]]
     then
     printf 'The file specified: %s\nis not in the correct format of\n* -- Audiobook.m4b, checking directory for an m4b file...' "$clifilename"
   elif [[ "$clifilename" == *\ --\ Audiobook.m4b ]] && [[ -f "$1" ]]
@@ -117,7 +117,12 @@ filecheck(){
         m4bin="$files"
       elif [[ "$files" == *m4b ]]; then
         m4bin="${files/.m4b/ -- Audiobook.m4b}"
-        mv "$files" "$m4bin"
+        if ! mvoutput="$(mv "$files" "$m4bin" 2>&1)" && [[ "$mvoutput" = "mv: cannot move "*\ to\ *": Permission denied" ]]; then
+          own && mv "$files" "$m4bin" || exit 1
+        else
+          printf 'Unknown error. exit 1'
+          exit 1
+        fi
       fi
     else
       echo "No single & appropriate input file found or specified, please check and retry..."
