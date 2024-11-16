@@ -820,12 +820,12 @@ if [[ "$rmmatch" = true && "$duration" = "$outdur" ]]; then
     exit 0
   elif [[ "$mvoutput" =~ ^mv\:\ [\'\"].+[\'\"]\ and\ [\'\"].+[\'\"]\ are\ the\ same\ file$ ]]; then
     printf '\nPlease see %s%s%s/%s%s\n\n%sDone.\n\n%s' "$white" "$bold" "$PWD" "$ioutput" "$tput0" "$relipsis" "$tput0"
-    printf 'NB: $tmp= %s\n             and\n    $PWD= %s\n' "$tmp" "$PWD"
+    printf '%sNB: $tmp = %s%s%s\n             and\n    $PWD = %s%s%s\n' "$red" "$white" "$tmp" "$red" "$white" "$PWD" "$red"
     if [[ "$tmp" != "$PWD" ]]; then
       rmr "$tmp"
-      printf '    ...removing %s\n\n' "$tmp"
+      printf '    %sremoving %s%s\n\n' "$relipsis" "$white" "$tmp"
     else
-      printf '    ...not removing %s\n\n' "$tmp"
+      printf '    %snot removing %s%s\n\n' "$relipsis" "$white" "$tmp"
     fi
     printline "${bold}  Exiting (0) ${white}indexopus  ${tput0}"
     exit 0
