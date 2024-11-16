@@ -2,6 +2,8 @@
 # nb: the swp file that editscript relies on is provided by nano
 # opusbook4ka is an external dependency
 
+. ~/.config/indexopus.conf
+
 # Invokes breakout function upon INT/^C
 trap '{ breakout -B; exit 1; }' INT
 pidfile="/tmp/.opus.book.pids"
@@ -13,7 +15,7 @@ shopt -s extglob nullglob   # as a global option
 scriptpath="$(realpath $0)"
 script="${scriptpath##*\/}"
 
-threads=4 # number of parallel threads
+[[ ! "$threads" ]] && threads=4 # number of parallel threads
 bfreq=12 # flashing frequency (( $(date +%s) % bfreq == 0 )) && ...
 rfreq=45 # tput reset frequency...  ca. period...
 sexpattern='^([0-9]|[0-9][0-9]|[0-9][0-9][0-9]):([0-5]?[0-9]):([0-5]?[0-9])$'   # RegEx pattern to match a sexagesimal:
