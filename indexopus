@@ -37,7 +37,7 @@ remove_mp4tags=("major_brand" "minor_version" "compatible_brands" "encoded_by" '
 
 
 ####this needs to be done better, but for now if the dependencies aren't here, i want it to just exit the script
-! command -v opustags > /dev/null && apt install opustags
+! command -v opustags > /dev/null && sudo apt install opustags
 ! command -V opustags > /dev/null && { echo "opustags missing; exit 1"; exit 1; }
 
 editscript(){
@@ -715,7 +715,8 @@ dirsize="$((dirsize/1000))"  #convert bytes to KiB
 #       "$duration"
 
 #[[ "$overwrite" != false ]] && ffout="$(ffmpeg -nostdin -hide_banner -v error -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
-[[ "$overwrite" != false ]] && ffout="$(ffmpeg -nostdin -hide_banner -v info -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
+#[[ "$overwrite" != false ]] && 
+ffout="$(ffmpeg -nostdin -hide_banner -v info -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
 
 #ffout="$(printf %s|tail -n2|head -n1)"
 #ffout="$(printf %s|tail -n2|head -n1)"
@@ -790,8 +791,11 @@ printf '\n\n%sIncorporating index into%s %s -- Audiobook.opus%s\n\n%s' "$relipsi
 #    exit 1
 #  fi
 #fi
+output="$tmp/$output"
 
 writeindex "$output"
+wiec="$?"
+(( "$?" != 0 )) && { echo "writeindex did not exit cleanly, exit 1"; exit 1; }
 
 if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null; then
   printf '%sChecking output from mediainfo...\n\n%s' "$relipsis" "$tput0"
@@ -820,10 +824,28 @@ else
 fi
 
 if [[ "$rmmatch" = true && "$duration" = "$outdur" ]]; then
-  printf '%sDurations of part and indexed opus files match, automatically deleting temporary files!\n\nPlease see %s%s%s/%s%s\n\n%sDone.\n\n%s' "$relipsis" "$white" "$bold" "$PWD" "$ioutput" "$tput0" "$relipsis" "$tput0"
+#  pause "output=$output; PWD=$PWD; tmp=$tmp"
+  printf '%sDurations of part and indexed opus files match, automatically deleting temporary files!\n' "$relipsis"
   rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index)
-  printline "${bold}  Exiting (0) ${white}indexopus  ${tput0}"
-  exit 0
+  if mvoutput="$(mv "$output" "$PWD" 2>&1)"; then
+    printf '\nPlease see %s%s%s/%s%s\n\n%sDone.\n\n%s' "$white" "$bold" "$PWD" "$ioutput" "$tput0" "$relipsis" "$tput0"
+    rm -r "$tmp"
+    printline "${bold}  Exiting (0) ${white}indexopus  ${tput0}"
+    exit 0
+  elif [[ "$mvoutput" =~ ^mv\:\ \'.+\'\ and\ \'.+\'\ are\ the\ same\ file$ ]]; then
+    printf '\nPlease see %s%s%s/%s%s\n\n%sDone.\n\n%s' "$white" "$bold" "$PWD" "$ioutput" "$tput0" "$relipsis" "$tput0"
+    printf 'NB: $tmp= %s\n   and\n    $PWD= %s\n' "$tmp" "$PWD"
+    if [[ "$tmp" != "$PWD" ]]; then
+      rmr "$tmp"
+    else
+      printf '    ...not removing %s\n\n' "$tmp"
+    fi
+    printline "${bold}  Exiting (0) ${white}indexopus  ${tput0}"
+    exit 0
+  else
+    printf 'there is something wrong here.  exit 1'
+    exit 1
+  fi
 fi
 
 [[ "$reindex" = true ]] && confirm "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info? %s' "${red}" "${bold}" "${tput0}")" && indexopus reindex
@@ -833,6 +855,8 @@ fi
 #[[ "$reindex" != true ]] && rmyn "${bold}${red}Remove $title -- Part *.opus & temp files? (y/n) ${tput0}" "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index) && iorm=true ||
 [[ "$rmmatch" != true ]] && rmyn "${bold}${red}Remove $title -- Part *.opus & temp files? (y/n) ${tput0}" "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index) && iorm=true ||
  rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index)
+ mv "$output" "$PWD"
+ rm -r "$tmp"
 
 printf '\n\n%sDone.\n\nPlease see %s%s%s/%s\n\n' "$relipsis" "$white" "$bold" "$PWD" "$ioutput"
 

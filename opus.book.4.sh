@@ -378,7 +378,7 @@ printf '%sDuration of %s%s %s%s file(s) to convert: %s%s%s%s%s\n...in: %s%s%s\n\
     sleep 0.5s
   done
 
-  updatebanner="$(printline "$bold Converting $filenum $startext files of duration $inputdur$tput0")"
+  updatebanner="$(printline "$bold Converting $filenum $startext files of duration $inputdur$tput0 ")"
   clear -x
   progress "$inputdur"
   wait  #for the bacground operations to finish up

@@ -28,13 +28,41 @@ scriptname="$(realpath $0)"
 #for i in {00..18}; do cd $i; 
 #for d in */; do
 #cd "$d"
+
+
+escapepath(){
+  for f in ./*."$ext"*; do
+    if [[ "$PWD/$f" == *\'* ]]; then
+      ff="$f"; dir="$PWD"
+      [[ "$f" == *\'* ]] && ff="${f//\'/\'\\\'\'}" || ff="$f"
+      [[ "$PWD" = *\'* ]] && dir="${PWD//\'/\'\\\'\'}"
+      echo "file '$dir/$ff'" #>> "$tmp/opusfiles"
+    else
+      echo "file '$PWD/$f'" #>> "$tmp/opusfiles"
+    fi
+  done
+}
+
+
+
+#if [[ "$ext" == "flac" ]]; then
+#ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) "$title.$ext"
+#elif [[ "$2" == "-y" ]]; then
+#ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -y -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) -acodec copy "$title.$ext"
+#else
+#ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) -acodec copy "$title.$ext"
+#fi
+
 if [[ "$ext" == "flac" ]]; then
-ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) "$title.$ext"
+  ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(escapepath) "$title.$ext"
 elif [[ "$2" == "-y" ]]; then
-ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -y -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) -acodec copy "$title.$ext"
+  ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -y -i <(escapepath) -acodec copy "$title.$ext"
 else
-ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) -acodec copy "$title.$ext"
+  ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(escapepath) -acodec copy "$title.$ext"
 fi
+
+
+
 #cd -
 #done
 

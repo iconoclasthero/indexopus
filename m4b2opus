@@ -338,7 +338,7 @@ opuspartdur="$(checkdur opus)"
 m4bindur="${m4bindur#*: }"
 
 printf '%sDuration of the original m4b file: %s%s%s\n' "$bold" "$red" "$m4bindur" "$tput0"
-printf '%sDuration of the .opus part files: %s%s%s\n' "$bold" "$red" "$opuspartdur" "$tput0"
+printf '%sDuration of the  .opus part files: %s%s%s\n' "$bold" "$red" "$opuspartdur" "$tput0"
 
 ##indexopus##################################################################################
 echo
@@ -379,12 +379,17 @@ cd "$swd"
 checkdur # probably do something different here since you have m4bindur and have to calc opusdur...
          # yeah, this is a terrible idea.  do this by heand instead of relying on something no
          # indended for this
-echo "Duration(s):"
+
+#echo "Duration(s):"
+
 #echo "${red}${bold}${tput0}$(m4bindur) the $m4bin"  #this threw an error saying m4bindur could not be found: not a function?
-echo "${red}${bold}${tput0}$m4bindur the $m4bin"     #removed the () from above.
-echo "${red}${bold}${tput0}$(checkdur opus) $titleopus"
+
+#echo "${red}${bold}${tput0}$m4bindur $m4bin"     #removed the () from above.
+#echo "${red}${bold}${tput0}$(checkdur opus) $titleopus"
+
 opusdursec="$(sex2sec "$(checkdur opus)")"
 m4bindursec="$(sex2sec $m4bindur)"
+
 if [[ "$rmmatch" = true ]] && (( opusdursec > 0 )); then
   verifydur=$(bc <<< "scale=4; ($m4bindursec - $opusdursec) / $opusdursec " )
   verifydur="${verifydur/#-}"
