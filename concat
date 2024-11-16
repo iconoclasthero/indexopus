@@ -53,6 +53,8 @@ escapepath(){
 #ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) -acodec copy "$title.$ext"
 #fi
 
+[[ "$title" =~ \."$ext"$ ]] && title="${title%.$ext}"
+
 if [[ "$ext" == "flac" ]]; then
   ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(escapepath) "$title.$ext"
 elif [[ "$2" == "-y" ]]; then
@@ -60,8 +62,6 @@ elif [[ "$2" == "-y" ]]; then
 else
   ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(escapepath) -acodec copy "$title.$ext"
 fi
-
-
 
 #cd -
 #done
