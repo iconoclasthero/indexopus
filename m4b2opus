@@ -352,9 +352,18 @@ if [[ "$rmmatch" = true ]]
     indexopus -t "$title" -m "$convertdir" -s "$stamp" -d "$opuspartdur"
 fi
    ec4io="$?" 				# error code 4 indexopus
-   [[ "$ec4io" = 2 ]] && iorm=true
-   [[ "$ec4io" = 1 ]] && printf 'How the hell did you manage to get here?!' && exit
-   [[ "$ec4io" = 130 ]] && printf '%sindexopus was aborted by user, exit (130). Investigate...\n%s\n%s\n\n' "$bold" "$tput0" "$(printline "  ${bold}Leaving ${scriptname}: ${red}indexopus aborted, exit (1)${tput0}  ")" && exit
+   if (( ec4io == 2 )); then
+     iorm=true
+   elif (( ec4io == 1 )); then
+     printf 'How the hell did you manage to get here?!'
+     if ! [[ -f "$convertdir/$title -- Audiobook.opus" ]]; then
+       pause "\$convertdir/\$title -- Audiobook.opus: $convertdir/$title -- Audiobook.opus"
+       exit
+     fi
+   elif (( ec4io == 130 )); then
+     printf '%sindexopus was aborted by user, exit (130). Investigate...\n%s\n%s\n\n' "$bold" "$tput0" "$(printline "  ${bold}Leaving ${scriptname}: ${red}indexopus aborted, exit (1)${tput0}  ")"
+     exit
+   fi
 
 
 printline "${bold}  Returning from external dependency:${red} indexopus  ${tput0}"

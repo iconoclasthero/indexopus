@@ -10,14 +10,23 @@ pause(){ read -rp "$*" ; }
 
 [[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
 
-title="${1%.*}"
-#ext="m4b"
 ext="opus"
+#ext="m4b"
 #ext="flac"
 #ext="mp3"
 #ext="${1##*.}"
 scriptname="$(realpath $0)"
 
+
+shopt -s extglob
+ if [[ "$1" = --ext=@(m4b|m4a|mp3) ]]; then
+   ext="$1"
+   shift
+   ext="${ext#*=}"
+   pause "new extension: $ext"
+ fi
+
+title="${1%.*}"
 
 #for i in {000..104}; do
 #for f in *$i.ts; do printf %s\n file '%s\n' "$PWD"/"$f";done;
@@ -42,8 +51,6 @@ escapepath(){
     fi
   done
 }
-
-
 
 #if [[ "$ext" == "flac" ]]; then
 #ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) "$title.$ext"

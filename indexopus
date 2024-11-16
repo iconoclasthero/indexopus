@@ -729,24 +729,14 @@ fftime=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^time=/) {print $i} }' <<< "$ffout" 
 ffbitrate=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^bitrate=/) {print $(i+1)} }' <<< "$ffout" | sed 's/bitrate=//')
 ffspeed=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^speed=/) {print $i} }' <<< "$ffout" | sed 's/speed=//')
 
-#printf %s\\nConcatanated\ file\:\\n%s "$red" "$tput0"
-#printf '%ssize   %s: %s\n' "$red" "$tput0" "$ffsize"
-#printf '%stime   %s: %s\n' "$red" "$tput0" "$fftime"
-#printf '%sbitrate%s: %s\n' "$red" "$tput0" "$ffbitrate"
-#printf '%sspeed  %s: %s\n' "$red" "$tput0" "$ffspeed"
-
 labelwidth=12
 valuewidth=15
 totalwidth=$((labelwidth + valuewidth + 5))
 
 printf "\n%-${totalwidth}s    | %-${totalwidth}s\n" "${red}Concatenated file${tput0}:" "${red}Part files${tput0}:"
-#printf "\n%-${totalwidth}s  | %-${totalwidth}s\n" "${red}Concatenated file:${tput0}" "${red}Part files:${tput0}"
 
 printf "%-${labelwidth}s %-${valuewidth}s | %-${labelwidth}s %s\n" \
   "${red}size   ${tput0}:" "$ffsize KiB" "${red}size${tput0}:" "${dirsize} KiB"
-
-#printf "\n%-${totalwidth}s | %-${totalwidth}s\n" "${red}Concatenated file:${tput0}" "${red}Part files:${tput0}"
-
 
 printf "%-${labelwidth}s %-${valuewidth}s | %-${labelwidth}s %s\n" \
   "${red}time   ${tput0}:" "$fftime" "${red}time${tput0}:" "$duration"
@@ -754,14 +744,10 @@ printf "%-${labelwidth}s %-${valuewidth}s | %-${labelwidth}s %s\n" \
 printf "%-${labelwidth}s %-${valuewidth}s |\n" \
   "${red}bitrate${tput0}:" "$ffbitrate"
 
-#printf "%s%-${labelwidth}s %s%-${valuewidth}s |\n" \
-#  "$red" "speed  :" "$tput0" "$ffspeed"
 printf "%-${labelwidth}s %-${valuewidth}s |\n" \
  "${red}speed  ${tput0}:" "$ffspeed"
 
 printf '\n%sSize reduction%s: %s KiB / %s%%\n' "$red" "$tput0" "$(( dirsize - ffsize ))" "$(( ( 100*${dirsize} - 100 * ${ffsize%KiB} ) / ${dirsize} ))"
-
-#pause "ffmpeg output: $(declare -p ffout)"
 
 if [[ "$overwrite" != false ]] && [[ "$?" != 0 ]]; then
   printf "\nffmpeg failed to concatinate; exit 1\n\n" && exit 1
@@ -832,18 +818,22 @@ if [[ "$rmmatch" = true && "$duration" = "$outdur" ]]; then
     rm -r "$tmp"
     printline "${bold}  Exiting (0) ${white}indexopus  ${tput0}"
     exit 0
-  elif [[ "$mvoutput" =~ ^mv\:\ \'.+\'\ and\ \'.+\'\ are\ the\ same\ file$ ]]; then
+  elif [[ "$mvoutput" =~ ^mv\:\ [\'\"].+[\'\"]\ and\ [\'\"].+[\'\"]\ are\ the\ same\ file$ ]]; then
     printf '\nPlease see %s%s%s/%s%s\n\n%sDone.\n\n%s' "$white" "$bold" "$PWD" "$ioutput" "$tput0" "$relipsis" "$tput0"
-    printf 'NB: $tmp= %s\n   and\n    $PWD= %s\n' "$tmp" "$PWD"
+    printf 'NB: $tmp= %s\n             and\n    $PWD= %s\n' "$tmp" "$PWD"
     if [[ "$tmp" != "$PWD" ]]; then
       rmr "$tmp"
+      printf '    ...removing %s\n\n' "$tmp"
     else
       printf '    ...not removing %s\n\n' "$tmp"
     fi
     printline "${bold}  Exiting (0) ${white}indexopus  ${tput0}"
     exit 0
   else
-    printf 'there is something wrong here.  exit 1'
+    echo "mvoutput= $mvoutput"
+    pause "output=$output; PWD=$PWD; tmp=$tmp"
+    printf '\nthere is something wrong here.  exit 1\n\n'
+    printline "${bold}  Exiting (1) ${white}indexopus  ${tput0}"
     exit 1
   fi
 fi
