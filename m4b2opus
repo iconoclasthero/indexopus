@@ -112,16 +112,20 @@ filecheck(){
     m4bin="$1"
   else
     files=(*m4b)
-    if [[ -f "$files" ]] && [[ "${#files[@]}" == 1 ]]; then
-      if [[ "$files" == *\ --\ Audiobook.m4b ]]; then
+    if [[ "${#files[@]}" == 1 ]]; then
+      if [[ "${files[@]}" == *\ --\ Audiobook.m4b ]]; then
         m4bin="$files"
-      elif [[ "$files" == *m4b ]]; then
+      elif [[ "${files[@]}" == *m4b ]]; then
         m4bin="${files/.m4b/ -- Audiobook.m4b}"
-        if ! mvoutput="$(mv "$files" "$m4bin" 2>&1)" && [[ "$mvoutput" = "mv: cannot move "*\ to\ *": Permission denied" ]]; then
-          own && mv "$files" "$m4bin" || exit 1
-        else
-          printf 'Unknown error. exit 1'
-          exit 1
+        mvoutput="$(mv "$files" "$m4bin" 2>&1)"
+        mvec="$?"
+        if (( mvec > 0 )); then
+          if [[ "$mvoutput" = "mv: cannot move "*\ to\ *": Permission denied" ]]; then
+            own && mv "$files" "$m4bin" || { printf 'Unable to gain write permission for %s. exit 1\n\n' "${files[@]}"; exit 1; }
+          else
+            printf 'Unknown error renaming %s. exit 1\n\n' "${files[@]}"
+            exit 1
+          fi
         fi
       fi
     else
