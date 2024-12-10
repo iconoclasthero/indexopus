@@ -16,6 +16,7 @@ red="$(tput setaf 9)" #red fg
 white="$(tput setaf 15)" #white fg
 relipsis="$red..."
 stamp="$(date +%s)"
+screened='false'
 ##definitions#################################################################################
 
 
@@ -273,19 +274,43 @@ noindexsplit(){
 ##--> m4b2opus <--####################################################################################
 
 echo
-printline "${bold}  Welcome to ${white}$script  ${tput0}"
+[[ "$1" = @(edit|e|nano) ]] && editscript
+[[ "$1" = "-y" ]] && shift && rmmatch=true
+[[ "$1" = "--stats" ]] && shift && stats=true
+[[ "$1" = @(--screen|-s) ]] && shift && screened=true
+[[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=true
 
-[[ "$1" == @(edit|e|nano) ]] && editscript
-
-[[ "$1" == "-y" ]] && shift && rmmatch=true
-[[ "$1" == "--stats" ]] && shift && stats=true
 #[[ "$1" ]] && clifile "$1"
 
-filecheck "$1" && [[ ! "$?" == 0 ]] && exit
+if "$screened"; then
+  printline "$bold  Calling m4b2opus in GNU screen $tput0"
+  printf \\n\\n
+  allm4s=(*.m4[ab])
+  screenname="m4b2opus-${allm4s[0]}"
+  screen -dmS "${screenname:0:16}" m4b2opus -y
+  screen -ls
+  printf \\n\\n
+  exit
+fi
 
-allm4s=(*m4?)
+#if "$screened"; then
+#  printline "$bold  Calling m4b2opus in GNU screen $tput0"
+#  printf \\n\\n
+#  allm4s=(*.m4[ab])
+#  #read -rp "${allm4s[0]}"
+##  exec bash -c "TERM=screen-256color COLORTERM=1 screen -dmS m4b2opus-\"${allm4s[0]}\" m4b2opus -y; screen -ls; printf \\n\\n"
+##  exec bash -c "screen -dmS test bash -c \"echo $TERM; \sleep 60m\"; m4b2opus-\"${allm4s[0]}\" m4b2opus -y; screen -ls; printf \\n\\n"
+#  exec bash -c "screen -dmS m4b2opus-\"${allm4s[0]}\" m4b2opus -y; screen -ls; printf \\n\\n"
+#fi
 
-printf '\n%s/*m4?: \n' "$PWD"
+[[ "$TERM"=screen ]] && TERM=screen.xterm-256color
+printline "${bold}  Welcome to ${white}$script  ${tput0}"
+
+filecheck "$1" && [[ ! "$?" = 0 ]] && exit
+
+allm4s=(*.m4[ab])
+
+printf '\n%s/*.m4[ab]: \n' "$PWD"
 printf ' %s%s%s\n' "$red" "${allm4s[@]}" "$white"
 
 [[ "$stats" = true ]] && mediainfo "$m4bin"
@@ -306,7 +331,7 @@ convertdir="$CACHE/m4b2opus-$title"
 
 [[ ! -d "$convertdir" ]] && echo "Could not create $convertdir. Please investigate. (exit 1)" && exit 1
 
-if [[ ! "$(mediainfo "$m4bin"|grep Menu)" =~ ^Menu ]]; then  #process unindexed m4b files
+if [[ ! $(mediainfo "$m4bin"|grep Menu) =~ ^Menu ]]; then  #process unindexed m4b files
   noindexsplit "$m4bin" "$convertdir"
 else
   m4bsplit "$m4bin" "$convertdir"

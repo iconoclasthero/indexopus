@@ -288,7 +288,7 @@ done
   exit 1
 
 while (( $# > 0 )); do
-  [[ "$1" == @(edit|e|-e) ]] && editscript
+  [[ "$1" = @(edit|e|-e) ]] && editscript
   [[ "$1" = @(-s|--stats) ]] && shift && statson=true
   [[ "$1" = "-d" ]] && inputdur="$2" && shift 2
   [[ "$1" = @(-h|--help) ]]  && shift && help=true
@@ -298,7 +298,7 @@ while (( $# > 0 )); do
   shift
 done
 
-if [[ "$startfile" && ! -f "$startfile" && "$startfile" != $mediaext ]] || (( "${#mediafiles[@]}" == 0 ))
+if [[ "$startfile" && ! -f "$startfile" && "$startfile" != $mediaext ]] || (( "${#mediafiles[@]}" == 0 ))  #Do not quote $mediaext as it contains a wildcard
   then
   echo "Usage: $0 [edit|e|-e] [-d] "##:##:##" [-s|--stats] [-f|--force] [-h|--help] <optional filename>"
   echo "Files must be of $mediaext format."
