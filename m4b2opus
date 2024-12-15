@@ -283,7 +283,7 @@ echo
 #[[ "$1" ]] && clifile "$1"
 
 if "$screened"; then
-  printline "$bold  Calling m4b2opus in GNU screen $tput0"
+  printline "$bold Calling m4b2opus in GNU screen $tput0"
   printf \\n\\n
   allm4s=(*.m4[ab])
   screenname="m4b2opus-${allm4s[0]}"
