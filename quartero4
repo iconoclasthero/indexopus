@@ -11,6 +11,8 @@ white="$(tput setaf 15)" #white fg
 relipsis="${red}..."
 shopt -s nullglob extglob dotglob
 threads=4
+rmmatch=false
+screened=false
 
 editscript(){
   local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
@@ -114,16 +116,19 @@ if [[ "$1" ]]
 
 [[ "$1" == @(edit|e|nano) ]] && editscript
 
-
 [[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=true
+[[ "$1" = -y ]] && shift && rmmatch=true
+
+pause "$rmmatch"
 
 if "$screened"; then
-  allfiles=( *mp3 ); [[ ! "$allfiles" ]] && allfiles=( *m4[ab] )
+  allfiles=( *.mp3 )
+  [[ ! "$allfiles" ]] && allfiles=( *.m4[ab] )
   printline "$bold Calling m4b2opus in GNU screen $tput0"
   printf \\n\\n
 #  allm4s=(*.m4[ab])
   screenname="q.o.4-${allfiles[0]}"
-  screen -dmS "${screenname:0:16}" quartero4
+  screen -dmS "${screenname:0:16}" quartero4 -y "$@"
   screen -ls
   printf \\n\\n
   exit
@@ -131,30 +136,27 @@ fi
 
 SWD="$PWD"
 
-ckbook=( *@(mp3|m4@(a|b)) )
-
-if ((${#ckbook[@]}==0))
-  then
-    printf '\n%s%sNo mp3 or m4a/m4b files found!%s\nListing of %s:\n' "$red" "$bold" "$tput0" "$SWD"
-	ls
+if [[ -n "$1" ]] && [[ -f "$1" ]]; then
+    path="$1"
+else
+  ckbook=( *@(mp3|m4@(a|b)) )
+  if (( ${#ckbook[@]} == 1 )); then
+    path="$ckbook"
+  else    # i.e., elif (( ${#ckbook[@]} != 1 )); then
+    printf '\n%s%sE: No single .mp3 or .m4b/.m4a file found!%s\nListing of %s:\n' "$red" "$bold" "$tput0" "$SWD"
+    ls
     printf '\n\nexit 1\n'
     exit 1
-fi
-
-
-if [[ -n "$1" ]] && [[ -f "$1" ]]
-  then
-    path="$1"
-elif ((${#ckbook[@]}==1))
-  then
-    path="$ckbook"
+  fi
 fi
 
 if [[ "$path" != *\ --\ Audiobook.@(mp3|m4@(a|b)) ]]
   then
     path="$ckbook"
     printf '\n%s%sFile is not in the format of <title> -- Audiobook.@(mp3|m4a|m4b)!\n%s\n' "$red" "$bold" "$tput0"
-      if confirm "Rename $path to ${ckbook%.*} -- Audiobook.${ckbook##*.}? (y/n) "
+pause "$rmmatch"
+
+      if "$rmmatch" || confirm "Rename $path to ${ckbook%.*} -- Audiobook.${ckbook##*.}? (y/n) "
         then
           mv "$ckbook" "${ckbook%.*} -- Audiobook.${ckbook##*.}"
         else
@@ -270,11 +272,38 @@ echo
 
 #printf '%s\n%s\n' "$(ls *\ Audiobook.m4?)" "$(mediainfo *\ Audiobook.m4?|grep ^Duration\ |uniq)"
 
+opusdursec=$(mediainfo --Inform="General;%Duration%" *\ --\ Audiobook.opus)
+
+[[ ! "$allfiles" ]] && allfiles=( *.mp3 )
+
+[[ ! "$allfiles" ]] && allfiles=( *.m4[ab] )
+
+for i in "${allfiles[@]}"; do allfilesdur=$(( allfilesdur + $(mediainfo --Inform="General;%Duration%" "$i") )); done
+
+if [[ "$rmmatch" = true ]]; then # && (( opusdursec > 0 )); then
+  verifydur=$(bc <<< "scale=4; ($allfilesdur - $opusdursec) / $opusdursec " )
+  verifydur="${verifydur/#-}"
+  pause "$verifydur"
+  if [[ $(bc <<< "scale=4; $verifydur < 0.001") ]]; then
+    rm -r *m4b "$convertdir"
+    [[ "$m4bindursec" != "$opusdursec" ]] &&
+       printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tp>
+      printf '%sDurations match!%s\n' "$relipsis" "$tput0"
+    printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
+    exit
+  elif [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
+    printf '%s%sThe m4b and opus audiobook durations do not match!\n' "$bold" "$red"
+    printf '%s%sm4b2opus will not automatically delete starting and temporary files!\n' "$white" "$tput0"
+    printf '\n\n'
+    printf '%s-y/-f specified, but the durations do not match!\n%s' "$bold" "$tput0"
+  fi
+
+else
 rm -i *.@(mp3|m4@(a|b))
 
-#rmr "$tmp"
+exit
 
-
+fi
 
 
 #https://www.reddit.com/r/ffmpeg/comments/107p3mh/remove_all_apart_from_audio/
