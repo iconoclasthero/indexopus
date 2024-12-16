@@ -272,6 +272,24 @@ progress() {
 ###--> Main Code <--###########################################################################
 ###--> opus.book.4 <--#########################################################################
 
+[[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=true
+
+#[[ "$1" ]] && clifile "$1"
+
+[[ ! "$files" ]] && files=( *,mp3 )
+[[ ! "$files" ]] && files=( *.m4? )
+
+if "$screened"; then
+  printline "$bold Calling opus.book.4 in GNU screen $tput0"
+  printf \\n\\n
+  allm4s=(*.m4[ab])
+  screenname="o.b.4-${files[0]}"
+  screen -dmS "${screenname:0:16}" m4b2opus -y
+  screen -ls
+  printf \\n\\n
+  exit
+fi
+
 printf \\n
 bannerarray=( "$(printline "${bold}  Welcome to ${white}${script} ${tput0}")" )
 printf %s\\n\\n "${bannerarray[@]}"

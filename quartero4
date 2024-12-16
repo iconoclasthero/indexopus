@@ -114,6 +114,21 @@ if [[ "$1" ]]
 
 [[ "$1" == @(edit|e|nano) ]] && editscript
 
+
+[[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=true
+
+if "$screened"; then
+  allfiles=( *mp3 ); [[ ! "$allfiles" ]] && allfiles=( *m4[ab] )
+  printline "$bold Calling m4b2opus in GNU screen $tput0"
+  printf \\n\\n
+#  allm4s=(*.m4[ab])
+  screenname="q.o.4-${allfiles[0]}"
+  screen -dmS "${screenname:0:16}" quartero4
+  screen -ls
+  printf \\n\\n
+  exit
+fi
+
 SWD="$PWD"
 
 ckbook=( *@(mp3|m4@(a|b)) )

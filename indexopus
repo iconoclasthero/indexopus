@@ -492,6 +492,10 @@ mvopus() {
 
   elif [[ "${opusarray[@]}" =~ .+[[:space:]][[:digit:]]{1,3}\.opus ]]; then
     echo "Using rename pattern 6:"
+    if [[ "${opusarray[0]}" =~ .+\ of\ [[:digit:]]{1,3}\.opus ]]; then
+      echo "$bold${red}E: This file appears to have a pattern of '... part ## of ##.ext' which is not provided for, manually rename.$tput0"
+      exit 1
+    fi
     regex=".+[[:space:]][[:digit:]]{1,3}\.opus"
     for i in "${opusarray[@]}"; do
       n="${i##* }"; n="${n%.opus}"; (( "${#n}" < 2 )) && n="0$n"
