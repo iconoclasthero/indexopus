@@ -212,6 +212,13 @@ while read -r first _ _ start _ end
       read  # discard line with Metadata:
       read _ _ chapter
       [[ "$chapter" = Chapter\ ?\:\ * ]] && chapter="${chapter/Chapter /Chapter 0}"
+
+# at some point i'd like to make a menu for what to do here, but for now this works.
+#      [[ "$chapter" =~ \ \/\  ]] && chapter="${chapter// \/ /: }"
+      [[ "$chapter" =~ \/ ]] && chapter="${chapter//\//\\}"
+
+#      read -rp "$title" </dev/tty
+
       [[ "$n" -lt 10 ]] && partnum="0$n" || partnum="$n"
       printf '%sCreating %s -- Part %s: %s.m4a%s\n' "$relipsis" "$title" "$partnum" "$chapter" "$tput0"
       readarray -t ffoutput < <(ffmpeg -n -nostdin -hide_banner -stats -v error -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "$outputdir/$title -- Part $partnum: $chapter.m4a" 2>&1)
