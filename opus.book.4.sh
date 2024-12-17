@@ -279,6 +279,8 @@ progress() {
 [[ ! "$files" ]] && files=( *,mp3 )
 [[ ! "$files" ]] && files=( *.m4? )
 
+[[ "${screened:=false}" ]]
+
 if "$screened"; then
   printline "$bold Calling opus.book.4 in GNU screen $tput0"
   printf \\n\\n

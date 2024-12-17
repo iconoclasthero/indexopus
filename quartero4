@@ -119,11 +119,10 @@ if [[ "$1" ]]
 [[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=true
 [[ "$1" = -y ]] && shift && rmmatch=true
 
-pause "$rmmatch"
-
 if "$screened"; then
   allfiles=( *.mp3 )
   [[ ! "$allfiles" ]] && allfiles=( *.m4[ab] )
+  . indexopus.lib
   printline "$bold Calling m4b2opus in GNU screen $tput0"
   printf \\n\\n
 #  allm4s=(*.m4[ab])
@@ -154,11 +153,16 @@ if [[ "$path" != *\ --\ Audiobook.@(mp3|m4@(a|b)) ]]
   then
     path="$ckbook"
     printf '\n%s%sFile is not in the format of <title> -- Audiobook.@(mp3|m4a|m4b)!\n%s\n' "$red" "$bold" "$tput0"
-pause "$rmmatch"
-
-      if "$rmmatch" || confirm "Rename $path to ${ckbook%.*} -- Audiobook.${ckbook##*.}? (y/n) "
+      ckbookfile="${ckbook%.*}"; ckbookext="${ckbook##*.}"
+#      [[ "$ckbookfile" =~ \. ]] && n_ckbookfile="${ckbookfile//./_}"
+#      if "$rmmatch" || confirm "Rename $path to ${ckbook%.*} -- Audiobook.${ckbook##*.}? (y/n) "
+      n_ckbook="${n_ckbookfile:-$ckbookfile} -- Audiobook.$ckbookext"
+      if "$rmmatch" || { printf 'Rename\n %s \nto\n %s\n' \
+                                "$path" \
+                                "$n_ckbook";
+                          confirm "(y/n) ?"; }
         then
-          mv "$ckbook" "${ckbook%.*} -- Audiobook.${ckbook##*.}"
+          mv "$ckbook" "$n_ckbook"
         else
           printf "No file name given or filename invalid...\n"
           printf "File must be in the format of \"* -- Audiobook.@(mp3|m4?)\n"
@@ -216,7 +220,11 @@ for i in First Second Third Fourth
    ((n++))
    for f in *\ --\ Part\ 0"$n".*
     do
-      mv "$f" "${f/./: $i Quarter.}"
+      of="$f"
+      [[ "${f%.*}" =~ \. ]] && fext="${f##*.}" && ff="${f%.*}" && f="${ff//./·}.$fext"
+      nf="${f/./: $i Quarter.}"
+      mv "$of" "$nf"
+      [[ "$nf" =~ \· ]] && mv "$nf" "${nf//·/.}"
     done
  done
 
@@ -283,28 +291,28 @@ for i in "${allfiles[@]}"; do allfilesdur=$(( allfilesdur + $(mediainfo --Inform
 if [[ "$rmmatch" = true ]]; then # && (( opusdursec > 0 )); then
   verifydur=$(bc <<< "scale=4; ($allfilesdur - $opusdursec) / $opusdursec " )
   verifydur="${verifydur/#-}"
-  pause "$verifydur"
   if [[ $(bc <<< "scale=4; $verifydur < 0.001") ]]; then
-    rm -r *m4b "$convertdir"
+    rm -r "${allfiles[@]}"
     [[ "$m4bindursec" != "$opusdursec" ]] &&
-       printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tp>
-      printf '%sDurations match!%s\n' "$relipsis" "$tput0"
+       printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' \
+              "$relipsis" \
+              "$(tput sitm)" \
+              "$(tput ritm)" \
+              "$tput0" ||
+       printf '%sDurations match!%s\n' "$relipsis" "$tput0"
     printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
-    exit
-  elif [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
+#  elif (( allfilesdur != opusdursec )) #[[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
+  else
     printf '%s%sThe m4b and opus audiobook durations do not match!\n' "$bold" "$red"
     printf '%s%sm4b2opus will not automatically delete starting and temporary files!\n' "$white" "$tput0"
     printf '\n\n'
     printf '%s-y/-f specified, but the durations do not match!\n%s' "$bold" "$tput0"
   fi
-
 else
-rm -i *.@(mp3|m4@(a|b))
-
-exit
-
+  rm -i *.@(mp3|m4@(a|b))
 fi
 
+exit
 
 #https://www.reddit.com/r/ffmpeg/comments/107p3mh/remove_all_apart_from_audio/
 #Mon Dec 11 10:52:50 AM EST 2023

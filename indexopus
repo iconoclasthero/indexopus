@@ -366,19 +366,19 @@ writeindex(){
 
 
 
-rename() {
+rename(){
   ext=opus #local?
   declare -A confirm_rename
   declare -A parts
   local hundreds width length
 
-mvopus() {
+mvopus(){
   max_length=0
   width=$(tput cols)
   for i in "${confirm_rename[@]}"; do
     rnlength="${#i}"
     if (( rnlength > max_length )); then
-      max_length=$rnlength
+      max_length="$rnlength"
     fi
   done
 
@@ -444,16 +444,26 @@ mvopus() {
 
 
 
-  elif [[ "${opusarray[@]}" =~ .+-(p|P)art[[:digit:]]{1,3}\.opus ]]; then
+  elif [[ "${opusarray[0]}" =~ .+-\ ?(p|P)art[[:digit:]]{1,3}\.opus ]]; then
     echo "Using rename pattern 3."
 #    for i in *-Part??.opus; do
-    for i in "${opusarray[@]}"; do
-      n="${i%.opus}"; n="${n##*-Part}"
-      [[ "$n" =~ [[:digit:]] ]] && n="0$n"
-      newname="${i/-@(p|P)art/ -- Part $n: Part }"
-      confirm_rename["$i"]="$newname"
-      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
-    done
+    [[ "${opusarray[0]}" =~ .+-(p|P)art[[:digit:]]{1,3}\.opus ]] &&
+      for i in "${opusarray[@]}"; do
+        n="${i%.opus}" && n="${n##*-Part}"
+#        [[ "$n" =~ [[:digit:]] ]] && n="0$n"
+        [[ "$n" =~ ^[[:digit:]]$ ]] && n="0$n"
+        newname="${i/-@(p|P)art/ -- Part $n: Part }"
+        confirm_rename["$i"]="$newname"
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      done
+    [[ "${opusarray[0]}" =~ .+-\ (p|P)art[[:digit:]]{1,3}\.opus ]] &&
+      for i in "${opusarray[@]}"; do
+        n="${i%.opus}" && n="${n##*- Part}"
+        [[ "$n" =~ ^[[:digit:]]$ ]] && n="0$n"
+        newname="${i/- @(p|P)art/ -- Part $n: Part }"
+        confirm_rename["$i"]="$newname"
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      done
 
     mvopus
 
@@ -492,17 +502,37 @@ mvopus() {
 
   elif [[ "${opusarray[@]}" =~ .+[[:space:]][[:digit:]]{1,3}\.opus ]]; then
     echo "Using rename pattern 6:"
-    if [[ "${opusarray[0]}" =~ .+\ of\ [[:digit:]]{1,3}\.opus ]]; then
-      echo "$bold${red}E: This file appears to have a pattern of '... part ## of ##.ext' which is not provided for, manually rename.$tput0"
-      exit 1
-    fi
     regex=".+[[:space:]][[:digit:]]{1,3}\.opus"
-    for i in "${opusarray[@]}"; do
-      n="${i##* }"; n="${n%.opus}"; (( "${#n}" < 2 )) && n="0$n"
-      newname="${i% *}"; newname="$newname -- Part $n: Part $n.opus"
-      confirm_rename["$i"]="$newname"
-      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
-    done
+    if [[ "${opusarray[0]}" =~ .+\ (p|P)art\ [[:digit:]]{1,3}\ of\ [[:digit:]]{1,3}\.opus ]]; then
+      for (( i=0; i<"${#opusarray[@]}"; i++ )); do
+        j="${opusarray[i]% of *}"
+        if [[ "$j" != "${opusarray[i]}" ]]; then
+#          j="${j/ part / -- Part }.opus"
+          j="${j/part }.opus"
+#          opusarray[i]="$j"
+          n="${j##* }"; n="${n%.opus}"
+          (( "${#n}" < 2 )) && n="0$n"
+          newname="${j% *}"; newname="$newname -- Part $n: Part $n.opus"
+          confirm_rename["${opusarray[i]}"]="$newname"
+
+# the following is apparently done in mvopus?
+#          printf '%s    %s---->%s    %s%s\n%s' \
+#                 "${opusarray[i]}" \
+#                 "$bold" \
+#                 "$tput0" \
+#                 "$red" \
+#                 "${confirm_rename[${opusarray[i]}]}" \
+#                 "$tput0"
+        fi
+      done
+    else
+      for i in "${opusarray[@]}"; do
+        n="${i##* }"; n="${n%.opus}"; (( "${#n}" < 2 )) && n="0$n"
+        newname="${i% *}"; newname="$newname -- Part $n: Part $n.opus"
+        confirm_rename["$i"]="$newname"
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      done
+    fi
 
     mvopus
 
