@@ -500,6 +500,22 @@ mvopus(){
 
     mvopus
 
+  elif [[ "${opusarray[@]}" =~ .+[[:space:]]-[[:space:]][[:digit:]]{1,3}\ .+\.opus ]]; then
+    echo "Using rename pattern 5.5"
+    regex=".+[[:space:]]-[[:space:]][[:digit:]]{1,3}\ .+\.opus"
+    for i in *\ -\ @(?|??|???)\ *.opus; do
+      n="${i%.opus}"; n="${n##* - }"; b="${n#* }"; n="${n%% *}"
+      (( 10#$n < 10 ))
+      [[ $n =~ ^[0-9]+$ ]] || pause "There's probably a problem, here's the value of \$n: $n"
+      newname="${i% - *}"
+      newname="$newname -- Part $n: $b.opus"
+#      newname="${newname/ - / -- Part $n: Part }"
+      confirm_rename["$i"]="$newname"
+#      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+
+    mvopus
+
   elif [[ "${opusarray[@]}" =~ .+[[:space:]][[:digit:]]{1,3}\.opus ]]; then
     echo "Using rename pattern 6:"
     regex=".+[[:space:]][[:digit:]]{1,3}\.opus"
