@@ -10,7 +10,7 @@ red="$(tput setaf 9)" #red fg
 white="$(tput setaf 15)" #white fg
 relipsis="${red}..."
 shopt -s nullglob extglob dotglob
-threads=4
+[[ ! "$threads" ]] && threads=4
 rmmatch=false
 screened=false
 
@@ -55,7 +55,7 @@ secmin=$((hourmin+minutes))
 secmin=$((secmin*60))
 seconds="${seconds#0}"
 totalsec=$(( "$seconds" + "$secmin" ))
-divsec=$(python3 -c "print($totalsec/4)")
+divsec=$(python3 -c "print($totalsec/$threads)")
 
 }  #calculatetime()
 
@@ -215,22 +215,16 @@ done
 
 cd "$tmp"
 
-for i in First Second Third Fourth
- do
-   ((n++))
-   for f in *\ --\ Part\ 0"$n".*
-    do
-      of="$f"
-      [[ "${f%.*}" =~ \. ]] && fext="${f##*.}" && ff="${f%.*}" && f="${ff//./·}.$fext"
-      nf="${f/./: $i Quarter.}"
-      mv "$of" "$nf"
-      [[ "$nf" =~ \· ]] && mv "$nf" "${nf//·/.}"
-    done
- done
+#for i in First Second Third Fourth; do
+#  ((n++))
+#  for f in *\ --\ Part\ 0"$n".*; do
+#    mv "$f" "${f/./: $i Quarter.}"
+#  done
+#done
 
 printf '#####################################################\nentering opus.book.4\n#####################################################\n\n'
 
-opus.book.4
+threads="$threads" opus.book.4
 
 printf '#####################################################\nleaving opus.book.4\n#####################################################\n\n'
 
