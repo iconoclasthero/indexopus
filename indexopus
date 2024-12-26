@@ -134,11 +134,10 @@ ioutput="$ititle -- Audiobook.opus"
 
 createindex(){
   chno=0
-  for i in "$title -- Part "*.opus
-    do
-      chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna#*: }"
-      [[ "$chna" = @(Chapter|Part)\ ? || "$chna" = @(Chapter|Part)\ ?\ * ]] && chna="${chna/ / 0}"
-      if [[ "$t" != 0 ]]; then
+  for i in "$title -- Part "*.opus; do
+    chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna#*: }"
+    [[ "$chna" = @(Chapter|Part)\ ? || "$chna" = @(Chapter|Part)\ ?\ * ]] && chna="${chna/ / 0}"
+    if [[ "$t" != 0 ]]; then
         ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
         printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  "$tmp/opusindex"
         printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
@@ -147,7 +146,7 @@ createindex(){
         createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
         rawindex+=( "$ts" )
         rawindex+=( "$chna" )
-     else
+   else
         ts="00:00:00.000"
         printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> "$tmp/opusindex"
         printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
@@ -156,27 +155,27 @@ createindex(){
         createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
         rawindex+=( "$ts" )
         rawindex+=( "$chna" )
-      fi
-      d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
+    fi
+    d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
 #     d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
-      t=$(echo "$d + $t" | bc)
-      ((chno++))
-    done
+    t=$(echo "$d + $t" | bc)
+    ((chno++))
+  done
 
 #ffmpeg will not take filenames with ' in them, they must be quoted:
 #check index for single quotes:
-for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus)
- do
-   if [[ "$PWD/$f" == *\'* ]]
-    then
-       ff="$f"; dir="$PWD"
-       [[ "$f" == *\'* ]] && ff="${f//\'/\'\\\'\'}" || ff="$f"
-       [[ "$PWD" = *\'* ]] && dir="${PWD//\'/\'\\\'\'}"
-       echo "file '$dir/$ff'" >> "$tmp/opusfiles"
+#took out the strict chapter or 3 digit check...
+#  for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus); do
+  for f in "$title"\ --\ Part\ *\:\ *.opus; do
+    if [[ "$PWD/$f" == *\'* ]]; then
+      ff="$f"; dir="$PWD"
+      [[ "$f" == *\'* ]] && ff="${f//\'/\'\\\'\'}" || ff="$f"
+      [[ "$PWD" = *\'* ]] && dir="${PWD//\'/\'\\\'\'}"
+      echo "file '$dir/$ff'" >> "$tmp/opusfiles"
     else
-       echo "file '$PWD/$f'" >> "$tmp/opusfiles"
+      echo "file '$PWD/$f'" >> "$tmp/opusfiles"
     fi
-done
+  done
 
 }
 ##--> createindex() <--################################################################################
@@ -384,18 +383,17 @@ mvopus(){
 
    length=$((${#i} + max_length + 10))
    offset=$(( width - max_length - 2 ))
+
    for i in "${!confirm_rename[@]}"; do
-      if (( length > width )); then
-#       printf '%s    %s---->%s\n  %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
-        for key in "${!confirm_rename[@]}"; do break; done
-        if [[ "$key" =~ .+\ -\ .+\.opus && ! "$key" =~ .+\ --\ .+\.opus ]]; then
+     if (( length > width )); then
+#      printf '%s    %s---->%s\n  %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+       for key in "${!confirm_rename[@]}"; do break; done
+       if [[ "$key" =~ .+\ -\ .+\.opus && ! "$key" =~ .+\ --\ .+\.opus ]]; then
           printrn+=( "$(printf '  %s    %s---->%s   %s%s\n%s' "${i##* - }" "$bold" "$tput0" "$red" "${confirm_rename["$i"]##* -- }" "$tput0")" )
         else
           printrn+=( "$(printf '  %s    %s---->%s   %s%s\n%s' "${i##* -- }" "$bold" "$tput0" "$red" "${confirm_rename["$i"]##* -- }" "$tput0")" )
 #       printrn1+=( "$(printf '%s    %s---->%s\n%*s%s%s\n%s' "$i" "$bold" "$tput0" "$offset" "" "$red" "${confirm_rename["$i"]}" "$tput0")" )
         fi
-
-
 
       else
         unset printrn1 printrn2
@@ -415,20 +413,36 @@ mvopus(){
 }  #end of mvopus
    ##############
 
-  if [[ "$opusarray" =~ .+\ --\ ((C|c)hapter|(P|p)art|(D|d)isc)\ [[:digit:]]{1,3}\.opus ]]; then
+#  if [[ "${opusarray[0]}" =~ .+\ --\ ((C|c)hapter|(P|p)art|(D|d)isc)|(T|t)rack\ [[:digit:]]{1,3}\.opus ]]; then
+  if [[ "${opusarray[0]}" =~ .+\ --\ (([Cc]hapter|[Pp]art|[Dd]isc|[Tt]rack)\ [[:digit:]]{1,3})\.opus ]]; then
     echo "Using rename pattern 1."
+   if "${quiet:=false}"; then rmmatch=true; fi
+
     for i in "${opusarray[@]}"; do
       n="${i%.opus}"; n="${n##* }"
       [[ "$n" =~ \ [[:digit:]]\.opus ]] && n="0$n"
       title="${i% -- *}"
       order="${i##* -- }"
-      newname="${i/ -- @(@(p|P)art|@(c|C)hapter|@(d|D)isc) */ -- Part $n: Part $n.opus}"
+      newname="${i/ -- @(@(p|P)art|@(c|C)hapter|@(d|D)isc|@(t|T)rack) */ -- Part $n: Part $n.opus}"
       confirm_rename["$i"]="$newname"
      done
 
     mvopus
 
-  elif [[ "$opusarray" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc)\ [[:digit:]]{1,3}\.opus ]]; then
+  elif [[ "${opusarray[0]}" =~ .+\ --\ (([Cc]hapter|[Pp]art|[Dd]isc|[Tt]rack)\ [[:digit:]]{1,3})\:\ .+\.opus ]]; then
+    echo "Using rename pattern 1.1."
+    for i in "${opusarray[@]}"; do
+      n="${i#* -- }"; n="${n%%:*}"; n="${n#* }"
+      [[ "$n" =~ ^[[:digit:]]$ ]] && n="0$n"
+      title="${i% -- *}"
+      chapt="${i##* -- }"
+      newname="$title -- Part $n: ${chapt#*: }"
+#      printf %s\\n%s\\n\\n "$i" "$newname"
+      confirm_rename["$i"]="$newname"
+     done
+    mvopus
+
+  elif [[ "$opusarray" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc)|(T|t)rack\ [[:digit:]]{1,3}\.opus ]]; then
     echo "Using rename pattern 2."
     for i in "${opusarray[@]}"; do
       n="${i%.opus}"; n="${n##* }"
@@ -436,7 +450,7 @@ mvopus(){
       (( "${#n}" == 1 )) && n="0$n"
       title="${i% - *}"
       order="${i##* - }"
-      newname="${i/ - @(@(P|p)art|@(c|C)hapter|@(d|D)isc) */ -- Part $n: Part $n.opus}"
+      newname="${i/ - @(@(P|p)art|@(c|C)hapter|@(d|D)isc|@(t|T)rack) */ -- Part $n: Part $n.opus}"
       confirm_rename["$i"]="$newname"
      done
 
@@ -619,16 +633,21 @@ mvopus(){
    mvopus
 
   fi
-
     # Check if files match the expected naming pattern after renaming
     renopus=( *\ --\ Part\ *.opus )
     if ! compgen -G '@(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus)' &> /dev/null; then
         # If files do not match expected naming pattern, attempt to rename them
         if [[ "${renopus[0]/ -- Part / -- Part 00: Part }" == *\ --\ Part\ ??\:\ *.opus ]]; then
-            for opusfile in *opus; do
-                n="${opusfile#* -- Part }"; n="${n%%.opus}"
-                mv "$opusfile" "${opusfile/ -- Part / -- Part $n: Part }"
+            for i in "${renopus[@]}"; do
+                n="${i#* -- Part }"; n="${n%%:*}" #n="${n%.opus}"
+                confirm_rename["$i"]="${i/ -- Part / -- Part $n: Part }"
+                printf '%s    %s---->%s    %s%s\n%s' \
+                       "$i"   "$bold" \
+                                     "$tput0" \
+                                           "$red" "${confirm_rename["$i"]}" \
+                                                 "$tput0"
             done
+          mvopus
         else
             allfiles=(*)
             # Exit if files do not match expected naming pattern and cannot be renamed
@@ -657,7 +676,9 @@ while [[ "$#" -gt 0 ]]; do
        fd="$2"; shift
     elif [[ "$1" = @(-d) ]]; then
         opuspartdur="$2"; shift
-    elif [[ "$1" = @(-t|--title) ]]; then
+        elif [[ "$1" = @(-q|--quiet) ]]; then
+        quiet=true; shift
+        elif [[ "$1" = @(-t|--title) ]]; then
         title="$2"; shift
     elif [[ "$1" = @(-s|--stamp) ]]; then
         stamp="$2"; shift
@@ -701,25 +722,19 @@ fi
 # this checks for a metadata.json, ideally from audiobookshelf.  there could be other metadata.json files
 # abs doesn't support json files with other names, nor is there anything in the json identifying it
 # as an abs file.  It does check the .json for the chapter index, so there's at least that...
-if [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].title' metadata.json)" ]]
-  then
-    reindex=true; itemid_pwd
-    [[ "$(jq -r '.chapters[0] | .title' metadata.json)".opus == "${opusarray[0]}" ]] ||
-      [[ "$(jq -r '.chapters[0] | .title' metadata.json)" == "001" ]] &&
-      reindex=false
+if ! "${quiet:=false}" && [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].title' metadata.json)" ]]; then
+  reindex=true; itemid_pwd
+  [[ "$(jq -r '.chapters[0] | .title' metadata.json)".opus = "${opusarray[0]}" ]] ||
+     [[ "$(jq -r '.chapters[0] | .title' metadata.json)" = "001" ]] && reindex=false
 
-    [[ "$reindex" = false ]] &&
-
+  [[ "$reindex" = false ]] &&
     printf '%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s/audiobook/%s/chapters\n\n' "$red" "$absserver" "$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$sqlitepwd';" ".exit")" &&
       [[ ! "$rmmatch" = true ]] && confirm "${bold}Would you like to try to reindex the file after importing chapter information? ${tput0}" &&
       reindex=true
 fi
 
-if ! compgen -G *\ --\ Part\ @(??|???)\:\ *.opus &> /dev/null
- then
-
- rename
-
+if ! compgen -G *\ --\ Part\ @(??|???)\:\ *.opus &> /dev/null; then
+  rename
 fi
 
 d=0
@@ -733,17 +748,26 @@ if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]
     then
       printf '\n%sOverwriting %s -- Audiobook.opus...%s\n' "$relipsis" "$ititle" "${tput0}"
     else
-      [[ -f metadata.json ]] &&
-        confirm "$(printf '\nNot overwriting.\nA metadata.json file was found. Would you like to reindex the file?')" &&
-        reindex=true && overwrite=false ||
-        printf '\n%s\n\n' "$(printline "  Exiting ${scriptname}: ${red}user abort. exit (130)${tput0}  ")"
-        exit 130
+#      [[ -f metadata.json ]] &&
+#        confirm "$(printf '\nNot overwriting.\nA metadata.json file was found. Would you like to reindex the file?')" &&
+#        reindex=true && overwrite=false ||
+#        printf '\n%s\n\n' "$(printline "  Exiting ${scriptname}: ${red}user abort. exit (130)${tput0}  ")"
+#        exit 130
+      if [[ -f metadata.json ]] && confirm "$(printf '\nNot overwriting.\nA metadata.json file was found. Would you like to reindex the file?')"; then
+        reindex=true
+        overwrite=false
+      else
+        printf '\n%s\n\n' "$(printline "  Exiting ${scriptname}: ${red}user abort. exit (130)${tput0}")"
+      exit 130
+      fi
    fi
 fi
 
 
 [[ "$opuspartdur" ]] && duration="$opuspartdur" ||
-           duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
+#also changing what its using for part digits here to just straight fuckin' parts:
+#           duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
+           duration=$(find . -type f \( -iname "$title -- Part *: *.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
            xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
            perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
            tail -n 1)
@@ -759,7 +783,6 @@ printf '\n%s%sProposed index for %s:%s%s\n' "$red" "$bold" "$ititle" "${tput0}" 
 
 printf '%s .. %s\n' "${rawindex[@]}"  # DO NOT touch this line
 echo
-
 if [[ "$rmmatch" != "true" ]] &&
   ! $(confirm "Continue with concatination? (y/n) "); then
   printf '\n\nWell why are you here then?%s\n\n' "$tput0"
@@ -783,7 +806,7 @@ dirsize="$((dirsize/1000))"  #convert bytes to KiB
 #       "$duration"
 
 #[[ "$overwrite" != false ]] && ffout="$(ffmpeg -nostdin -hide_banner -v error -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
-#[[ "$overwrite" != false ]] && 
+#[[ "$overwrite" != false ]] &&
 ffout="$(ffmpeg -nostdin -hide_banner -v info -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
 
 #ffout="$(printf %s|tail -n2|head -n1)"
@@ -815,7 +838,8 @@ printf "%-${labelwidth}s %-${valuewidth}s |\n" \
 printf "%-${labelwidth}s %-${valuewidth}s |\n" \
  "${red}speed  ${tput0}:" "$ffspeed"
 
-printf '\n%sSize reduction%s: %s KiB / %s%%\n' "$red" "$tput0" "$(( dirsize - ffsize ))" "$(( ( 100*${dirsize} - 100 * ${ffsize%KiB} ) / ${dirsize} ))"
+# adding the "${ffsize:=0}" here is cheating since it shouldn't be but it's to see what's going on in the code
+printf '\n%sSize reduction%s: %s KiB / %s%%\n' "$red" "$tput0" "$(( dirsize - ffsize ))" "$(( ( 100*dirsize - 100 * ${ffsize:=0} ) / dirsize ))"
 
 if [[ "$overwrite" != false ]] && [[ "$?" != 0 ]]; then
   printf "\nffmpeg failed to concatinate; exit 1\n\n" && exit 1
@@ -877,6 +901,8 @@ else
   exit 1
 fi
 
+if "${quiet:=false}"; then rmmatch=true; fi
+
 if [[ "$rmmatch" = true && "$duration" = "$outdur" ]]; then
 #  pause "output=$output; PWD=$PWD; tmp=$tmp"
   printf '%sDurations of part and indexed opus files match, automatically deleting temporary files!\n' "$relipsis"
@@ -906,8 +932,6 @@ if [[ "$rmmatch" = true && "$duration" = "$outdur" ]]; then
   fi
 fi
 
-[[ "$reindex" = true ]] && confirm "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info? %s' "${red}" "${bold}" "${tput0}")" && indexopus reindex
-
 #this isnt working right tonight and it is late.
 #this was "$reindex" != true...  changing to "$rmmatch":
 #[[ "$reindex" != true ]] && rmyn "${bold}${red}Remove $title -- Part *.opus & temp files? (y/n) ${tput0}" "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index) && iorm=true ||
@@ -915,6 +939,8 @@ fi
  rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index)
  mv "$output" "$PWD"
  rm -r "$tmp"
+
+! "${quiet:=false}" && "${reindex:=false}" && confirm "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info? %s' "${red}" "${bold}" "${tput0}")" && indexopus reindex
 
 printf '\n\n%sDone.\n\nPlease see %s%s%s/%s\n\n' "$relipsis" "$white" "$bold" "$PWD" "$ioutput"
 
@@ -941,4 +967,3 @@ to get chapters for a new abs book, it looks like the following api calls:
 curl -X POST "$absserver/api/items/$(itemid)/scan"   -H "Authorization: Bearer $abstoken"
 curl "$absserver/api/search/chapters?asin=$(jq -r '.asin' metadata.json)"   -H "Authorization: Bearer $abstoken" >chapters.json
 curl -X POST "$absserver/api/items/$(itemid)/match"   -H "Authorization: Bearer $abstoken"   -H "Content-Type: application/json"   -d '{"provider": "audible", "overrideDefaults": "true"}'
-

@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -x
 tmp=tmp
 scriptname=$(realpath "$0")
 ulon=$(tput smul)  #underline on
@@ -196,17 +196,19 @@ count=1 #cannot change.
 
 [[ ! -d "$tmp" ]] && mkdir "$tmp"
 
-for i in *"$ext"
-do
+if [[ ! -w . || ! -w "$wholefile" ]]; then
+  sudo chown -R "$USER:media" .
+fi
+
+
+for i in *"$ext"; do
   wholefile="$i"
   printf '\nFile to split: %s\n' "$wholefile"
   calculatetime "$wholefile"
   printf '\n\n%sSplitting file into %s pieces:\n%s' "$relipsis" "$threads" "$tput0"
-
-while (( $count < $((1+$threads)) ))
-  do
-     #echo '>>>>>       ffmpeg -i "$wholefile" -ss $(python3 -c "print(($count-1)*$divsec)") -to $(python3 -c "print($count*$divsec)") -acodec copy "${wholefile%.*} -- Part 0$count.$ext" '
-     #ffmpeg -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$whilefile" -acodec copy "${wholefile%.*} -- Part 0$count.$ext"
+  while (( $count < $((1+$threads)) )); do
+    #echo '>>>>>       ffmpeg -i "$wholefile" -ss $(python3 -c "print(($count-1)*$divsec)") -to $(python3 -c "print($count*$divsec)") -acodec copy "${wholefile%.*} -- Part 0$count.$ext" '
+    #ffmpeg -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$whilefile" -acodec copy "${wholefile%.*} -- Part 0$count.$ext"
 #pause "$(python -c "print(($count-1)*$divsec)")"
     ffmpeg -n -nostdin -hide_banner -stats -v error -ss $(python3 -c "print(($count-1)*$divsec)") -to $(python3 -c "print($count*$divsec)") -i "$wholefile" -vn -acodec copy "$tmp/${wholefile%% -- *} -- Part 0$count.$outext"
     ((count++))
@@ -306,6 +308,7 @@ else
   rm -i *.@(mp3|m4@(a|b))
 fi
 
+pause
 exit
 
 #https://www.reddit.com/r/ffmpeg/comments/107p3mh/remove_all_apart_from_audio/

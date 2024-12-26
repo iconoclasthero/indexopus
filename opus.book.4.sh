@@ -276,7 +276,7 @@ progress() {
 
 #[[ "$1" ]] && clifile "$1"
 
-[[ ! "$files" ]] && files=( *,mp3 )
+[[ ! "$files" ]] && files=( *.mp3 )
 [[ ! "$files" ]] && files=( *.m4? )
 
 [[ "${screened:=false}" ]]
@@ -286,7 +286,7 @@ if "$screened"; then
   printf \\n\\n
   allm4s=(*.m4[ab])
   screenname="o.b.4-${files[0]}"
-  screen -dmS "${screenname:0:16}" m4b2opus -y
+  screen -dmS "${screenname:0:16}" opus.book.4
   screen -ls
   printf \\n\\n
   exit
@@ -297,6 +297,8 @@ bannerarray=( "$(printline "${bold}  Welcome to ${white}${script} ${tput0}")" )
 printf %s\\n\\n "${bannerarray[@]}"
 
 mediafiles=( ${mediaext} )
+
+#(( ${#mediafiles[@]} != 1 )) && printf '\n%sThere is no single appropriatly-named media file in %s.  Please check and try again.\nexit 1\n\n%s' "$bold" "$(pwd)" "$tput0" && exit 1
 
 #test for more than one accptable media extension and fail if it finds more than one.
 for exts in "${mediafiles[@]}"; do
@@ -336,7 +338,6 @@ if  [[ "$startfile" ]] && [[ -f "$opusfile" ]] && [[ "$overwrite" != true ]]; th
   printf '\n%s%s%s exists!%s\n   %sexit 1\n\n%s' "$relipsis" "$bold" "$opusfile" "$white" "$tput0"
   echo "$line"
   exit 1
-
 elif [[ "$startfile" ]]; then
   printf '\n%sConverting: %s.\n     Duration: %s%s%s%s\n\n' "$relipsis" "$file" "$tput0" "$bold" "$(ffprobe -i "$file" -show_entries format=duration -v quiet -of csv="p=0" -sexagesimal |
     awk -F: '{printf "%02d:%02d:%02.2f\n", $1, $2, $3}')" "$tput0"
@@ -355,7 +356,6 @@ elif [[ "$startfile" ]]; then
   printf '\n%sDurations:\n%s' "$bold" "$tput0"
   checkdur "$startfile"
   checkdur "$opusfile"
-
 elif (( filenum > 0 )); then
 #need to add a formal confirm here at some point, but really, who's going to be doing this?
 #ffmpeg cannot overwrite here so probably have to exit if the files aren't deleted... further, we could actully compare the opus files that exist to the ones that are going to be converted...but since im not using find here, that probably donesnt matter.
@@ -374,7 +374,6 @@ elif (( filenum > 0 )); then
   fi
 
 [[ ! "$inputdur" ]] && inputdur="$(mediaduration "$startext")"
-
 #  bannerarray=( "$(printf '%sDuration of %s %s file(s) to convert: %s%s%s%s%s\n...in: %s%s\n\n' \
 #"$relipsis" "$filenum" "$startext" "$tput0" "$bold" "$inputdur" "$tput0" "$red" "$PWD" "$tput0")" )
 #  bannerarray+=( "$(printf '%sConversion progress:\n%s'  "$relipsis" "$tput0")" )
@@ -394,6 +393,11 @@ printf '%sDuration of %s%s %s%s file(s) to convert: %s%s%s%s%s\n...in: %s%s%s\n\
    "$white" \
    "$PWD" \
    "$tput0"
+
+  if [[ ! -w . || $(find "${mediafiles[0]}" ! -writable -print -quit) ]]; then
+    sudo chmod -R g+w .
+    sudo chown -R "$USER:media" .
+  fi
 
   for ((i=0; i<"$threads"; i++)); do
     ffmpeg2&    # call function to background to convert media files to opus, counter
