@@ -10,13 +10,13 @@ START=1
 edit=0
 scriptname="$(realpath $0)"
 basename "$PWD"
-title="Devil-Land"
+title="History of Russia"
 inext="mp3"
 outext="mp3"
-#inext="opus"
-#outext="opus"
-inext="m4?"
-outext="m4a"
+inext="opus"
+outext="opus"
+#inext="m4?"
+#outext="m4a"
 stamp=$(date +%s)
 #compgen -A file "*$inext"
 

@@ -515,13 +515,22 @@ mvopus(){
     mvopus
 
   elif [[ "${opusarray[@]}" =~ .+[[:space:]]-[[:space:]][[:digit:]]{1,3}\ .+\.opus ]]; then
-    echo "Using rename pattern 5.5"
+    renpat="5.5"
+# 'The Ocean of Churn - Sanjeev Sanyal - 001 - (Begin).opus'
+# 'The Ocean of Churn - Sanjeev Sanyal - 002 - Introduction.opus'
+
+    echo "Using rename pattern $renpat"
     regex=".+[[:space:]]-[[:space:]][[:digit:]]{1,3}\ .+\.opus"
+
     for i in *\ -\ @(?|??|???)\ *.opus; do
-      n="${i%.opus}"; n="${n##* - }"; b="${n#* }"; n="${n%% *}"
+        n="${i%.opus}"; n="${n##* - }"; b="${n#* }"; n="${n%% *}"; newname="${i% - *}"
+
+      [[ ! "$n" =~ ^[[:digit:]]+$ ]] &&
+        { n="${i%.opus}"; b="${n##* - }"; n="${n% - *}"; newname="${n% - *}"; n="${n##* - }"; n="${n%% *}"; }
+      [[ ! "$n" =~ ^[[:digit:]]+$ ]] && exit 1
+
       (( 10#$n < 10 ))
-      [[ $n =~ ^[0-9]+$ ]] || pause "There's probably a problem, here's the value of \$n: $n"
-      newname="${i% - *}"
+      [[ $n =~ ^[0-9]+$ ]] || pause "There's probably a problem in rename pattern $renpat, here's the value of \$n: $n"
       newname="$newname -- Part $n: $b.opus"
 #      newname="${newname/ - / -- Part $n: Part }"
       confirm_rename["$i"]="$newname"
@@ -530,8 +539,29 @@ mvopus(){
 
     mvopus
 
+  elif [[ "${opusarray[@]}" =~ [[:digit:]]\ .+\,\ Part\ [[:digit:]]{1,3}.opus ]]; then
+    renpat="6.1"
+
+#  For TTC merges:
+#  01 Great Artists of the Italian Renaissance, Part 1.opus
+#  02 Great Artists of the Italian Renaissance, Part 2.opus
+
+    echo "Using rename pattern $renpat"
+    regex="[[:digit:]]\ .+\,\ Part\ [[:digit:]]{1,3}.opus"
+
+    for i in ??\ *\,\ Part\ @(?|??|???).opus; do
+      n="${i%% *}"; p="Part ${i##*Part }"; t="${i%, Part *}"
+      [[ $n =~ ^[0-9]+$ ]] || pause "There's probably a problem in rename pattern $renpat, here's the value of \$n: $n"
+      newname="${t#* } -- Part $n: $p"
+      confirm_rename["$i"]="$newname"
+    done
+
+    mvopus
+
+  
+
   elif [[ "${opusarray[@]}" =~ .+[[:space:]][[:digit:]]{1,3}\.opus ]]; then
-    echo "Using rename pattern 6:"
+    echo "Using rename pattern 6.2:"
     regex=".+[[:space:]][[:digit:]]{1,3}\.opus"
     if [[ "${opusarray[0]}" =~ .+\ (p|P)art\ [[:digit:]]{1,3}\ of\ [[:digit:]]{1,3}\.opus ]]; then
       for (( i=0; i<"${#opusarray[@]}"; i++ )); do
@@ -578,15 +608,33 @@ mvopus(){
  ## '019 Barry Posen - Restraint_ A New Foundation for U.S. Grand Strategy - End Credits.opus'
  ###############################################################################################################
 
-  elif [[ "${opusarray[@]}" =~ [[:digit:]]{1,3}\ -\ (.+)\.opus ]]; then
+  elif [[ "${opusarray[0]}" =~ [[:digit:]]{1,3}\ -\ (.+)\.opus ]]; then
     echo "Using rename pattern 7:"
-    regex="[[:digit:]]{1,3}\ -\ (.+)\.opus"
-    for i in "${opusarray[@]}"; do
-      n="${i%% *}"
-      newname="${i%.opus}"; newname="${newname#* - } -- Part $n: Part $n.opus"
-      confirm_rename["$i"]="$newname"
-      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
-    done
+    if [[ "${opusarray[0]}" =~ ^[[:digit:]]{1,3}\ -\ (.+)\.opus ]]; then
+      echo "Using rename pattern 7a:"
+      regex="^[[:digit:]]{1,3}\ -\ (.+)\.opus"
+      for i in "${opusarray[@]}"; do
+        n="${i%% *}"
+        newname="${i%.opus}"; newname="${newname#* - } -- Part $n: Part $n.opus"
+        confirm_rename["$i"]="$newname"
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      done
+    elif [[ "${opusarray[0]}" =~ .+\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\ -\ (.+)\.opus ]]; then
+
+#'The Ocean of Churn -- Part 01 - (Begin).opus'
+#'The Ocean of Churn -- Part 09 - Treasure and Spice.opus'
+#'The Ocean of Churn -- Part 02 - Introduction.opus'
+
+      pause "Using rename pattern 7b:"
+      regex="^[[:digit:]]{1,3}\ -\ (.+)\.opus"
+      for i in "${opusarray[@]}"; do
+#        n="${i#* ((C|c)hapter|(P|p)art|(D|d)isc)|(T|t)rack) }"
+n="${i#* @(@(C|c)hapter|@(P|p)art|@(T|t)rack|@(D|d)isc) }"; n="${n%% *}"
+        newname="${i%.opus}"; newname="${newname%% -- *} -- Part $n: ${newname#* - }.opus"
+        confirm_rename["$i"]="$newname"
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      done
+    fi
 
     mvopus
 
@@ -636,8 +684,10 @@ mvopus(){
     # Check if files match the expected naming pattern after renaming
     renopus=( *\ --\ Part\ *.opus )
     if ! compgen -G '@(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus)' &> /dev/null; then
+        pause "Using naming pattern zulu!"
         # If files do not match expected naming pattern, attempt to rename them
         if [[ "${renopus[0]/ -- Part / -- Part 00: Part }" == *\ --\ Part\ ??\:\ *.opus ]]; then
+        pause "!! USING NAMING PATTERN ZULU !!"
             for i in "${renopus[@]}"; do
                 n="${i#* -- Part }"; n="${n%%:*}" #n="${n%.opus}"
                 confirm_rename["$i"]="${i/ -- Part / -- Part $n: Part }"
@@ -948,8 +998,8 @@ printf '\n\n%sDone.\n\nPlease see %s%s%s/%s\n\n' "$relipsis" "$white" "$bold" "$
 
 (( $rmynres == 1 )) 2>/dev/null && echo "$tmp remains"
 
-#clean up /tmp/indexopus-* files older than a day:
-find /tmp -iname "indexopus-1*" -mtime -1 -exec rm -rf {} 2>/dev/null \;
+#clean up /tmp/indexopus-* files older than two days:
+find /tmp -iname "indexopus-1*" -mtime -2 -exec rm -rf {} 2>/dev/null \;
 
 printf '%s' "$tput0"
 
