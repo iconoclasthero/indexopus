@@ -281,11 +281,13 @@ noindexsplit(){
 ##--> m4b2opus <--####################################################################################
 
 echo
-[[ "$1" = @(edit|e|nano) ]] && editscript
-[[ "$1" = "-y" ]] && shift && rmmatch=true
-[[ "$1" = "--stats" ]] && shift && stats=true
-[[ "$1" = @(--screen|-s) ]] && shift && screened=true
-[[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=true
+while (( $# > 0 )); do
+  [[ "$1" = @(edit|e|nano) ]] && editscript
+  [[ "$1" = "-y" ]] && shift && rmmatch=true
+  [[ "$1" = "--stats" ]] && shift && stats=true
+  [[ "$1" = @(--screen|-s) ]] && shift && screened=true
+  [[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=true
+done
 
 #[[ "$1" ]] && clifile "$1"
 
