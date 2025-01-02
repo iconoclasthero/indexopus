@@ -1,0 +1,54 @@
+{
+  "tags": [],
+  "chapters": [
+    {
+      "start": 0,
+      "end": 3845.466,
+      "title": "Part 001 ",
+      "id": 0
+    },
+    {
+      "start": 3845.466,
+      "end": 7840.838,
+      "title": "Part 002 ",
+      "id": 1
+    },
+    {
+      "start": 7840.838,
+      "end": 11656.859,
+      "title": "Part 003 ",
+      "id": 2
+    },
+    {
+      "start": 11656.859,
+      "end": 15467.956,
+      "title": "Part 004 ",
+      "id": 3
+    },
+    {
+      "start": 15467.956,
+      "end": 19389.336,
+      "title": "Part 005 ",
+      "id": 4
+    }
+  ],
+  "title": "Title: Subtitle (0000)",
+  "subtitle": null,
+  "authors": [
+    "First Last"
+  ],
+  "narrators": [
+    "Peggy Noonan"
+  ],
+  "series": [],
+  "genres": [],
+  "publishedYear": "2001",
+  "publishedDate": null,
+  "publisher": null,
+  "description": "It is 20 years - a full generation - since Ronald Reagan first walked into the White House and ignited a revolution. From the beginning, he enjoyed affection from so many Americans, but now, as he approaches the end of his life, he has received what he deserved even more: their deep respect.",
+  "isbn": null,
+  "asin": null,
+  "language": null,
+  "explicit": false,
+  "abridged": false
+}
