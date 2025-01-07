@@ -41,10 +41,11 @@ fi
 
 
 changerate=false
+findmnt -T . | grep -q "fuse.sshfs" && unset SUDO && fuse=true
 
 for i in *flac;
  do
-  [[ ! -w "$i" || ! -w "$PWD" ]] && printf \\nFix\ permissions\!\\n && exit 1
+  [[ "$fuse" != true && ! -w "$i" || ! -w "$PWD" ]] && printf \\nFix\ permissions\!\\n && exit 1
 
   if "$mi"; then
     bits=$(mediainfo --Output='Audio;%BitDepth%' "$i")
