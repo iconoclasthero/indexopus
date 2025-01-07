@@ -296,7 +296,7 @@ if "$screened"; then
   printf \\n\\n
   allm4s=(*.m4[ab])
   screenname="m4b2opus-${allm4s[0]}"
-  screen -dmS "${screenname:0:16}" m4b2opus -y  #should this be a -y here?  probably.
+  screen -dmS "${screenname:0:16}" m4b2opus "${rmmatch:--y }"  #should this be a -y here?  probably.
   screen -ls
   printf \\n\\n
   exit

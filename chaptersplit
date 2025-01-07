@@ -10,7 +10,7 @@ START=1
 edit=0
 scriptname="$(realpath $0)"
 basename "$PWD"
-title="Egypt"
+title="Concert Masterworks"
 inext="mp3"
 outext="mp3"
 inext="opus"
