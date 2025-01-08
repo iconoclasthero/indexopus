@@ -1,5 +1,6 @@
 #!/bin/bash
 # nb: the swp file that editscript relies on is provided by nano
+export TERM
 red="$(tput setaf 9)"
 bold="$(tput bold)"
 tput0="$(tput sgr0)"
@@ -14,7 +15,8 @@ pause(){ read -rp "$*" < /dev/tty; }
 yn(){
   local yn
   while true; do
-    read -p "$1 (y/n) " yn
+    echo "$1 (y/n) "
+    read yn
       case $yn in
         [yY] )
               return 0 ;;  # Success (true)
