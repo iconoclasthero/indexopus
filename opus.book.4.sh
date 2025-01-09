@@ -1,6 +1,8 @@
 #!/bin/bash
 # nb: the swp file that editscript relies on is provided by nano
 # opusbook4ka is an external dependency
+#set -x
+#trap read DEBUG
 
 . ~/.config/indexopus.conf
 
@@ -279,9 +281,7 @@ progress() {
 [[ ! "$files" ]] && files=( *.mp3 )
 [[ ! "$files" ]] && files=( *.m4? )
 
-[[ "${screened:=false}" ]]
-
-if "$screened"; then
+if "${screened:=false}"; then
   printline "$bold Calling opus.book.4 in GNU screen $tput0"
   printf \\n\\n
   allm4s=(*.m4[ab])
@@ -332,7 +332,7 @@ startext=( ${mediaext} ); startext="${startext##*.}"		# define what the starting
 #mediafiles=                                                 # why the fuck is this here?  there should be no reason to unset mediafiles AND this isn't the way to do it anyway...
 filenum="$(ls ${mediaext}|wc -l)"							# how many of those files are there?
 
-[[ "$filenum" -lt "$threads" ]] && threads="$filenum"
+(( filenum < threads )) && threads="$filenum"
 
 if  [[ "$startfile" ]] && [[ -f "$opusfile" ]] && [[ "$overwrite" != true ]]; then
   printf '\n%s%s%s exists!%s\n   %sexit 1\n\n%s' "$relipsis" "$bold" "$opusfile" "$white" "$tput0"
@@ -373,26 +373,26 @@ elif (( filenum > 0 )); then
     fi
   fi
 
-[[ ! "$inputdur" ]] && inputdur="$(mediaduration "$startext")"
+  [[ ! "$inputdur" ]] && inputdur="$(mediaduration "$startext")"; echo "$inputdur"
 #  bannerarray=( "$(printf '%sDuration of %s %s file(s) to convert: %s%s%s%s%s\n...in: %s%s\n\n' \
 #"$relipsis" "$filenum" "$startext" "$tput0" "$bold" "$inputdur" "$tput0" "$red" "$PWD" "$tput0")" )
 #  bannerarray+=( "$(printf '%sConversion progress:\n%s'  "$relipsis" "$tput0")" )
 #  printf '%s\n%sGathering files...\n%s' "${bannerarray[${#bannerarray[@]}-2]}" "$relipsis" "$tput0"
 
-printf '%sDuration of %s%s %s%s file(s) to convert: %s%s%s%s%s\n...in: %s%s%s\n\n' \
-   "$relipsis" \
-   "$white" \
-   "$filenum" \
-   "$startext" \
-   "$red" \
-   "$tput0" \
-   "$bold" \
-   "$inputdur" \
-   "$tput0" \
-   "$red" \
-   "$white" \
-   "$PWD" \
-   "$tput0"
+  printf '%sDuration of %s%s %s%s file(s) to convert: %s%s%s%s%s\n...in: %s%s%s\n\n' \
+    "$relipsis" \
+    "$white" \
+    "$filenum" \
+    "$startext" \
+    "$red" \
+    "$tput0" \
+    "$bold" \
+    "$inputdur" \
+    "$tput0" \
+    "$red" \
+    "$white" \
+    "$PWD" \
+    "$tput0"
 
   if [[ ! -w . || $(find "${mediafiles[0]}" ! -writable -print -quit) ]]; then
     sudo chmod -R g+w .

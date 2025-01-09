@@ -308,7 +308,6 @@ else
   rm -i *.@(mp3|m4@(a|b))
 fi
 
-pause
 exit
 
 #https://www.reddit.com/r/ffmpeg/comments/107p3mh/remove_all_apart_from_audio/
