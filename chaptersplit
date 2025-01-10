@@ -5,39 +5,43 @@
 #     Chapter #0:0: start 0.000000, end 1290.013333
 #       first   _     _     start    _     end
 
+
+# nb: the swp file that editscript relies on is provided by nano
+editscript(){
+  local scriptpath script path swp; scriptpath=$(realpath "$0" 2>/dev/null); script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
+     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptpath") && exit
+     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit ;}
+
+pause(){ read -rp "$*" < /dev/tty; }
+
+[[ "$1" == @(edit|e|-e) ]] && editscript
+
 outputdir="/dev/shm/cache/convert"
 START=1
 edit=0
 scriptname="$(realpath $0)"
 basename "$PWD"
-title="Concert Masterworks"
+title="FDR"
 inext="mp3"
 outext="mp3"
 inext="opus"
 outext="opus"
-#inext="m4?"
-#outext="m4a"
+inext="m4?"
+outext="m4a"
 stamp=$(date +%s)
 #compgen -A file "*$inext"
-
-function editscript(){
-if (("$edit")); then
- (/usr/bin/nano "$scriptname")
- exit
-fi
-}
 
 function pause(){
    read -p "$*"
 }
 
-if [[ $# -eq 0 ]] || [[ "$1" == "edit" ]]; then
- edit="1"
+if [[ $# -eq 0 ]] || [[ "$1" = "edit" ]]; then
+ edit="true"
 fi
 
 echo "this is the value of $1"
 
-editscript "$1"
+if "${edit:-false}"; then editscript; fi
 
 mkdir -p "$outputdir"
 
@@ -58,7 +62,12 @@ while read -r first _ _ start _ end; do
 #    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "$title -- $chapter.$outext" </dev/null
 
 
-    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "/dev/shm/cache/convert/$title -- Part $partnum: $chapter.$outext" </dev/null
+#    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "/dev/shm/cache/convert/$title -- Part $partnum: $chapter.$outext" </dev/null
+    ffmpeg -n -nostdin -hide_banner -stats -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "/dev/shm/cache/convert/$title -- Part $partnum: $chapter.$outext" </dev/null
+#
+#1. Audio Files:
+#For audio-only files (e.g., MP3, AAC, WAV), the concept of frames per second (FPS) doesn't apply because audio is continuous and not frame-based like video.
+#The -fps_mode option is used to manage the frame rate when dealing with video streams. It's not relevant to audio-only files, so you can safely omit it in most cases when working with audio.
 
 
 

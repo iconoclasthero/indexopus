@@ -2,7 +2,8 @@
 # nb: the swp file that editscript relies on is provided by nano
 # <konsolebox_> iconoclast_hero: 1) Yes that's one way to do it but bash doesn't support decimals so checking if the result is > 0 would be more complicated. 2) You can use printf and pipe it back to Perl.
 # <konsolebox_> iconoclast_hero: You can also just do everything in Perl: ... | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t += $1); END { if ($t > 0) { printf "%02d:%02d:%02d\n", $t/3600, $t/60%60, $t%60; }; }'
-
+#trap read DEBUG
+#set -x
 finddur(){
     IFS=':'; tdurs=( $(find -type f -iname "*.$1" -print0 2>/dev/null |
                        xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
