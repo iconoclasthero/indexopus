@@ -358,7 +358,7 @@ fi
 
 
 [[ "$TERM" = screen ]] && export TERM=screen.xterm-256color
-pause
+
 printline "${bold}  Welcome to ${white}$script  ${tput0}"
 
 filecheck "$1" && [[ ! "$?" = 0 ]] && exit
@@ -471,7 +471,7 @@ opusparts=( *opus )
 cd "$swd"
 
 [[ ! "$rmmatch"=true ]] && pause "Need to check to see if $tmp is being created... when indexopus isn't run with -y"
-pause "before checkdur"
+
 checkdur # probably do something different here since you have m4bindur and have to calc opusdur...
          # yeah, this is a terrible idea.  do this by heand instead of relying on something no
          # indended for this
@@ -518,7 +518,6 @@ fi
   printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 
 printline "${bold}  Exiting (0) ${white}m4b2opus  ${tput0}"
-pause
 exit 0
 
 

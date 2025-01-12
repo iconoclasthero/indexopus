@@ -373,7 +373,7 @@ elif (( filenum > 0 )); then
     fi
   fi
 
-  [[ ! "$inputdur" ]] && inputdur="$(mediaduration "$startext")"; echo "$inputdur"
+  [[ ! "$inputdur" ]] && inputdur="$(mediaduration "$startext")"
 #  bannerarray=( "$(printf '%sDuration of %s %s file(s) to convert: %s%s%s%s%s\n...in: %s%s\n\n' \
 #"$relipsis" "$filenum" "$startext" "$tput0" "$bold" "$inputdur" "$tput0" "$red" "$PWD" "$tput0")" )
 #  bannerarray+=( "$(printf '%sConversion progress:\n%s'  "$relipsis" "$tput0")" )
