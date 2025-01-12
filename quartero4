@@ -1,15 +1,17 @@
 #!/bin/bash
 #set -x
+
 . ~/.config/indexopus.conf
 
+tmp=/cache/
 mp=tmp
 scriptname=$(realpath "$0")
-ulon=$(tput smul)  #underline on
-uloff=$(tput rmul) #underline off
-bold="$(tput bold)"  #bold on
-tput0="$(tput sgr0)" #clear tput
-red="$(tput setaf 9)" #red fg
-white="$(tput setaf 15)" #white fg
+ulon=$(tput smul)         # underline on
+uloff=$(tput rmul)        # underline off
+bold="$(tput bold)"       # bold on
+tput0="$(tput sgr0)"      # clear tput
+red="$(tput setaf 9)"     # red fg
+white="$(tput setaf 15)"  # white fg
 relipsis="${red}..."
 shopt -s nullglob extglob dotglob
 [[ ! "$threads" ]] && threads=4
@@ -44,7 +46,7 @@ hours=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -
 minutes=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' | tail -n 1)
 seconds=$(find -type f -name "*$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' | tail -n 1)
 
-[[ "$hours" =~ "0*(.*)" ]] && hours=${BASH_REMATCH[1]}
+[[ "$hours"   =~ "0*(.*)" ]] &&   hours=${BASH_REMATCH[1]}
 [[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
 [[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
 
@@ -195,6 +197,8 @@ fi
 #printf ' inext=%s\noutext=%s\n   ext=%s' "$inext" "$outext" "$ext"
 
 count=1 #cannot change.
+
+tmp="$tmp/quartero4-$title"
 
 [[ ! -d "$tmp" ]] && mkdir "$tmp"
 
