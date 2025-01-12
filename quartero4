@@ -1,6 +1,8 @@
 #!/bin/bash
 #set -x
-tmp=tmp
+. ~/.config/indexopus.conf
+
+mp=tmp
 scriptname=$(realpath "$0")
 ulon=$(tput smul)  #underline on
 uloff=$(tput rmul) #underline off
