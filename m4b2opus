@@ -189,48 +189,91 @@ calctime(){
 }
 ##--> calctime{} <--#############################################################################
 
-m4bsplit(){
-# Original code from: http://crunchbang.org/forums/viewtopic.php?id=38748#p414992
-# m4bronto
+#m4bsplit(){
+## Original code from: http://crunchbang.org/forums/viewtopic.php?id=38748#p414992
+## m4bronto
+#
+##     Chapter #0:0: start 0.000000, end 1290.013333
+##       first   _     _     start    _     end
+#local bpath outputdur START first start end partnum n
+#outputdir="$2"
+#START=1
+#bpath="$(basename "$PWD")"
+##while [ "$#" -gt 0 ]; do
+#
+#ffmpeg -i "$1" 2> ".tmp$stamp"
+#
+#n="$START"
+#
+#while read -r first _ _ start _ end
+# do
+#  if [[ "$first" = Chapter ]]
+#   then
+#      read  # discard line with Metadata:
+#      read _ _ chapter
+#      [[ "$chapter" = Chapter\ ?\:\ * ]] && chapter="${chapter/Chapter /Chapter 0}"
+#
+## at some point i'd like to make a menu for what to do here, but for now this works.
+##      [[ "$chapter" =~ \ \/\  ]] && chapter="${chapter// \/ /: }"
+#      [[ "$chapter" =~ \/ ]] && chapter="${chapter//\//\\}"
+#
+##      read -rp "$title" </dev/tty
+#
+#      [[ "$n" -lt 10 ]] && partnum="0$n" || partnum="$n"
+#      printf '%sCreating %s -- Part %s: %s.m4a%s\n' "$relipsis" "$title" "$partnum" "$chapter" "$tput0"
+#      readarray -t ffoutput < <(ffmpeg -n -nostdin -hide_banner -stats -v error -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "$outputdir/$title -- Part $partnum: $chapter.m4a" 2>&1)
+#      ((n++))
+#  fi
+#done <".tmp$stamp"
+#
+#rm ".tmp$stamp"
+#
+##shift
+##done
+#}
 
-#     Chapter #0:0: start 0.000000, end 1290.013333
-#       first   _     _     start    _     end
-local bpath outputdur START first start end partnum n
-outputdir="$2"
-START=1
-bpath="$(basename "$PWD")"
-#while [ "$#" -gt 0 ]; do
+m4bsplit() {
+  local bpath outputdir START first start end partnum n chapter max_digits
+  outputdir="$2"
+  START=1
+  bpath="$(basename "$PWD")"
+  ffmpeg -i "$1" 2> ".tmp$stamp"
 
-ffmpeg -i "$1" 2> ".tmp$stamp"
+  chapters=$(grep -cE 'Chapter #[[:digit:]]:[[:digit:]]{1,3}: start' ".tmp$stamp")
 
-n="$START"
+  (( chapters < 100 )) && max_digits=2 || max_digits=3
 
-while read -r first _ _ start _ end
- do
-  if [[ "$first" = Chapter ]]
-   then
-      read  # discard line with Metadata:
+  n="$START"
+  while read -r first _ _ start _ end; do
+    if [[ "$first" == "Chapter" ]]; then
+      read  # discard the Metadata line
       read _ _ chapter
-      [[ "$chapter" = Chapter\ ?\:\ * ]] && chapter="${chapter/Chapter /Chapter 0}"
 
-# at some point i'd like to make a menu for what to do here, but for now this works.
-#      [[ "$chapter" =~ \ \/\  ]] && chapter="${chapter// \/ /: }"
-      [[ "$chapter" =~ \/ ]] && chapter="${chapter//\//\\}"
+      chapter="${chapter//\//\\}"  # Escape slashes in chapter titles
+      partnum=$(printf "%0${max_digits}d" "$n")
 
-#      read -rp "$title" </dev/tty
+      local outfile="$outputdir/$title -- Part $partnum: $chapter.m4a"
+      printf '%sCreating %s\n' "$relipsis" "$outfile"
 
-      [[ "$n" -lt 10 ]] && partnum="0$n" || partnum="$n"
-      printf '%sCreating %s -- Part %s: %s.m4a%s\n' "$relipsis" "$title" "$partnum" "$chapter" "$tput0"
-      readarray -t ffoutput < <(ffmpeg -n -nostdin -hide_banner -stats -v error -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "$outputdir/$title -- Part $partnum: $chapter.m4a" 2>&1)
+      ffmpeg -n \
+             -nostdin \
+             -hide_banner \
+             -stats \
+             -v error \
+             -ss "${start%?}" \
+             -to "$end" \
+             -i "$1" \
+             -vn \
+             -codec copy \
+             "$outfile"
+
       ((n++))
-  fi
-done <".tmp$stamp"
+    fi
+  done < ".tmp$stamp"
 
-rm ".tmp$stamp"
-
-#shift
-#done
+  rm ".tmp$stamp"
 }
+
 ##--> m4bsplit() <--##################################################################################
 
 rmyn(){
@@ -296,10 +339,11 @@ if "$screened"; then
   printf \\n\\n
   allm4s=(*.m4[ab])
   screenname="m4b2opus-${allm4s[0]}"
-  screen -dmS "${screenname:0:16}" m4b2opus "${rmmatch:--y }"  #should this be a -y here?  probably.
-  screen -ls
-  printf \\n\\n
-  exit
+  echo "m4b2opus ${rmmatch:+$rmmatch}"
+  screen -dmS "${screenname:0:16}" m4b2opus "${rmmatch:+-y}" #"${rmmatch:--y }"  #should this be a -y here?  probably.
+  screen -ls                                                                           #could probably add some logic to not delete shit
+  printf \\n\\n                                                                        #leaving that for later, but screen implies -y as
+  exit                                                                                 #it doesn't really work otherwise?
 fi
 
 #if "$screened"; then
@@ -312,7 +356,9 @@ fi
 #  exec bash -c "screen -dmS m4b2opus-\"${allm4s[0]}\" m4b2opus -y; screen -ls; printf \\n\\n"
 #fi
 
-[[ "$TERM"=screen ]] && TERM=screen.xterm-256color
+
+[[ "$TERM" = screen ]] && export TERM=screen.xterm-256color
+pause
 printline "${bold}  Welcome to ${white}$script  ${tput0}"
 
 filecheck "$1" && [[ ! "$?" = 0 ]] && exit
@@ -347,16 +393,15 @@ else
   cd "$convertdir"
   (( $(ls *m4a|wc -l) > 99 )) && for i in *\ --\ Part\ ??\:\ *.m4a; do mv "$i" "${i/Part /Part 0}"; done
   regexexp='.*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\ |\.]'
-    for m4afile in *m4a
-      do
-        [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\.\ ] ]] &&
-           mv "$m4afile" "${m4afile/Chapter /Chapter 0}"
-      done
+  for m4afile in *m4a; do
+    [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\.\ ] ]] &&
+      mv "$m4afile" "${m4afile/Chapter /Chapter 0}"
+  done
 fi
-
 
 cd "$convertdir"
 echo
+
 [[ "$rmmatch" != true ]] && pause "${bold}${red}Control-Z to suspend and adjust chapter names in $convertdir? $tput0"
 
 #opus.book.4##################################################################################
@@ -384,9 +429,9 @@ printf '%sDuration of the original m4b file: %s%s%s\n' "$bold" "$red" "$m4bindur
 printf '%sDuration of the  .opus part files: %s%s%s\n' "$bold" "$red" "$opuspartdur" "$tput0"
 
 ##indexopus##################################################################################
+
 echo
 printline "${bold}  Calling external dependency:${red} indexopus  ${tput0}"
-
 
 if [[ "$rmmatch" = true ]]
   then
@@ -413,7 +458,6 @@ printline "${bold}  Returning from external dependency:${red} indexopus  ${tput0
 ##indexopus##################################################################################
 
 
-
 tmp="/tmp/indexopus-$stamp"  #this probably doesn't exist...
 titleopus="$title -- Audiobook.opus"
 
@@ -427,7 +471,7 @@ opusparts=( *opus )
 cd "$swd"
 
 [[ ! "$rmmatch"=true ]] && pause "Need to check to see if $tmp is being created... when indexopus isn't run with -y"
-
+pause "before checkdur"
 checkdur # probably do something different here since you have m4bindur and have to calc opusdur...
          # yeah, this is a terrible idea.  do this by heand instead of relying on something no
          # indended for this
@@ -441,15 +485,16 @@ checkdur # probably do something different here since you have m4bindur and have
 
 opusdursec="$(sex2sec "$(checkdur opus)")"
 m4bindursec="$(sex2sec $m4bindur)"
-
 if [[ "$rmmatch" = true ]] && (( opusdursec > 0 )); then
-  verifydur=$(bc <<< "scale=4; ($m4bindursec - $opusdursec) / $opusdursec " )
+#  verifydur=$(bc <<< "scale=4; ($m4bindursec - $opusdursec) / $opusdursec " )
+  verifydur=$(( (1000 * (m4bindursec - opusdursec)) / opusdursec ))
   verifydur="${verifydur/#-}"
-  if [[ $(bc <<< "scale=4; $verifydur < 0.001") ]]; then
+#  if [[ $(bc <<< "scale=4; $verifydur < 0.001") ]]; then
+  if (( verifydur < 1 )); then  #this is 0.1% difference
     rm -r *m4b "$convertdir"
     [[ "$m4bindursec" != "$opusdursec" ]] &&
        printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tput sitm)" "$(tput ritm)" "$tput0" ||
-      printf '%sDurations match!%s\n' "$relipsis" "$tput0"
+       printf '%sDurations match!%s\n' "$relipsis" "$tput0"
     printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
     exit
   elif [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
@@ -461,6 +506,7 @@ if [[ "$rmmatch" = true ]] && (( opusdursec > 0 )); then
 fi
 
   printf '\n%sCleaning up remaining files:%s\n\n' "$red" "$tput0"
+
 #  ls "$tmp" "$convertdir" 2>/dev/null
 
   printf '\n\n'
@@ -472,6 +518,7 @@ fi
   printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 
 printline "${bold}  Exiting (0) ${white}m4b2opus  ${tput0}"
+pause
 exit 0
 
 

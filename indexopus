@@ -14,7 +14,7 @@
 # Promlem with colons in the part description:
 # That could still indicate a problem if the code is later attempting to do shell arithmetic on the value, in which case you got lucky by having printf throw an error. You could fix that by adding a test and failing early, because printf won't cause the script to exit.
 # https://mywiki.wooledge.org/BashFAQ/054 -- How can I tell whether a variable contains a valid number?
-
+#m4b2opus calls     indexopus -t "$title" -m "$convertdir" -s "$stamp" -d "$opuspartdur"
 
 shopt -s extglob nullglob dotglob
 scriptpath=$(realpath "$0")
@@ -133,6 +133,9 @@ ioutput="$ititle -- Audiobook.opus"
 ##--> gettitle() <--###################################################################################
 
 createindex(){
+  [[ -f "$tmp/opusindex" ]] && rm "$tmp/opusindex"
+  [[ -f "$tmp/opusfiles" ]] && rm "$tmp/opusfiles"
+
   chno=0
   for i in "$title -- Part "*.opus; do
     chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna#*: }"
@@ -558,7 +561,6 @@ mvopus(){
 
     mvopus
 
-  
 
   elif [[ "${opusarray[@]}" =~ .+[[:space:]][[:digit:]]{1,3}\.opus ]]; then
     echo "Using rename pattern 6.2:"
@@ -718,56 +720,54 @@ echo
 
 # Parse command-line options
 while [[ "$#" -gt 0 ]]; do
-    if [[ "$1" = @(e|edit|--edit) ]]; then
-        editscript;
-    elif [[ "$1" = @(-y|--force) ]]; then
-        rmmatch=true
-    elif [[ "$1" = -f ]]; then
-       fd="$2"; shift
-    elif [[ "$1" = @(-d) ]]; then
-        opuspartdur="$2"; shift
-        elif [[ "$1" = @(-q|--quiet) ]]; then
-        quiet=true; shift
-        elif [[ "$1" = @(-t|--title) ]]; then
-        title="$2"; shift
-    elif [[ "$1" = @(-s|--stamp) ]]; then
-        stamp="$2"; shift
-    elif [[ "$1" = @(-m|--tmp) ]]; then
-        tmp="$2"; shift
-    elif [[ "$1" = @(c|config|--config) ]]; then
-        if [[ -n "$2" && -f "$2" && $(grep -q "absserver" "$2") ]]; then
-            config="$2"
-            shift
-        else
-#            if [[ -f "$confpath" && $(grep -q "absserver" "$confpath") ]]; then
-#                config="$confpath"
-#            fi
-                echo "Default config file location: $confpath"
-        fi
-    elif [[ "$1" = @(-r|--reindex|reindex) ]]; then
-        reindex=true
-    elif [[ "$1" = @(-h|help|--help) ]]; then
-        usage
-    else
-        echo "Unknown option: $1"
-        exit 1
-    fi
-    shift
+  if [[ "$1" = @(e|edit|--edit) ]]; then
+     editscript;
+  elif [[ "$1" = @(-y|--force) ]]; then
+     rmmatch=true
+  elif [[ "$1" = -f ]]; then
+     fd="$2"; shift
+  elif [[ "$1" = @(-d) ]]; then
+     opuspartdur="$2"; shift
+  elif [[ "$1" = @(-q|--quiet) ]]; then
+     quiet=true; shift
+  elif [[ "$1" = @(-t|--title) ]]; then
+     title="$2"; shift
+  elif [[ "$1" = @(-s|--stamp) ]]; then
+     stamp="$2"; shift
+  elif [[ "$1" = @(-m|--tmp) ]]; then
+     tmp="$2"; shift
+  elif [[ "$1" = @(c|config|--config) ]]; then
+     if [[ -n "$2" && -f "$2" && $(grep -q "absserver" "$2") ]]; then
+       config="$2"
+       shift
+     else
+#      if [[ -f "$confpath" && $(grep -q "absserver" "$confpath") ]]; then
+#         config="$confpath"
+#      fi
+       echo "Default config file location: $confpath"
+     fi
+  elif [[ "$1" = @(-r|--reindex|reindex) ]]; then
+    reindex=true
+  elif [[ "$1" = @(-h|help|--help) ]]; then
+    usage
+  else
+    echo "Unknown option: $1"
+    exit 1
+  fi
+  shift
 done
 
 if [[ ! -d "$tmp" ]]; then
  mkdir "$tmp" || printf '%s%sFailed to create %s!\nexit 1\n%s' "$red" "$bold" "$tmp" "$tput0" #&& exit
 fi
 
-if [[ "$reindex" = true ]]   #if reindex is true, check for rmmatch and reindex.
- then
-   reindex
-   printf '%sPlease see %s/%s for indexed file.%s\n\n' "$red" "$PWD" "$reintitle" "$tput0"
-   exit
+if [[ "$reindex" = true ]]; then   #if reindex is true, check for rmmatch and reindex.
+  reindex
+  printf '%sPlease see %s/%s for indexed file.%s\n\n' "$red" "$PWD" "$reintitle" "$tput0"
+  exit
 fi
 
-
-    opusarray=( *.opus )
+opusarray=( *.opus )
 
 # this checks for a metadata.json, ideally from audiobookshelf.  there could be other metadata.json files
 # abs doesn't support json files with other names, nor is there anything in the json identifying it
@@ -791,26 +791,24 @@ d=0
 t=0
 gettitle "$title"
 
-if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]
- then
-   printf 'This directory already contains %s\n\n' "$ioutput"
-   if confirm "Overwrite the existing file? (y/n) "
-    then
-      printf '\n%sOverwriting %s -- Audiobook.opus...%s\n' "$relipsis" "$ititle" "${tput0}"
-    else
+if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]; then
+  printf 'This directory already contains %s\n\n' "$ioutput"
+  if confirm "Overwrite the existing file? (y/n) "; then
+    printf '\n%sOverwriting %s -- Audiobook.opus...%s\n' "$relipsis" "$ititle" "${tput0}"
+  else
 #      [[ -f metadata.json ]] &&
 #        confirm "$(printf '\nNot overwriting.\nA metadata.json file was found. Would you like to reindex the file?')" &&
 #        reindex=true && overwrite=false ||
 #        printf '\n%s\n\n' "$(printline "  Exiting ${scriptname}: ${red}user abort. exit (130)${tput0}  ")"
 #        exit 130
-      if [[ -f metadata.json ]] && confirm "$(printf '\nNot overwriting.\nA metadata.json file was found. Would you like to reindex the file?')"; then
-        reindex=true
-        overwrite=false
-      else
-        printf '\n%s\n\n' "$(printline "  Exiting ${scriptname}: ${red}user abort. exit (130)${tput0}")"
+    if [[ -f metadata.json ]] && confirm "$(printf '\nNot overwriting.\nA metadata.json file was found. Would you like to reindex the file?')"; then
+      reindex=true
+      overwrite=false
+    else
+      printf '\n%s\n\n' "$(printline "  Exiting ${scriptname}: ${red}user abort. exit (130)${tput0}")"
       exit 130
-      fi
-   fi
+    fi
+  fi
 fi
 
 
@@ -824,8 +822,6 @@ fi
 
 printf '\n%sGenerating the index for %s -- Audiobook.opus from...%s\n\n' "$relipsis" "$ititle" "$tput0"
 
-rm opusindex opusfiles 2>/dev/null
-
 createindex
 
 printf '%s:~%s~%s\n\n' "${createdindex[@]}"|paste|column -t -s "~"
@@ -833,6 +829,7 @@ printf '\n%s%sProposed index for %s:%s%s\n' "$red" "$bold" "$ititle" "${tput0}" 
 
 printf '%s .. %s\n' "${rawindex[@]}"  # DO NOT touch this line
 echo
+
 if [[ "$rmmatch" != "true" ]] &&
   ! $(confirm "Continue with concatination? (y/n) "); then
   printf '\n\nWell why are you here then?%s\n\n' "$tput0"
@@ -953,8 +950,8 @@ fi
 
 if "${quiet:=false}"; then rmmatch=true; fi
 
+
 if [[ "$rmmatch" = true && "$duration" = "$outdur" ]]; then
-#  pause "output=$output; PWD=$PWD; tmp=$tmp"
   printf '%sDurations of part and indexed opus files match, automatically deleting temporary files!\n' "$relipsis"
   rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index)
   if mvoutput="$(mv "$output" "$PWD" 2>&1)"; then
@@ -985,10 +982,14 @@ fi
 #this isnt working right tonight and it is late.
 #this was "$reindex" != true...  changing to "$rmmatch":
 #[[ "$reindex" != true ]] && rmyn "${bold}${red}Remove $title -- Part *.opus & temp files? (y/n) ${tput0}" "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index) && iorm=true ||
-[[ "$rmmatch" != true ]] && rmyn "${bold}${red}Remove $title -- Part *.opus & temp files? (y/n) ${tput0}" "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index) && iorm=true ||
+
+
+
+[[ "$rmmatch" != true ]] &&
+  rmyn "${bold}${red}Remove $title -- Part *.opus & temp files? (y/n) ${tput0}" "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index) && iorm=true ||
  rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index)
- mv "$output" "$PWD"
- rm -r "$tmp"
+#DB pause "PWD=$PWD tmp=$tmp output=$output"
+ [[ "$PWD" != "$tmp" ]] && mv "$output" "$PWD" && rm -r "$tmp"
 
 ! "${quiet:=false}" && "${reindex:=false}" && confirm "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info? %s' "${red}" "${bold}" "${tput0}")" && indexopus reindex
 
