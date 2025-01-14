@@ -10,6 +10,7 @@ green="$(tput setaf 2)" #green fg
 white="$(tput setaf 15)" #white fg
 tput0="$(tput sgr0)" #reset tput changes
 bold="$(tput bold)" #bold on
+boldred="$(tput setaf 9 bold)"
 relipsis="$red..."
 mediagroup='media'
 
@@ -90,7 +91,7 @@ sex2sec(){
   echo "$total_seconds" ;  }
 ##--> sexagesimal_to_sec() <--##################################################################
 
-checkdur(){  #came from opus.book.4
+checkdur(){  #came from opus.book.4  #refactored below to be more concise.
   local m4as m4bs opuss mp3s checkdurexts
   checkdurexts='@(m4a|m4b|mp3|opus)'
   m4as=(*m4a)
@@ -98,24 +99,52 @@ checkdur(){  #came from opus.book.4
   opuss=(*opus)
   mp3s=(*mp3)
 
-if [[ "$1" = $checkdurexts ]]
-  then
+if [[ "$1" = $checkdurexts ]]; then
   find -type f -iname "*.$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
     perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
     tail -n 1
-elif [[ "$1" = *.$checkdurexts ]]
-  then
+elif [[ "$1" = *.$checkdurexts ]];  then
   printf '%s%s  %s\n%s' "$red" "$(mplayer -vo dummy -ao dummy -identify "$1" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$1" "$tput0"
 else
     printf '\n%sDuration(s):%s\n' "$bold" "$tput0"
     [[ "${#m4as[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white"  "${m4as[@]}" "$tput0"
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white"  "${m4as[@]}" "$tput0"
     [[ "${#m4bs[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${m4bs[@]}" "$tput0"
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${m4bs[@]}" "$tput0"
     [[ "${#mp3s[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.mp3" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${mp3s[@]}" "$tput0"
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(find -type f -iname "*.mp3" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${mp3s[@]}" "$tput0"
     [[ "${#opuss[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opuss[@]}" "$tput0"
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opuss[@]}" "$tput0"
+ fi
+}
+##--> checkdur() <--###########################################################################
+# Refactored on Tue Jan 14 07:41:06 AM EST 2025; the above may eventually be eliminated.
+
+checkdur(){  # from opus.book.4
+  local m4as m4bs opuss mp3s checkdurexts
+  checkdurexts='@(m4a|m4b|mp3|opus)'
+    m4as=(*m4a); [[ ! -f "${m4as[0]}" ]]  && unset m4as
+    m4bs=(*m4b); [[ ! -f "${m4bs[0]}" ]]  && unset m4bs
+    mp3s=(*mp3); [[ ! -f "${mp3s[0]}" ]]  && unset mp3s
+  opuss=(*opus); [[ ! -f "${opuss[0]}" ]] && unset opuss
+
+  findmedia(){ find -type f -iname "*.$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null; }
+  perldur(){ perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1; }
+
+if [[ "$1" = $checkdurexts ]]; then
+  findmedia "$1" | perldur
+elif [[ "$1" = *.$checkdurexts ]]; then
+  printf '%s%s  %s\n%s' "$red" "$(mplayer -vo dummy -ao dummy -identify "$1" 2>/dev/null | perldur)" "$1" "$tput0"
+else
+    printf '\n%sDuration(s):%s\n' "$bold" "$tput0"
+    [[ "${m4as[@]}" ]] &&
+      printf 'm4a: %s %s%s %s%s\n' "$boldred" "$(findmedia m4a | perldur)" "$white"  "${m4as[@]}" "$tput0"
+    [[ "${m4bs[@]}" ]] &&
+      printf 'm4b: %s %s%s %s%s\n' "$boldred" "$(findmedia m4b | perldur)" "$white" "${m4bs[@]}" "$tput0"
+    [[ "${mp3s[@]}" ]] &&
+      printf 'mp3: %s %s%s %s%s\n' "$boldred" "$(findmedia mp3 | perldur)" "$white" "${mp3s[@]}" "$tput0"
+    [[ "${opuss[@]}" ]] &&
+      printf 'opus: %s %s%s %s%s\n' "$boldred" "$(findmedia opus | perldur)" "$white" "${opuss[@]}" "$tput0"
  fi
 }
 ##--> checkdur() <--###########################################################################
