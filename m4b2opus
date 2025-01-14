@@ -5,26 +5,33 @@
 #trap pause DEBUG
 shopt -s nullglob
 
-threads=4
+
+## definitions #################################################################################
+[[ "$TERM" = screen ]] && TERM=screen.xterm-256color
+[[ "$TERM" = dummy ]] && TERM=xterm-256color
+export TERM="$TERM"
+
+threads=4                #this should be assigned when ~/.config/indexopus.conf is sourced
 scriptpath="$(realpath "$0")"
 scriptname="${scriptpath##*\/}"
-ulon=$(tput smul)  #underline on
-uloff=$(tput rmul) #underline off
-bold="$(tput bold)"  #bold on
-tput0="$(tput sgr0)" #clear tput
-red="$(tput setaf 9)" #red fg
-white="$(tput setaf 15)" #white fg
+ulon="$(tput smul)"
+uloff="$(tput rmul)"
+bold="$(tput bold)"
+tput0="$(tput sgr0)"
+red="$(tput setaf 9)"
+white="$(tput setaf 15)"
 relipsis="$red..."
 stamp="$(date +%s)"
-screened='false'
-##definitions#################################################################################
 
-
-## load functions #############################################################################
+## load functions ##############################################################################
 ## printline()
 ## pause()
-## checkdur()
+## checkdur() ## reviewed and refactored Tue Jan 14 08:15:13 AM EST 2025
+
 . "$HOME/bin/gits/indexopus/indexopus.lib"
+
+## load defaults ###############################################################################
+. "$HOME/.config/indexopus.conf"
 
 fnrmr(){
   local red relipsis="${red}..."
@@ -112,8 +119,14 @@ filecheck(){
     then
     m4bin="$1"
   else
-    files=(*m4b)
-    if [[ "${#files[@]}" == 1 ]]; then
+    files=(*.m4[ba])
+    if (( "${#files[@]}" == 1 )); then
+
+      # to handle the case where there's an unindexed m4a or a misnamed m4b,
+      # for simplicity sake, just rename to m4b
+      # probably want to change it back at the end, but it is going to get deleted anyway
+      [[ "$files" = *m4a ]] && startm4a="${files}" && mv "$files" "${files%.m4a}.mb4"
+
       if [[ "${files[@]}" == *\ --\ Audiobook.m4b ]]; then
         m4bin="$files"
       elif [[ "${files[@]}" == *m4b ]]; then
@@ -130,7 +143,7 @@ filecheck(){
         fi
       fi
     else
-      echo "No single & appropriate input file found or specified, please check and retry..."
+      echo "No single m4b/m4a input file found or specified, please check and retry..."
       ls
       exit 1
     fi
@@ -324,67 +337,60 @@ noindexsplit(){
 ##--> m4b2opus <--####################################################################################
 
 echo
+
 while (( $# > 0 )); do
   [[ "$1" = @(edit|e|nano) ]] && editscript
   [[ "$1" = "-y" ]] && shift && rmmatch=true
   [[ "$1" = "--stats" ]] && shift && stats=true
   [[ "$1" = @(--screen|-s) ]] && shift && screened=true
   [[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=true
+  [[ -f "$1" ]] && clifile="$1" && shift  #these don't actually do anything
+  [[ -d "$1" ]] && clidir="$1" && shift   #at the moment but they could...there has to be some catchall condition for things not in this list or it will loop endlessly...
 done
 
-#[[ "$1" ]] && clifile "$1"
-
-if "$screened"; then
+if "${screened:=false}"; then
   printline "$bold Calling m4b2opus in GNU screen $tput0"
   printf \\n\\n
   allm4s=(*.m4[ab])
   screenname="m4b2opus-${allm4s[0]}"
   echo "m4b2opus ${rmmatch:+$rmmatch}"
   screen -dmS "${screenname:0:16}" m4b2opus "${rmmatch:+-y}" #"${rmmatch:--y }"  #should this be a -y here?  probably.
-  screen -ls                                                                           #could probably add some logic to not delete shit
-  printf \\n\\n                                                                        #leaving that for later, but screen implies -y as
-  exit                                                                                 #it doesn't really work otherwise?
+  screen -ls                                                                     #could probably add some logic to not delete shit
+  printf \\n\\n                                                                  #leaving that for later, but screen implies -y as
+  exit                                                                           #it doesn't really work otherwise?
 fi
 
-#if "$screened"; then
-#  printline "$bold  Calling m4b2opus in GNU screen $tput0"
-#  printf \\n\\n
-#  allm4s=(*.m4[ab])
-#  #read -rp "${allm4s[0]}"
-##  exec bash -c "TERM=screen-256color COLORTERM=1 screen -dmS m4b2opus-\"${allm4s[0]}\" m4b2opus -y; screen -ls; printf \\n\\n"
-##  exec bash -c "screen -dmS test bash -c \"echo $TERM; \sleep 60m\"; m4b2opus-\"${allm4s[0]}\" m4b2opus -y; screen -ls; printf \\n\\n"
-#  exec bash -c "screen -dmS m4b2opus-\"${allm4s[0]}\" m4b2opus -y; screen -ls; printf \\n\\n"
-#fi
-
-
-[[ "$TERM" = screen ]] && export TERM=screen.xterm-256color
-
 printline "${bold}  Welcome to ${white}$script  ${tput0}"
-
-filecheck "$1" && [[ ! "$?" = 0 ]] && exit
 
 allm4s=(*.m4[ab])
 
 printf '\n%s/*.m4[ab]: \n' "$PWD"
 printf ' %s%s%s\n' "$red" "${allm4s[@]}" "$white"
 
+filecheck "$1" && [[ ! "$?" = 0 ]] && exit  # this function returns "$m4bin"
+
 [[ "$stats" = true ]] && mediainfo "$m4bin"
 
-m4bindur="$(checkdur m4b)"
+declare -p checkdur
 
-printf '\n%sStarting .m4b file:%s' "$bold" "$tput0"
-printf ' %s%s%s%s\n' "$bold" "$red" "$m4bin" "$tput0"
+m4bindur="$(checkdur m4b)"                  # this function returns the duration of m4bs
+
+echo "boobs"
+
+printf '\n%sStarting .m4b file: %s%s%s' "$bold" "$red" "$m4bin" "$tput0"
+printf ' %s%s%s\n' "$boldred" "$m4bin" "$tput0"
 printf '%sStarting duration :%s' "$bold" "$tput0"
-printf ' %s%s%s\n' "$red" "$bold" "$m4bindur" "$tput0"
+printf ' %s%s%s\n' "$boldred" "$m4bindur" "$tput0"
 title="${m4bin% -- *}"
 swd="$PWD"
 convertdir="$CACHE/m4b2opus-$title"
 
-[[ "$convertdir" == *\'* ]] && convertdir="${convertdir//\'}"  #check $convertdir for \'s and remove them
+[[ "$convertdir" = *\'* ]] && convertdir="${convertdir//\'}"  #check $convertdir for \'s and remove them
 
-[[ ! -d "$convertdir" ]] && mkdir "$convertdir"
+[[ ! -d "$convertdir" ]] && mkdir "$convertdir" ||
+  { printf '%s[ERROR]%s Could not create "%s"; please investigate.\n(exit 1)\n%s' "$boldred" "$white" "$convertdir" "$tput0"; exit 1; }
 
-[[ ! -d "$convertdir" ]] && echo "Could not create $convertdir. Please investigate. (exit 1)" && exit 1
+### CODE REVIEW STOPPED Tue Jan 14 08:30:49 AM EST 2025
 
 if [[ ! $(mediainfo "$m4bin"|grep Menu) =~ ^Menu ]]; then  #process unindexed m4b files
   noindexsplit "$m4bin" "$convertdir"
