@@ -9,7 +9,7 @@ shopt -s nullglob
 ## definitions #################################################################################
 [[ "$TERM" = screen ]] && TERM=screen.xterm-256color
 [[ "$TERM" = dummy ]] && TERM=xterm-256color
-export TERM="$TERM"
+export TERM
 
 threads=4                #this should be assigned when ~/.config/indexopus.conf is sourced
 scriptpath="$(realpath "$0")"
@@ -371,11 +371,7 @@ filecheck "$1" && [[ ! "$?" = 0 ]] && exit  # this function returns "$m4bin"
 
 [[ "$stats" = true ]] && mediainfo "$m4bin"
 
-declare -p checkdur
-
 m4bindur="$(checkdur m4b)"                  # this function returns the duration of m4bs
-
-echo "boobs"
 
 printf '\n%sStarting .m4b file: %s%s%s' "$bold" "$red" "$m4bin" "$tput0"
 printf ' %s%s%s\n' "$boldred" "$m4bin" "$tput0"
@@ -387,8 +383,10 @@ convertdir="$CACHE/m4b2opus-$title"
 
 [[ "$convertdir" = *\'* ]] && convertdir="${convertdir//\'}"  #check $convertdir for \'s and remove them
 
-[[ ! -d "$convertdir" ]] && mkdir "$convertdir" ||
+if [[ ! -d "$convertdir" ]]; then
+  mkdir -p "$convertdir" ||
   { printf '%s[ERROR]%s Could not create "%s"; please investigate.\n(exit 1)\n%s' "$boldred" "$white" "$convertdir" "$tput0"; exit 1; }
+fi
 
 ### CODE REVIEW STOPPED Tue Jan 14 08:30:49 AM EST 2025
 
