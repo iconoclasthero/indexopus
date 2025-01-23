@@ -16,7 +16,7 @@ yn(){
   local yn
   while true; do
     echo "$1 (y/n) "
-    read yn
+    read yn </dev/tty
       case $yn in
         [yY] )
               return 0 ;;  # Success (true)
@@ -115,4 +115,4 @@ done
 
 mkdir "24-bit"
 mv *.24.flac "24-bit"
-rmr 24-bit
+rmr 24-bit </dev/tty
