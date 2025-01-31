@@ -45,11 +45,15 @@ flacs=(*flac)
 [[ "$flacs" = '*flac' ]] && { printf '\n[%sERROR%s] %sNo flacs in the present working directory!%s\nPlease check and try again.\n(exit 1)\n' "$boldred" "$tput0" "$bold" "$tput0"; exit 1; }
 
 # check if pwd is sshfs mount
-# does this still matter?  doesn't own go out and fix it regardless of sshfs mount?
 findmnt -T . | grep -q "fuse.sshfs" && unset SUDO && fuse=true
 
+if "${fuse:=false}"; then
+  touchout="$(touch boobs 2>&1)"; fusetouch="$?"
+  ! (( fusetouch )) && rm boobs
+fi
+
 # check for directory permissions
-[[ "$fuse" != true && ! -w "$PWD" ]] &&
+[[ (( fusetouch )) || "$fuse" != true && ! -w "$PWD" ]] &&
   if yn "$(printf '\nThe pwd %s is not writable.\nWould you like to "own" this directory?' "$(pwd)")"; then
     ownout=( "$(own 2>&1; ec="$?")" )
     if (( ec )); then
