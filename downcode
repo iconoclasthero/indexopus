@@ -3,6 +3,7 @@
 export TERM
 red="$(tput setaf 9)"
 bold="$(tput bold)"
+boldred="$(tput setaf 9 bold)"
 tput0="$(tput sgr0)"
 
 editscript(){
@@ -15,15 +16,12 @@ pause(){ read -rp "$*" < /dev/tty; }
 yn(){
   local yn
   while true; do
-    echo "$1 (y/n) "
+    printf '%s (y/n) ' "$1"
     read yn </dev/tty
       case $yn in
-        [yY] )
-              return 0 ;;  # Success (true)
-        [nN] )
-              return 1 ;;  # Failure (false)
-           * )
-              echo "Please answer y or n." ;;
+        [yY] ) return 0 ;;  # Success (true)
+        [nN] ) return 1 ;;  # Failure (false)
+           * ) echo "Please answer y or n." ;;
       esac
   done
 }
@@ -32,27 +30,72 @@ yn(){
 [[ "$1" == @(edit|e|-e) ]] && editscript
 
 if ! command -v mediainfo &> /dev/null; then
-    mi=false
-    if ! command -v ffprobe &> /dev/null; then
+  mi=false
+  if ! command -v ffprobe &> /dev/null; then
     echo "mediainfo and ffprobe could not be found. Please install one to continue."
     exit 1
-    fi
+  fi
 else
     mi=true
 fi
 
+# check for flacs first
+printf 'Current directory is %s\nChecking for flacs and permissions...\n' "$(pwd)"
+flacs=(*flac)
+[[ "$flacs" = '*flac' ]] && { printf '\n[%sERROR%s] %sNo flacs in the present working directory!%s\nPlease check and try again.\n(exit 1)\n' "$boldred" "$tput0" "$bold" "$tput0"; exit 1; }
 
-changerate=false
+# check if pwd is sshfs mount
+# does this still matter?  doesn't own go out and fix it regardless of sshfs mount?
 findmnt -T . | grep -q "fuse.sshfs" && unset SUDO && fuse=true
 
-for i in *flac;
- do
-  [[ "$fuse" != true && ! -w "$i" || ! -w "$PWD" ]] && printf \\nFix\ permissions\!\\n && exit 1
+# check for directory permissions
+[[ "$fuse" != true && ! -w "$PWD" ]] &&
+  if yn "$(printf '\nThe pwd %s is not writable.\nWould you like to "own" this directory?' "$(pwd)")"; then
+    ownout=( "$(own 2>&1; ec="$?")" )
+    if (( ec )); then
+      printf '\n[%sERROR%s] own returned an error:\n'  "$boldred" "$tput0"
+      printf '%s\n' "${ownout[@]}"
+      printf '\nFix permissions!\n(exit 1)\n\n'
+      exit 1
+    else
+      printf %s\\n "${ownout[@]}"
+    fi
+  else
+    printf '\n[%sERROR%s] Fix permissions!\n(exit 1)\n\n' "$boldred" "$tput0"
+    exit 1
+  fi
 
+# check for write permission of flacs
+for i in "${flacs[@]}"; do
+  [[ ! -w "$i" ]] &&
+    if yn "$(printf '\nThe file %s is not writable.\nWould you like to "own" this directory?' "$i")"; then
+      ownout=( "$(own 2>&1; ec="$?")" )
+      if ((ec)); then
+        printf '\n[%sERROR%s] own returned an error:\n'  "$boldred" "$tput0"
+        printf '%s\n' "${ownout[@]}"
+        printf '\nFix permissions!\n(exit 1)\n'
+        exit 1
+      else
+        printf %s\\n "${ownout[@]}"
+      fi
+    else
+      printf '\n[%sERROR%s] Fix permissions!\n(exit 1)\n'  "$boldred" "$tput0"
+      exit 1
+    fi
+done
+
+
+#  if [[ "$fuse" != true && ! -w "$i" || ! -w "$PWD" ]] && yn "$(printf '\nDirectory or files are not writable.\nWould you like to "own" this directory?')"; then
+#    own #|| printf '\nown returned an error.\nFix permissions!\n' && exit 1
+#  else
+#    printf \\nFix\ permissions\!\\n && exit 1
+#  fi
+
+for i in *flac; do
   if "$mi"; then
     bits=$(mediainfo --Output='Audio;%BitDepth%' "$i")
     Hz=$(mediainfo --Output='Audio;%SamplingRate%' "$i")
-  else
+ else
     bits=$(ffprobe -v error -select_streams a:0 -show_entries stream=bits_per_raw_sample -of default=noprint_wrappers=1:nokey=1 "$i")
     Hz=$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate -of default=noprint_wrappers=1:nokey=1 "$i")
   fi
@@ -87,7 +130,7 @@ for i in *flac;
 
   if (( Hz != 48000 )) && (( Hz != 41000 )); then
     printf 'The sample rate is %s Hz.\n' "$Hz"
-    if (( Hz > 48000 )) && ! "$changerate" ; then
+    if (( Hz > 48000 )) && ! "${changerate:=false}" ; then
       if yn "Do you want to set the sample rate to 48000 Hz?"; then
         Hz=48000
         changerate=true
@@ -95,7 +138,7 @@ for i in *flac;
         printf 'Please investigate. (exit 1)'
         exit 1
       fi
-    elif (( Hz > 48000 )) && "$changerate"; then
+    elif (( Hz > 48000 )) && "${changerate:=false}"; then
       Hz=48000
     fi
   fi
