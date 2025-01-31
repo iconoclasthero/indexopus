@@ -26,7 +26,6 @@ yn(){
   done
 }
 
-
 [[ "$1" == @(edit|e|-e) ]] && editscript
 
 if ! command -v mediainfo &> /dev/null; then
@@ -55,7 +54,7 @@ fi
 # check for directory permissions
 [[ (( fusetouch )) || "$fuse" != true && ! -w "$PWD" ]] &&
   if yn "$(printf '\nThe pwd %s is not writable.\nWould you like to "own" this directory?' "$(pwd)")"; then
-    ownout=( "$(own 2>&1; ec="$?")" )
+    ownout=( "$(own 2>&1|tee /dev/tty; ec="$?")" )
     if (( ec )); then
       printf '\n[%sERROR%s] own returned an error:\n'  "$boldred" "$tput0"
       printf '%s\n' "${ownout[@]}"
