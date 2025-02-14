@@ -90,11 +90,12 @@ confirm(){
 ##--> confirm() <--###################################################################################
 
 checkdur(){
-  local m4a m4b opus mp3
+  local m4a m4b opus mp3 wav
   m4a=(*m4a)
   m4b=(*m4b)
   opus=(*opus)
   mp3=(*mp3)
+  wav=(*wav)
 
 if [[ "$1" ]]
   then
@@ -108,6 +109,8 @@ if [[ "$1" ]]
     [[ "${#mp3[@]}" -gt 0 ]] &&
       printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.mp3" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${mp3[@]}" "$tput0"
     [[ "${#opus[@]}" -gt 0 ]] &&
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
+    [[ "${#wav[@]}" -gt 0 ]] &&
       printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
  fi
 }
@@ -142,7 +145,7 @@ SWD="$PWD"
 if [[ -n "$1" ]] && [[ -f "$1" ]]; then
     path="$1"
 else
-  ckbook=( *@(mp3|m4@(a|b)) )
+  ckbook=( *@(mp3|m4@(a|b)|wav) )
   if (( ${#ckbook[@]} == 1 )); then
     path="$ckbook"
   else    # i.e., elif (( ${#ckbook[@]} != 1 )); then
@@ -153,7 +156,7 @@ else
   fi
 fi
 
-if [[ "$path" != *\ --\ Audiobook.@(mp3|m4@(a|b)) ]]
+if [[ "$path" != *\ --\ Audiobook.@(mp3|m4@(a|b)|wav) ]]
   then
     path="$ckbook"
     printf '\n%s%sFile is not in the format of <title> -- Audiobook.@(mp3|m4a|m4b)!\n%s\n' "$red" "$bold" "$tput0"
@@ -169,7 +172,7 @@ if [[ "$path" != *\ --\ Audiobook.@(mp3|m4@(a|b)) ]]
           mv "$ckbook" "$n_ckbook"
         else
           printf "No file name given or filename invalid...\n"
-          printf "File must be in the format of \"* -- Audiobook.@(mp3|m4?)\n"
+          printf "File must be in the format of \"* -- Audiobook.@(mp3|m4?|wav)\n"
           exit
       fi
 fi
@@ -186,7 +189,7 @@ if [[ "$inext" == "@(m4b|m4a)" ]]
  then
    ext="$inext"
    outext="m4a"
-elif [ "$inext" = "mp3" ] || [ "$inext" = "opus" ] || [[ "$inext" == "m4a" ]] || [[ "$inext" == "flac" ]]
+elif [[ "$inext" = @(mp3|opus|m4a|flac|wav) ]]
  then
   ext="$inext"; outext="$inext"
  else
