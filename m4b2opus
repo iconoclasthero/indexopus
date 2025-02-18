@@ -265,6 +265,10 @@ m4bsplit() {
       chapter="${chapter//\//\\}"  # Escape slashes in chapter titles
       partnum=$(printf "%0${max_digits}d" "$n")
 
+      if (( ${#chapter} > 226 )); then
+        chapter="${chapter:0:226}…"  # Truncate chapter title to 100 characters
+      fi
+
       local outfile="$outputdir/$title -- Part $partnum: $chapter.m4a"
       printf '%sCreating %s\n' "$relipsis" "$outfile"
 

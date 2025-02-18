@@ -26,7 +26,7 @@ yn(){
   done
 }
 
-[[ "$1" == @(edit|e|-e) ]] && editscript
+[[ "$1" = @(edit|e|-e) ]] && editscript
 
 if ! command -v mediainfo &> /dev/null; then
   mi=false
@@ -45,14 +45,17 @@ flacs=(*flac)
 
 # check if pwd is sshfs mount
 findmnt -T . | grep -q "fuse.sshfs" && unset SUDO && fuse=true
-
 if "${fuse:=false}"; then
+  printf 'On an sshfsmount.\n'
   touchout="$(touch boobs 2>&1)"; fusetouch="$?"
   ! (( fusetouch )) && rm boobs
+else
+  printf 'Not on an sshfsmount.\n'
 fi
 
 # check for directory permissions
-[[ (( fusetouch )) || "$fuse" != true && ! -w "$PWD" ]] &&
+#pause "$fusetouch $fuse $PWD"
+(( fusetouch )) || [[ "$fuse" != true && ! -w "$PWD" ]] &&
   if yn "$(printf '\nThe pwd %s is not writable.\nWould you like to "own" this directory?' "$(pwd)")"; then
     ownout=( "$(own 2>&1|tee /dev/tty; ec="$?")" )
     if (( ec )); then

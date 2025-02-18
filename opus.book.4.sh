@@ -79,6 +79,8 @@ ffmpeg2(){
                                        -i "$startfile" \
                                        -c:a libopus \
                                        -b:a 17k \
+                                       -filter_complex "$filtercomplex" \
+                                       -ar 1 \
                                        -frame_duration:a 60 \
                                        -ar 24k \
                                        "$opusfile" 2>&1 >/dev/null)
