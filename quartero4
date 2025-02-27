@@ -1,6 +1,7 @@
 #!/bin/bash
 #set -x
 
+. /usr/local/bin/editscript
 . ~/.config/indexopus.conf
 
 tmp=/cache/
@@ -17,14 +18,6 @@ shopt -s nullglob extglob dotglob
 [[ ! "$threads" ]] && threads=4
 rmmatch=false
 screened=false
-
-editscript(){
-  local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
-     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
-     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
-  fi; }
-
-pause(){ read -p "$*" ; }
 
 cd-(){ cd - >/dev/null ; }
 
@@ -121,8 +114,8 @@ if [[ "$1" ]]
 # Main                                              #
 #####################################################
 
-[[ "$1" == @(edit|e|nano) ]] && editscript
-
+[[ "$1" = @(edit|e|nano) ]] && editscript
+[[ "$1" = --force ]] && force=1 && shift
 [[ "$1" = @(|-)@(-ys|-yes) ]] && shift && rmmatch=true && screened=true
 [[ "$1" = -y ]] && shift && rmmatch=true
 
@@ -177,7 +170,7 @@ if [[ "$path" != *\ --\ Audiobook.@(mp3|m4@(a|b)|wav) ]]
       fi
 fi
 
-[[ "$(mediainfo "$path"|grep Menu)" =~ ^Menu ]] && printf '%s has an index!\nexit 1\n' "$path" && exit 1
+! (( force )) && [[ "$(mediainfo "$path"|grep Menu)" =~ ^Menu ]] && printf '%s has an index!\nexit 1\n' "$path" && exit 1
 
 inext="${path##*.}"
 title="${path%.*}"
@@ -185,12 +178,11 @@ title="${title%% -- *}"
 ititle="${ulon}$title${uloff}"
 
 
-if [[ "$inext" == "@(m4b|m4a)" ]]
- then
+if [[ "$inext" = @(m4b|m4a) ]]; then
    ext="$inext"
    outext="m4a"
-elif [[ "$inext" = @(mp3|opus|m4a|flac|wav) ]]
- then
+pause "$outext"
+elif [[ "$inext" = @(mp3|opus|m4a|flac|wav) ]]; then
   ext="$inext"; outext="$inext"
  else
   printf "%s is not equal to a compatible file format of .mp3, .opus, .m4a, m4b.  Please correct the error and try again."

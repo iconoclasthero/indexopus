@@ -218,7 +218,9 @@ reindex(){
     done
 
   else
-    readarray -t chap_titles < <(jq -r '.chapters[] | .title' "metadata.json" 2>/dev/null)
+#   readarray -t chap_titles < <(jq -r '.chapters[] | .title' "metadata.json" 2>/dev/null)
+#   need to strip literal `\n` characters from chapter titles otherwise it fucks things up
+    readarray -t chap_titles < <(jq -r '.chapters[] | .title | gsub("\\n"; " ")' "metadata.json")
     readarray -t chap_starts < <(jq -r '.chapters[] | .start' "metadata.json" 2>/dev/null)
   fi
 
@@ -226,7 +228,7 @@ reindex(){
     printf 'Error with %s/metadata.json; check and retry.\nexit 1' "$PWD" &&
     exit 1
 
-  reintitle=( *\ --\ Audiobook.opus )
+  reintitle=( *\ --\ Audiobook.@(opus|ogg) )
 
   [[ ! "${#reintitle[@]}" -eq 1 ]] && printf 'No suitable audiobook found in pwd of format * -- Audiobook.opus\nCheck path %s and try again.\nexit 1' "$PWD" && exit 1
 

@@ -265,8 +265,8 @@ m4bsplit() {
       chapter="${chapter//\//\\}"  # Escape slashes in chapter titles
       partnum=$(printf "%0${max_digits}d" "$n")
 
-      if (( ${#chapter} > 226 )); then
-        chapter="${chapter:0:226}…"  # Truncate chapter title to 100 characters
+      if (( ${#chapter} > 200 )); then
+        chapter="${chapter:0:200}…"  # Truncate chapter title to 100 characters
       fi
 
       local outfile="$outputdir/$title -- Part $partnum: $chapter.m4a"
@@ -350,6 +350,7 @@ while (( $# > 0 )); do
   [[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=true
   [[ -f "$1" ]] && clifile="$1" && shift  #these don't actually do anything
   [[ -d "$1" ]] && clidir="$1" && shift   #at the moment but they could...there has to be some catchall condition for things not in this list or it will loop endlessly...
+  [[ "$1" = "" ]] && shift
 done
 
 if "${screened:=false}"; then
