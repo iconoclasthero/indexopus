@@ -33,7 +33,7 @@ bold="$(tput bold)" #bold on
 relipsis="$red..."
 stamp="$(date +%s)"  #sets datecode for all of indexopus - could use info from m4b2opus later
 tmp="/tmp/indexopus-$stamp" #this could change based on info from m4b2opus
-remove_mp4tags=("major_brand" "minor_version" "compatible_brands" "encoded_by" 'OverDrive MediaMarkers' "handler_name" "vendor_id")
+removemp4tags=("major_brand" "minor_version" "compatible_brands" "encoded_by" 'OverDrive MediaMarkers' "handler_name" "vendor_id" "ITUNPGAP" "iTunSMPB" "iTunNORM")
 
 
 ####this needs to be done better, but for now if the dependencies aren't here, i want it to just exit the script
@@ -306,10 +306,10 @@ reindex(){
 
 writeindex(){
   local output="$1" mp4grep mp4opustags chaptag tags ck4tags args
-  [[ ! "$remove_mp4tags" ]] &&
-     remove_mp4tags=("major_brand" "minor_version" "compatible_brands" "encoded_by" "OverDrive MediaMarkers")
+  [[ ! "$removemp4tags" ]] &&
+     removemp4tags=("major_brand" "minor_version" "compatible_brands" "encoded_by" "OverDrive MediaMarkers")
 
-#pause "$(printf %s\\n "${remove_mp4tags[@]}")"
+#pause "$(printf %s\\n "${removemp4tags[@]}")"
 
 
 #this works, why won't it work in the array?
@@ -323,7 +323,9 @@ writeindex(){
       mediainfo "$output"
       printf '\n%sremoving exiting CHAPTER tags with opustags...%s\n\n' "$relipsis" "$tput0"
       opustags "${tags[@]}" -i "$output"
-      ck4tags=( "$(opustags "$output" | grep --color=always -i chapter)" ) &&
+# i think this line is causing a problem because "chapter" can be used e.g., in the description
+#      ck4tags=( "$(opustags "$output" | grep --color=always -i chapter)" ) &&
+      ck4tags=( "$(opustags "$output" | grep --color=always CHAPTER)" ) &&
       printf 'Error!\nCHAPTER tags still present in opus file.\n%s' "${ck4tags[@]}" &&
       exit
   else
@@ -341,10 +343,10 @@ writeindex(){
   printf '%sStripping MP4 tags%s\n%s' "$relipsis" "$relipsis" "$tput0"
 
 #  [[ "$rmmatch" != 'true' ]] &&    ####why the fuck is this here?
-  mp4grep="$(IFS=\|; echo "${remove_mp4tags[*]}")"
+  mp4grep="$(IFS=\|; echo "${removemp4tags[*]}")"
 
 #  This is method one to remove the unwanted mp4 tags:
-  readarray -t mp4opustags -- < <(printf -- '-d\n%s\n' "${remove_mp4tags[@]}")
+  readarray -t mp4opustags -- < <(printf -- '-d\n%s\n' "${removemp4tags[@]}")
   mp4opustags+=(-i "$output")
   [[ $( opustags "$output" |grep -E "$mp4grep" ) ]] && opustags "${mp4opustags[@]}"
 
@@ -353,7 +355,7 @@ writeindex(){
 #  Keeping for reference for a while since this is such a fucking pain in the ass.
 
   if [[ $( opustags "$output" |grep -E "$mp4grep" ) ]]; then
-    for i in "${remove_mp4tags[@]}"; do
+    for i in "${removemp4tags[@]}"; do
       mp4args+=(-d "$i")
     done
 

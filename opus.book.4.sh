@@ -59,8 +59,11 @@ ffmpegs(){
           -c:a libopus \
           -b:a 17k \
           -frame_duration:a 60 \
-          -ar 24k \
           "${1%.*}.opus" ; }
+
+#         -ar 24k \
+# removing this because opus internal
+# sample rate is 48 kHz; 24 kHz here is probably wasteful
 
 ffmpeg2(){
  local startfile
@@ -80,10 +83,11 @@ ffmpeg2(){
                                        -c:a libopus \
                                        -b:a 17k \
                                        -filter_complex "$filtercomplex" \
-                                       -ar 1 \
                                        -frame_duration:a 60 \
-                                       -ar 24k \
                                        "$opusfile" 2>&1 >/dev/null)
+#                                      -ar 24k \
+# removing this because opus internal
+# sample rate is 48 kHz; 24 kHz here is probably wasteful
 
 # hmmm with the 2>&1 >/dev/null, I'm guessing that this is not going to work as a test anymore
       erfile="${ffoutput[0]}"; erfile="${erfile%%=*}"
@@ -352,9 +356,12 @@ elif [[ "$startfile" ]]; then
          -filter_complex "$filtercomplex" \
          -c:a libopus \
          -b:a 17k \
-         -ar 24k \
          -frame_duration:a 60 \
          "${file%.*}.opus"
+#        -ar 24k \
+# removing this because opus internal
+# sample rate is 48 kHz; 24 kHz here is probably wasteful
+
   printf '\n%sDurations:\n%s' "$bold" "$tput0"
   checkdur "$startfile"
   checkdur "$opusfile"
