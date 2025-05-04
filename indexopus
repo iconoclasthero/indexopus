@@ -414,7 +414,8 @@ mvopus(){
       echo
       [[ "$rmmatch" = true ]] || confirm "${bold}Continue with Proposed Rename (y/n) ${tput0}" &&
       for i in "${!confirm_rename[@]}"; do
-        mv "$i" "${confirm_rename["$i"]}"
+ #       [[ "$i" != "${confirm_rename["$i"]}" ]] &&
+        mv "$i" "${confirm_rename["$i"]}" #|| true
       done || exit 1
 
 }  #end of mvopus
@@ -442,10 +443,12 @@ mvopus(){
       n="${i#* -- }"; n="${n%%:*}"; n="${n#* }"
       [[ "$n" =~ ^[[:digit:]]$ ]] && n="0$n"
       title="${i% -- *}"
+      [[ "$title" =~ \[(.*)\] ]] && bracket="${BASH_REMATCH[1]}" && title="${title/ \[${bracket}\]}"
       chapt="${i##* -- }"
       newname="$title -- Part $n: ${chapt#*: }"
 #      printf %s\\n%s\\n\\n "$i" "$newname"
       confirm_rename["$i"]="$newname"
+#      pause "${confirm_rename["$i"]}"
      done
     mvopus
 
