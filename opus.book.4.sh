@@ -311,9 +311,18 @@ for exts in "${mediafiles[@]}"; do
     extensions+=( "${exts##*.}" )
 done
 
-(( $(printf '%s\n' "${extensions[@]}"|sort -u|wc -l) > 1 )) &&
-  printf '\n%sMore than one type of media file found!\nopus.book.4 cannot be launched from a folder where more than one type of media file is located.\nCorrect and try again.\n\n%s\n\n%sexit 1\n\n' "$bold" "$PWD" "$tput0" &&
-  exit 1
+mapfile -t extensions < <(printf '%s\n' "${extensions[@]}" | sort -u)
+
+#(( ${#extensions[@]} > 1 )) &&
+#  printf '\n%sMore than one type of media file found!\nopus.book.4 cannot be launched from a folder where more than one type of media file is located.\nCorrect and try again.\n\n%s\n\n%sexit 1\n\n' "$bold" "$PWD" "$tput0" &&
+#  exit 1
+
+if (( ${#extensions[@]} > 1 )); then
+  if ! [[ " ${extensions[*]} " =~ ' m4a ' && " ${extensions[*]} " =~ ' mp3 ' && ${#extensions[@]} -eq 2 ]]; then
+    printf '\n%sMore than one type of media file found!\nopus.book.4 cannot be launched from a folder where more than one type of media file is located.\nCorrect and try again.\n\n%s\n\n%sexit 1\n\n' "$bold" "$PWD" "$tput0"
+    exit 1
+  fi
+fi
 
 while (( $# > 0 )); do
   [[ "$1" = @(edit|e|-e) ]] && editscript
