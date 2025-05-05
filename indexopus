@@ -568,9 +568,29 @@ mvopus(){
 
     mvopus
 
+  elif [[ "${opusarray[0]}" =~ ^[[:digit:]]{1,3}\.opus$ ]]; then
+    renpat="6.2"
+    echo "Using rename pattern $renpat"
+    regex="^[[:digit:]]{1,3}\.opus$"
+    for file in "${opusarray[@]}"; do
+      [[ "$file" = ???.opus ]] && digit3=1
+      [[ "$file" = ??.opus ]] && digit2=1
+      [[ "$file" = ?.opus ]] && digit1=1
+    done
+    (( digit1 )) && digit2=1 && for i in ?.opus; do mv "$i" "0$i"; done
+    (( digit3 && digit2 )) && for i in ??.opus; do mv "$i" "0$i"; done
+
+    for i in *.opus; do
+      n="${i%.opus}"; t="title missing"
+      [[ $n =~ ^[0-9]+$ ]] || { printf 'There is probably a problem in rename pattern %s using regex %s, here is the value of $n: %s\n' "$renpat" "$regex" "$n"; pause "Use ^C to exit or [[Enter]] to continue. "; }
+      newname="$t -- Part $n: Part $n.opus"
+      confirm_rename["$i"]="$newname"
+    done
+
+    mvopus
 
   elif [[ "${opusarray[@]}" =~ .+[[:space:]][[:digit:]]{1,3}\.opus ]]; then
-    echo "Using rename pattern 6.2:"
+    echo "Using rename pattern 6.3:"
     regex=".+[[:space:]][[:digit:]]{1,3}\.opus"
     if [[ "${opusarray[0]}" =~ .+\ (p|P)art\ [[:digit:]]{1,3}\ of\ [[:digit:]]{1,3}\.opus ]]; then
       for (( i=0; i<"${#opusarray[@]}"; i++ )); do
