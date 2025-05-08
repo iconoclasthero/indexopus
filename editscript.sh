@@ -1,0 +1,1 @@
+/home/bvargo/bin/gits/notebook/editscript
