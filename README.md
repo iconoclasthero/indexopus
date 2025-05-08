@@ -1,7 +1,7 @@
 I'm tracking some scripts I've written here.  If the code's useful to someone, feel free to use it; I don't think I'm going to provide support for any of this since it's only satisficing for my use.
 
 # m4b2opus
-Realistically, that's what this does.  there are pices that do other things, but m4b2opus takes the disparate pieces and chops up an audio book so it can be converted in parallel to opus, and stitched back together to get an indexed audiobook out of it.  at this point indexopus is being used by the script and index-opus will be removed.
+Realistically, that's what this does.  there are pieces that do other things, but m4b2opus takes the disparate pieces and chops up an audio book so it can be converted in parallel to opus, and stitched back together to get an indexed audiobook out of it.  at this point indexopus is being used by the script.
 Basically, you just need to go to the directory with a file that has a normalish-enough name and 
 ` $ m4b2opus ` and you get an indexed opus audiobook out of it.
 

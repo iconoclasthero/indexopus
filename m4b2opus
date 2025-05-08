@@ -371,9 +371,10 @@ printline "${bold}  Welcome to ${white}$script  ${tput0}"
 
 allmp4s=(*.mp4)
 
-#(( "${#allmp4s[@]}" == 1 )) && { printf 'An .mp4 was found!\nMove\n  %s\nto\n  %s\n' "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"; confirm "Confirm rename? "; } && mv "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"
-
-(( "${#allmp4s[@]}" == 1 )) && { printf 'An .mp4 was found!\nMoving\n  %s\nto\n  %s\n' "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"; mv "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"; }
+if (( "${#allmp4s[@]}" == 1 )); then
+  printf 'An .mp4 was found!\nMove\n  %s\nto\n  %s\n' "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"
+  "${rmmatch:-false}" || confirm -d y "Confirm rename?"&& mv "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"
+fi
 
 allm4s=(*.m4[ab])
 
