@@ -2,6 +2,8 @@
 #depends opustags, ffmpeg, indexopus, opus.book.4, mplayer, mediaduration
 #need to address existing m4a files in the convert directory prior to the m4b to m4a split.
 
+. /usr/local/bin/editscript.sh
+
 #trap pause DEBUG
 shopt -s nullglob
 
@@ -100,11 +102,11 @@ done
 }
 ##--> fnrmr() <--###################################################################################
 
-editscript(){
-  local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
-     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
-     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
-  fi; }
+#editscript(){
+#  local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
+#     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
+#     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
+#  fi; }
 ##--> editscript() <--##############################################################################
 
 filecheck(){
@@ -366,6 +368,12 @@ if "${screened:=false}"; then
 fi
 
 printline "${bold}  Welcome to ${white}$script  ${tput0}"
+
+allmp4s=(*.mp4)
+
+#(( "${#allmp4s[@]}" == 1 )) && { printf 'An .mp4 was found!\nMove\n  %s\nto\n  %s\n' "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"; confirm "Confirm rename? "; } && mv "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"
+
+(( "${#allmp4s[@]}" == 1 )) && { printf 'An .mp4 was found!\nMoving\n  %s\nto\n  %s\n' "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"; mv "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"; }
 
 allm4s=(*.m4[ab])
 
