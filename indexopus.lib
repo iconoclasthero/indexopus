@@ -36,10 +36,12 @@ local    ppidname="`ps --no-heading -o %c -p ${tlpp_ppid}`"
  [[ "$iscli" ]] && return "$iscli"
 }
 
-editscript(){
-  local scriptpath script path swp; scriptpath=$(realpath "$0" 2>/dev/null); script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
-     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptpath") && exit
-     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit ; }
+#editscript(){
+#  local scriptpath script path swp; scriptpath=$(realpath "$0" 2>/dev/null); script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
+#     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptpath") && exit
+#     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit ; }
+
+. /usr/local/bin/editscript.sh
 
 if ! command -v own &> /dev/null; then
   own(){
@@ -52,6 +54,52 @@ if ! command -v own &> /dev/null; then
   fi
   }
 fi
+
+confirm(){
+  local def prompt reply msg
+
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -d|--default)
+        def=$2
+        shift 2
+        ;;
+      --default=*)
+        def="${1#*=}"
+        shift 1
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        echo "Unknown option: $1" >&2
+        return 2
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+#  msg=$1
+  msg="$(printf %b "$1")"
+  shift
+
+  case $def in
+    y|Y) prompt=" [Y/n] "; def=y ;;
+    n|N) prompt=" [y/N] "; def=n ;;
+    *)   prompt=" [y/n] "; def= ;;
+  esac
+
+  read -p "$msg$prompt" -n 1 -r reply
+  printf \\n 
+
+  reply=${reply:-$def}
+
+  [[ $reply =~ ^[Yy]$ ]]
+}
+
 
 printline(){
   local lead linetitle leader strippedleader leader_length remaining_width line
