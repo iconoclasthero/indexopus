@@ -40,3 +40,6 @@ Sort of a rough script for concatenating audiofiles. It should be set up to do w
 
 # downconvert
 Not really something that belongs in this repo, but it was untracked in `~/bin/` and that made me nervous so here we are with a file to convert flacs down to 16 bit/48 kHz.
+
+#mklnbook.functions
+These are copied from my ~/.bash_functions which are sourced from .bashrc along with .bash_aliases. I'm including them because they could be instructive and it's a place to keep them... unfortunately, that also means that they're not tracked but must be manually updated.
