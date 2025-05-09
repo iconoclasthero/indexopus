@@ -1,0 +1,208 @@
+
+delugecreds(){
+  hostlistconf="$HOME/.config/deluge/hostlist.conf"
+  local confvalues
+  readarray -t confvalues < <(jq -r '.hosts[0] | select(. != null) | .[0], .[1], .[2], .[3], .[4]' "$hostlistconf")
+  delugehost="${confvalues[1]}"
+  delugeport="${confvalues[2]}"
+  delugeuser="${confvalues[3]}"
+  delugepass="${confvalues[4]}"
+}
+
+mklnbook(){
+  sec2sex(){
+    local h m s d
+    local input="${1%.*}"
+    local dec="${1#*.}"
+    [[ -z "$dec" ]] && dec=0
+    d="${dec:0:3}"
+    [[ ${#d} -lt 3 ]] && d=$(printf "%-3s" "$d" | tr ' ' '0')
+
+#    [[ "${dec:0:1}" > 4 ]] && ((input++)) # why is this here?  we're retaining the decimal!
+
+    h=$(( input / 3600 ))
+    m=$(( (input % 3600) / 60 ))
+    s=$(( input % 60 ))
+
+  printf "%02d:%02d:%02d.%03d" "$((10#$h))" "$((10#$m))" "$((10#$s))" "$((10#$d))"
+  }
+
+  local a sd f t i d abscover linked hostlistconf delugehost delugeport delugeuser delugepass swd
+  swd="$(pwd)"
+  [[ "$1" = @(-v|--verbose) ]] && shift && verbose=1
+  abscover="cover.jpg"
+  hostlistconf="$HOME/.config/deluge/hostlist.conf"
+  delugecreds
+  linked='/library/torrent/seeds/mam/linked'
+  printf '\nDirectory/symlink link destination:\n%s\n' "$linked"
+  [[ ! "$1" ]] && set -- .
+  set -- "$(realpath "$1")"
+  [[ "$1" = *꞉* ]] && mv "$1" "${1//꞉/:}" && set -- "$(realpath "${1//꞉/:}")" && swd="$1"
+(( verbose )) &&  read -rp "$1" pause
+  sd="$(realpath "$1")"
+  t="${sd##*\/}"
+  sd="${sd%\/"$t"}"
+  a="${sd##*\/}"
+  sd="${sd%\/"$a"}"
+  d="$a -- $t";
+  [[ "$d" = *\:* ]] && d="${d//:/=}"
+  [[ "$d" = *\?* ]] && d="${d//\?/ }"
+  [[ "$d" = *\\* ]] && d="${d//\\/_}"
+  [[ ! -d "$linked/$d" ]] && mkdir "$linked/$d"
+  printf '\nDirectory should exist: \n'
+  eza -la -sold --no-user -r "$linked/$d" -d
+  printf \\n
+  t="${t% (*}"; [[ "$t" = *\:* ]] && t="${t%%:*}"
+  [[ "$t" = *\[TTC\]* ]] && t="${t% \[TTC\]*}"
+  [[ "$t" = \[* ]] && t="${t#*\] }"
+# mediainfo "$1"/*\ --\ Audiobook.opus
+  mi "$1"/*\ --\ Audiobook.opus|head -n$(($(mi "$1"/*\ --\ Audiobook.opus |\grep -En Menu|cut -f1 -d:) - 1 ))
+  if confirm "Set book metadata from ABS metadata.json? "; then
+    bookmetadata "$1"||return 1
+  fi
+  mi "$1"/*\ --\ Audiobook.opus #|head -n$(($(mi "$1"/*\ --\ Audiobook.opus |\grep -En Menu|cut -f1 -d:) - 1 ))
+
+# jq -r '.description | gsub("<p>"; ""; "g") | gsub("</p>"; "\n\n"; "g") | gsub("<br>"; "\n"; "g")' metadata.json
+
+  jq -r '.chapters[] | "\(.start) \(.title)"' metadata.json | while read -r start title; do   printf "%-42s : %s\n" "$(sec2sex "$start")" "$title"; done
+
+  if confirm "Reindex $t? "; then
+    cd "$1"
+    indexopus -r
+    cd -
+  fi
+  printf '\nLooking for attached cover:\n'
+  mediainfo "$1/$t -- Audiobook.opus" | \grep --color=always -iE '^Cover[[:space:]]+:'
+  ec1="$?"
+#  ffprobe "$1/$t -- Audiobook.opus" 2>&1 | \grep --color=always Cover
+  ffprobe "$1/$t -- Audiobook.opus" 2>&1 | { \grep --color=always 'Stream #0:1' -A2 || \grep --color=always Cover; }
+  ec2="$?"
+  (( ec1 && ec2 )) && printf 'No cover information from mediainfo and ffprobe!\n'
+  printf '\nDirectory listing of %s/*jpg: ' "$1"
+  eza -la --no-user -sold -r "$1"/*jpg
+  cover="$t -- Cover 01.jpg"
+(( verbose )) && read -rp "$cover " temp
+  abscover="$1/$abscover"
+  if [[ ! -f "$1/$cover" ]] && [[ -f "$abscover" ]]; then
+    printf '%s/%s does not exist.\n' "$1" "$cover"
+    mediainfo "$abscover" --Inform="Image;$abscover:\n%Height% × %Width%\n"
+    confirm "mv $abscover $1/$cover: " && mv "$abscover" "$1/$cover"
+  fi
+  mediainfo "$1/$cover" --Inform="Image;$cover:\n%Height% × %Width%\n"
+  if confirm "Embed $cover? "; then
+(( verbose )) && lla "$1/$cover"
+(( verbose )) && read -rp "$1/$cover" temp
+#defults for cover image:
+scale=1200
+maxcover=506000
+#maxcover=432942
+w=$(mediainfo --Inform="Image;%Width%" "$1/$cover")
+h=$(mediainfo --Inform="Image;%Height%" "$1/$cover")
+(( w > h )) && largest=$w || largest=$h
+tmpimg=$(mktemp --suffix=.jpg)
+[[ -f "$1/$t -- Audiobook-2.opus" ]] && {
+  printf '\nTemporary output opus file exists:\n  %s -- Audiobook-2.opus\n\n' "$1/$t"
+  if confirm "rm $1/$t -- Audiobook-2.opus? "; then
+    rm "$1/$t -- Audiobook-2.opus"
+  else
+    printf 'Temp output opus file exists.  Investigate.\nexit 1\n'
+    exit 1
+  fi
+}
+
+#    if (( $(mediainfo --Inform="Image;%Height%" "$1/$cover") > 1200 || $(mediainfo --Inform="Image;%Width%" "$1/$cover") > 1200 )); then
+#      convert "$1/$cover" -resize 1200x1200 jpg:- | \
+#      opustags -o "$1/$t -- Audiobook-2.opus" --set-cover - "$1/$t -- Audiobook.opus"
+#    else
+#      opustags -o "$1/$t -- Audiobook-2.opus" --set-cover "$cover" "$1/$t -- Audiobook.opus"
+#    fi
+
+  while :; do
+    if (( w >= h )); then
+      convert "$1/$cover" -resize "${scale}x" -strip -quality 85 "$tmpimg"
+    else
+      convert "$1/$cover" -resize "x${scale}" -strip -quality 85 "$tmpimg"
+    fi
+
+    size=$(stat -c %s "$tmpimg"); echo "${scale}: $size"
+
+    if (( size < maxcover )); then
+      opustags -o "$1/$t -- Audiobook-2.opus" --set-cover "$tmpimg" "$1/$t -- Audiobook.opus" -y
+      mediainfo "$1/$t -- Audiobook-2.opus" | grep -q 'Conformance errors'
+      ec="$?"
+      if (( ec == 1 )); then
+        break
+      elif (( ec == 0 )); then
+        printf 'Image still larger than max page size\nContinue resizing...\n'
+      elif (( ec != 0 )); then
+        printf 'Error checking conformance\n' >&2
+        info=$(mediainfo "$1/$t -- Audiobook-2.opus")
+        printf %s\\n "$info"
+        grep 'Conformance errors' <<< "$info"
+        exit $ec
+      fi
+    fi
+    (( scale -= 50 ))
+    (( scale <= 0 )) && {     echo "image too large even at minimal scale" >&2;     exit 1;   }
+  done
+    mediainfo "$1/$t -- Audiobook-2.opus" | \grep --color=always -iE '^Cover[[:space:]]+:'
+    ffprobe "$1/$t -- Audiobook-2.opus" 2>&1| \grep --color=always Cover
+    confirm "mv '$1/$t -- Audiobook-2.opus' '$1/$t -- Audiobook.opus'? " && mv "$1/$t -- Audiobook-2.opus" "$1/$t -- Audiobook.opus"
+  fi
+  printf 'Check cover, etc., before symlinking:\n'
+  eza -la -sold -r --no-user "$1"
+  read -p "..."
+  printf \\n
+#  pause "$1/$t* linked $d"
+  ln -sf "$1/$t"* "$linked/$d"
+  cd "$linked/$d"
+  printf '\npwd:\n%s\n\ncontents:\n' "$(pwd)"
+  eza -la -sold -r
+  printf \\nMoving\ opus\ to\ ogg...\\n
+#  read -p "Move opus to ogg? "
+#  printf \\n
+  for i in *.opus; do
+    mv "$i" "${i%.opus}.ogg"
+  done
+  for i in *\?*; do
+    mv "$i" "${i//\?/ }"
+  done 2>/dev/null
+  for i in *\\*; do
+    mv "$i" "${i//\\/_}"
+  done 2>/dev/null
+  ebook=("$PWD"/*\ --\ eBook.*)
+  if [[ -L "${ebook[0]}" ]] && printf '\neBook found!\n%s\n' "$(eza -la --no-user *\ --\ eBook.*)" && confirm "Remove eBook? "; then
+    rm *\ --\ eBook.*
+  fi
+  webp=("$PWD"/*.webp)
+  if [[ -L "${webp[0]}" ]] && printf '\nwebp found!\n%s\n' "$(eza -la --no-user *.webp)" && confirm "Remove *.webp? "; then
+    rm *.webp
+  fi
+  opf=("$PWD"/*.opf)
+  if [[ -L "${opf[0]}" ]] && printf '\nopf found!\n%s\n' "$(eza -la --no-user *.opf)" && confirm "Remove *.opf? "; then
+    rm *.opf
+  fi
+  (( SSHTRUSTED )) && pwd|xclip || printf 'Cannot use xclip; copy the folder location manually...\n'
+  printf '\nCheck files before returning to swd:\n'
+  eza -la -sold -r --no-user
+  read -p "..."
+  torrentfile="/library/torrent/${PWD##*/}.torrent"
+  transmission-create -p -t "$tracker" -o "$torrentfile" "$(pwd)"
+#  { cd "$linked/$d; mediainfo $t -- Audiobook.ogg"; }
+#  deluge-console "connect $delugehost:$delugeport $delugeuser $delugepass; add -p $linked $torrentfile"
+[[ "$torrentfile" = *\;* ]] && cp "$torrentfile" "${torrentfile//\;/_}" && torrentfile="${torrentfile//\;/_}" && read -rp "torrent file copied to $torrentfile as deluge-console cannot accpet semicolons in file names!"
+  deluge-console "connect $delugehost:$delugeport $delugeuser $delugepass; add -p ${linked@Q} ${torrentfile@Q}"
+  mediainfo "$t -- Audiobook.ogg"
+  printf '\nLeaving: \n%s\n' "$(pwd)"
+  printf '\nReturning to %s\n\n' "$swd"
+  cd - > /dev/null
+}
+
+updatetracker(){
+  delugecreds
+  torrent="$1"
+  [[ -d "$torrent" ]] && torrent="${torrent/\seed\/mam\/linked}" && torrent="/library/torrent/${torrent%\/}.torrent"
+  [[ "$torrent" != *.torrent || ! -f "$torrent" ]] && echo "$torrent not valid" && return
+  hash="$(transmission-show "$torrent" | \grep -oP 'Hash v1: \K.*')"
+  deluge-console "connect $delugehost:$delugeport $delugeuser $delugepass; update_tracker ${hash@Q}"
+}
