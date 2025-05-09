@@ -16,15 +16,7 @@ finddur(){
       printf 'Duration of .%s files: %s\n' "$1" "${tdurs[*]}"
 }
 
-
-editscript(){
-  local scriptname script path swp; scriptname=$(realpath "$0" 2>/dev/null); script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
-     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptname") && exit
-     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit ;}
-
-pause(){ read -p "$*" ; }
-
-[[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
+. /usr/local/bin/editscript
 
 readarray exts < <(find . -type f 2>/dev/null | sed -rn 's|.*/[^/]+\.([^/.]+)$|\1|p' | sort -u)
 

@@ -6,9 +6,8 @@ Basically, you just need to go to the directory with a file that has a normalish
 ` $ m4b2opus ` and you get an indexed opus audiobook out of it.
 
 # indexopus
-This takes .opus chapter files and incorporates them into a single indexed file using ffmpeg, mediainfo, and opustags.
-depends: opustag, ffmpeg/ffprobe
-optional: mediainfo
+This takes .opus chapter files and incorporates them into a single indexed file using ffmpeg, ffprobe,  mediainfo, and opustags.
+depends: opustags, ffmpeg/ffprobe, mediainfo, mplayer
 
 **Files need to be in the format of 'Title -- Part ##: Chapter Title.opus'** 
 There is some correction for common variations I've run into, but ultimately it will be in this format.
