@@ -239,7 +239,10 @@ reindex(){
       if [[ "$t" != @(0|0.0) ]]; then
         ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", int($t / 3600), int($t / 60) % 60, $t % 60 + ($t - int($t))' | tail -n 1)
         chna="${chap_titles[$chno]}"
-        [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
+#        [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
+        chna=$(echo "$chna" | sed -E 's/^(Part|Chapter)[[:space:]]*/\1 /')
+        [[ "$chna" =~ ^(Part|Chapter)\ [0-9]($|[.:\ ].*)$ ]] && chna="${chna/ / 0}"
+        chna="${chna%"${chna##*[![:space:]]}"}"
         printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  "$tmp/opusindex"
         printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
         rawindex+=( "$ts" )
@@ -251,7 +254,10 @@ reindex(){
       else
         ts="00:00:00.000"
         chna="${chap_titles[$chno]}"
-        [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
+#        [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
+        chna=$(echo "$chna" | sed -E 's/^(Part|Chapter)[[:space:]]*/\1 /')
+        [[ "$chna" =~ ^(Part|Chapter)\ [0-9]($|[.:\ ].*)$ ]] && chna="${chna/ / 0}"
+        chna="${chna%"${chna##*[![:space:]]}"}"
         printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> "$tmp/opusindex"
         printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
         rawindex+=( "$ts" )
