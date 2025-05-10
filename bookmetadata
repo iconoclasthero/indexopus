@@ -28,7 +28,7 @@ exarray(){
 striptags(){
   local output="$1" mp4grep mp4opustags chaptag tags ck4tags args
   [[ ! "$removemp4tags" ]] &&
-    removemp4tags=("major_brand" "minor_version" "compatible_brands" "encoded_by" 'OverDrive MediaMarkers' "handler_name" "vendor_id" "ITUNPGAP" "iTunSMPB" "iTunNORM" "CUESHEET" "json64" "Track name")
+    removemp4tags=("major_brand" "minor_version" "compatible_brands" "encoded_by" 'OverDrive MediaMarkers' "handler_name" "vendor_id" "ITUNPGAP" "iTunSMPB" "iTunNORM" "CUESHEET" "json64" "Track name" "engiTunSMPB" "engiTunPGAP" "engiTunNORM")
 
 ##pause "$(printf %s\\n "${removemp4tags[@]}")"
 #
@@ -128,7 +128,8 @@ book="$bookdir/$title -- Audiobook.opus"
 title="$(jq -r '.title' "$metadata")"
 subtitle="$(jq -r '.subtitle' "$metadata")"
 readarray -t authors < <(jq -r '.authors[]' "$metadata")
-artist="$(jq -r '.authors | join(", ")' "$metadata")"
+#artist="$(jq -r '.authors | join(", ")' "$metadata")"
+artist="$(jq -r '.authors | join("; ")' "$metadata")"
 album_artist="$artist"
 if [[ "$subtitle" != null ]]; then
   album="$title: $subtitle"
@@ -140,6 +141,7 @@ fi
 readarray -t genres < <(jq -r '.genres[]' "$metadata")
 series="$(jq -r '.series | join ("; ")' "$metadata")"
 genre="$(jq -r '.genres | join("; ")' "$metadata")"
+readarray -t tagarray < <(jq -r '.tags[]' "$metadata")
 date="$(jq -r '.publishedYear' "$metadata")"
 description="$(jq -r '.description' "$metadata")"
 # replaced by the jq below [[ "$descrption" = \<p\>* ]] && description="${description#\<p\>}" && description="${descrption//\<\/p\>}"
@@ -154,13 +156,11 @@ description="$(jq -r '.description' "$metadata")"
 
 comment="$description"
 #readarray -t narrators < <(jq -r '.narrators[]' "$metadata")
-composer="$(jq -r '.narrators | join(", ")' "$metadata")"
+composer="$(jq -r '.narrators | join("; ")' "$metadata")"
 copyright="$(jq -r '.publisher' "$metadata")"
 publisher="$copyright"
 TRACKTOTAL=1
 language="$(jq -r '.language' "$metadata")"
-#asin="$(jq -r '.asin' "$metadata")"
-#isbn="$(jq -r '.isbn' "$metadata")"
 isbn="$(jq -re '.isbn | select(. != null)' "$metadata" || unset isbn)"
 asin="$(jq -re '.asin | select(. != null)' "$metadata" || unset asin)"
 
@@ -208,14 +208,13 @@ args+=("--set" "date=$date")
 args+=("--set" "genre=$genre")
 args+=("--set" "DESCRIPTION=$description")
 args+=("--set" "publisher=$publisher")
+for i in "${tagarray[@]}"; do args+=("--set" "Tags=$i"); done
 #args+=("--set" "comment=$comment")
-#args+=("Normal Women -- Audiobook1.opus")
 (( verbose )) && printf %s\\n "${args[@]}" && pause "tag? "
 opustags "${args[@]}"
 striptags "$book"
 
 printf \\n
-#"${args[@]}"
 
 
 

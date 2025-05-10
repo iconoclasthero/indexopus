@@ -22,6 +22,7 @@ bold="$(tput bold)"
 tput0="$(tput sgr0)"
 red="$(tput setaf 9)"
 white="$(tput setaf 15)"
+yellow="$(tput setaf 11)"
 relipsis="$red..."
 stamp="$(date +%s)"
 
@@ -204,57 +205,17 @@ calctime(){
 }
 ##--> calctime{} <--#############################################################################
 
-#m4bsplit(){
+
+m4bsplit(){
 ## Original code from: http://crunchbang.org/forums/viewtopic.php?id=38748#p414992
 ## m4bronto
-#
-##     Chapter #0:0: start 0.000000, end 1290.013333
-##       first   _     _     start    _     end
-#local bpath outputdur START first start end partnum n
-#outputdir="$2"
-#START=1
-#bpath="$(basename "$PWD")"
-##while [ "$#" -gt 0 ]; do
-#
-#ffmpeg -i "$1" 2> ".tmp$stamp"
-#
-#n="$START"
-#
-#while read -r first _ _ start _ end
-# do
-#  if [[ "$first" = Chapter ]]
-#   then
-#      read  # discard line with Metadata:
-#      read _ _ chapter
-#      [[ "$chapter" = Chapter\ ?\:\ * ]] && chapter="${chapter/Chapter /Chapter 0}"
-#
-## at some point i'd like to make a menu for what to do here, but for now this works.
-##      [[ "$chapter" =~ \ \/\  ]] && chapter="${chapter// \/ /: }"
-#      [[ "$chapter" =~ \/ ]] && chapter="${chapter//\//\\}"
-#
-##      read -rp "$title" </dev/tty
-#
-#      [[ "$n" -lt 10 ]] && partnum="0$n" || partnum="$n"
-#      printf '%sCreating %s -- Part %s: %s.m4a%s\n' "$relipsis" "$title" "$partnum" "$chapter" "$tput0"
-#      readarray -t ffoutput < <(ffmpeg -n -nostdin -hide_banner -stats -v error -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "$outputdir/$title -- Part $partnum: $chapter.m4a" 2>&1)
-#      ((n++))
-#  fi
-#done <".tmp$stamp"
-#
-#rm ".tmp$stamp"
-#
-##shift
-##done
-#}
-
-m4bsplit() {
   local bpath outputdir START first start end partnum n chapter max_digits
   outputdir="$2"
   START=1
   bpath="$(basename "$PWD")"
-  ffmpeg -i "$1" 2> ".tmp$stamp"
+  ffmpeg -i "$1" 2> "/tmp/.tmp$stamp"
 
-  chapters=$(grep -cE 'Chapter #[[:digit:]]:[[:digit:]]{1,3}: start' ".tmp$stamp")
+  chapters=$(grep -cE 'Chapter #[[:digit:]]:[[:digit:]]{1,3}: start' "/tmp/.tmp$stamp")
 
   (( chapters < 100 )) && max_digits=2 || max_digits=3
 
@@ -288,9 +249,9 @@ m4bsplit() {
 
       ((n++))
     fi
-  done < ".tmp$stamp"
+  done < "/tmp/.tmp$stamp"
 
-  rm ".tmp$stamp"
+  rm "/tmp/.tmp$stamp"
 }
 
 ##--> m4bsplit() <--##################################################################################
@@ -484,10 +445,67 @@ titleopus="$title -- Audiobook.opus"
      printline "$scriptname" &&
      exit 1
 
-mv "$titleopus" "$swd"
-opusparts=( *opus )
+indent() {
+  local n="$1"
+  local pad="$(printf '%*s' "$n")"
+  fold -s -w $((COLUMNS - n)) | sed "s/^/$pad/"
+}
+
+indent() {
+  local pad="${1:-4}"
+  local spaces="$(printf '%*s' "$pad")"
+  while IFS= read -r line; do
+    printf '%s%s\n' "$spaces" "$line"
+  done
+}
+
+# this is another way to indent: `sed 's/^/    /'`
+
+mvoutput="$(mv "$titleopus" "$swd" 2>&1)"
+ec="$?"
+if (( ec )); then
+  rmmatch=false
+  if [[ "$mvoutput" = "mv: cannot create regular file '"*"': Permission denied" || "$mvoutput" = *Permission\ denied* ]]; then
+    printf '\n\n%sThe converted file:\n  %s%s\n%scannot be moved to the starting m4b directory:\n  %s%s\n%sdue to permissions issues:\n\n%s%s\n\n%s' "$bold$red" "$white" "$titleopus" "$red" "$white" "$swd" "$red" "$yellow" "$mvoutput" "$red"
+#    printf 'Would you like to attempt to change ownership of this directory to %s%s:%s%s?\n\n%s\n%s\nContents:\n%s\n\n' "$white" "$USER" "$USER" "$red" "$(eza -dgl --color=always "$swd"| indent 3)" "$red" "$(eza -glB -a --color=always "$swd"| indent 3)"
+    printf 'Would you like to attempt to change ownership of this directory to %s%s:%s%s?\n\n%s\n%s\n%s' "$white" "$USER" "$USER" "$red" "$(eza -aagl --color=always "$swd"| indent 3)" "$red"
+#    if confirm -y "Would you like to attempt to change ownership to $of $white\n\n $(eza -dglB -all --color=always "$swd")$red \n\nto\n $white$USER:$USER\n${red}"; then
+    if confirm -y; then
+      if sudo -p "Enter sudo password to change ownsership of $swd: " chown "$USER":"$USER" "$swd"; then
+        sudo -k
+        mvoutput=$(mv "$titleopus" "$swd" 2>&1)
+        ec="$?"
+        if (( ec )); then
+          printf 'Still failed to mv %s to %s!\n%s\n' "$titleopus" "$(pwd)" "$mvoutput"
+          eza -dglB -all "$swd"
+          printf '\n%s[WARN]: %s is still in %s!%s\n' "$yellow" "$titleopus" "$(pwd)" "$white"
+          confirm "Continue script with manual confirmations for all deletions?" && warnopus=1 || { printf '\nExiting %s (exit 1)\n\n' "$0"; exit 1; }
+        else
+          printf 'Ownership change successful.\n'
+        fi #to mv failing after sucessfully changing permissions
+      else
+        printf 'chown %s:%s %s failed!\n%s\n\n' "$USER" "$USER" "$swd" "$(eza -glB -all)"
+#       printf 'NB: %s is still in %s!\n' "$titleopus" "$(pwd)"
+        printf '\n%s[WARN]: %s is still in %s!%s\n' "$yellow" "$titleopus" "$(pwd)" "$white"
+        confirm "Continue script with manual confirmations for all deletions?" && warnopus=1 || { printf '\nExiting %s (exit 1)\n\n' "$0"; exit 1; }
+      fi  #to chown USER:USER failing
+    else
+#     printf '\nNB: %s%s%s is still in %s%s%s!%s\n\n' "$white" "$titleopus" "$red" "$white" "$(pwd)" "$red" "$white"
+      printf '\n%s[WARN]: %s is still in %s!%s\n\n' "$yellow" "$titleopus" "$(pwd)" "$white"
+      confirm "Continue script with manual confirmations for all deletions?" && warnopus=1 || { printf '\nExiting %s (exit 1)\n\n' "$0"; exit 1; }
+    fi #to confirm take ownership?
+  else #to if mv error due to permissions
+    printf 'mv %s %s\n failed:\n%s\n\nThis is an unhandled error!\n\n' "$titleopus" "$swd" "$mvoutput"
+    printf 'NB: %s is still in %s!\n' "$titleopus" "$(pwd)"
+    printf '\n%s[WARN]: %s is still in %s!%s\n' "$yellow" "$titleopus" "$(pwd)" "$white"
+    confirm "Continue script with manual confirmations for all deletions?" && warnopus=1 || { printf '\nExiting %s (exit 1)\n\n' "$0"; exit 1; }
+  fi #to if mv error due to permissions
+fi
+
+opusparts=( *Part*.opus )
 cd "$swd"
 
+#wait, wtf is this doing here?  $tmp should be created long ago and it's in the process of being deleted by this point in the script, right?
 [[ ! "$rmmatch"=true ]] && pause "Need to check to see if $tmp is being created... when indexopus isn't run with -y"
 
 checkdur # probably do something different here since you have m4bindur and have to calc opusdur...
@@ -503,6 +521,7 @@ checkdur # probably do something different here since you have m4bindur and have
 
 opusdursec="$(sex2sec "$(checkdur opus)")"
 m4bindursec="$(sex2sec $m4bindur)"
+ioutput="$(tput sitm)$title$(tput ritm) -- Audiobook.opus"
 if [[ "$rmmatch" = true ]] && (( opusdursec > 0 )); then
 #  verifydur=$(bc <<< "scale=4; ($m4bindursec - $opusdursec) / $opusdursec " )
   verifydur=$(( (1000 * (m4bindursec - opusdursec)) / opusdursec ))
@@ -523,17 +542,25 @@ if [[ "$rmmatch" = true ]] && (( opusdursec > 0 )); then
   fi
 fi
 
-  printf '\n%sCleaning up remaining files:%s\n\n' "$red" "$tput0"
+  printf '\n%sCleaning up remaining files:%s\n' "$red" "$tput0"
 
 #  ls "$tmp" "$convertdir" 2>/dev/null
 
   printf '\n\n'
 # the 2>/dev/null does not work for rmyn -- rewrite!!
 #  rmyn -q "${red}${bold}Remove the conversion ./m4a directory? ${tput0}" "${red}...Leaving ./m4a.${tput0}" rm -r "$convertdir/m4a"
-  [[ ! "$iorm" ]] && [[ "$opusparts" ]] && rmyn -q "${red}${bold}Remove $ititle -- Part *.opus files? ${tput0}" "${red}...Leaving $ititle -- Part *.opus files...${tput0}" rm "$convertdir/$title"\ --\ Part\ ??:*.opus
+
+# presumably these shouldn't even be left after indexopus -y so there should be a check for them...  wtf is "$opusparts" ??
+  [[ ! "$iorm" ]] && [[ "$opusparts" ]] && rmyn -q "${red}${bold}Remove $title -- Part *.opus files? ${tput0}" "${red}...Leaving $ititle -- Part *.opus files...${tput0}" rm "$convertdir/$title"\ --\ Part\ ??:*.opus
   rmyn "${red}${bold}Remove the starting $m4bin? " "${red}Leaving starting $m4bin${tput0}" rm "$m4bin"
+  (( warnopus )) && printf '\n%sThe converted opus file was not removed from the temporary directory!\n\nINSPECT THE FOLLOWING CAREFULLY BEFORE DELETING!!!%s\n\n' "$bold$yellow" "$tput0" && pause "Continue...$tput0"
   for i in "$convertdir" .tmp* "$tmp"; do [[ -a "$i" ]] && fnrmr "$i"; done
-  printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
+
+  if (( warnopus )); then
+    [[ -f "$convertdir/$titleopus" ]] && printf '%s\n\n...Done.\n\nPlease see:%s\n %s/%s\n\n' "$red" "$white" "$convertdir" "$ioutput" || printf '%s\n\n...Done.\n\nThe transcoded opus file was most likely deleted from:%s\n %s\n\n' "$red" "$white" "$convertdir"
+  else
+    printf '\n\n...Done.\n\nPlease see\n%s %s/%s\n\n' "$white" "$(pwd)" "$ioutput"
+  fi
 
 printline "${bold}  Exiting (0) ${white}m4b2opus  ${tput0}"
 exit 0

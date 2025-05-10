@@ -33,19 +33,19 @@ bold="$(tput bold)" #bold on
 relipsis="$red..."
 stamp="$(date +%s)"  #sets datecode for all of indexopus - could use info from m4b2opus later
 tmp="/tmp/indexopus-$stamp" #this could change based on info from m4b2opus
-removemp4tags=("major_brand" "minor_version" "compatible_brands" "encoded_by" 'OverDrive MediaMarkers' "handler_name" "vendor_id" "ITUNPGAP" "iTunSMPB" "iTunNORM")
+removemp4tags=("major_brand" "minor_version" "compatible_brands" "encoded_by" 'OverDrive MediaMarkers' "handler_name" "vendor_id" "ITUNPGAP" "iTunSMPB" "iTunNORM"  "CUESHEET" "json64" "Track name" "engiTunSMPB" "engiTunPGAP" "engiTunNORM")
 
 
 ####this needs to be done better, but for now if the dependencies aren't here, i want it to just exit the script
 ! command -v opustags > /dev/null && sudo apt install opustags
 ! command -V opustags > /dev/null && { echo "opustags missing; exit 1"; exit 1; }
 
-editscript(){
-  local script path; script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
-     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptpath"); exit
-     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit;
-  fi; }
-##--> editscript() <--#################################################################################
+#editscript(){
+#  local script path; script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
+#     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptpath"); exit
+#     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit;
+#  fi; }
+###--> editscript() <--#################################################################################
 
 pause(){ read -p "$*" ; }
 ##--> pause() <--######################################################################################
@@ -64,17 +64,17 @@ usage() {
     exit 1 ; }
 ##--> usage() <--######################################################################################
 
-confirm(){
- local ans IFS=
- while read -rp "$1" -n1 ans
-   do
-     printf '\n'
-     case "$ans" in
-       [Yy]) return 0;;
-       [Nn]) return 1;;
-     esac
-   done
-}
+#confirm(){
+# local ans IFS=
+# while read -rp "$1" -n1 ans
+#   do
+#     printf '\n'
+#     case "$ans" in
+#       [Yy]) return 0;;
+#       [Nn]) return 1;;
+#     esac
+#   done
+#}
 ##--> confirm() <--###################################################################################
 
 #unused
@@ -198,13 +198,12 @@ reindex(){
   chno=0
 
 
-  if [[ ! -f "chapters.json" ]]; then
-    if confirm "${bold}No chapters.json; retrieve chapter info from the web? ${tput0}"; then
+  if [[ ! -f "chapters.json" ]] && ! (( usemetadata )) &&
+    confirm "${bold}No chapters.json; retrieve chapter info from the web? ${tput0}"; then
 
       curl -X POST "$absserver/api/items/$(itemid)/scan"   -H "Authorization: Bearer $abstoken" -sSo /dev/null
       curl "$absserver/api/search/chapters?asin=$(jq -r '.asin' metadata.json)"   -H "Authorization: Bearer $abstoken" -sSo chapters.json
       newchapters=true
-    fi
   fi
 
   if [[ -f "chapters.json" ]] && [[ ! $(grep '{"error":"Chapters not found"}' "chapters.json") ]]; then
@@ -220,6 +219,7 @@ reindex(){
   else
 #   readarray -t chap_titles < <(jq -r '.chapters[] | .title' "metadata.json" 2>/dev/null)
 #   need to strip literal `\n` characters from chapter titles otherwise it fucks things up
+    jsonfile="metadata.json"
     readarray -t chap_titles < <(jq -r '.chapters[] | .title | gsub("\\n"; " ")' "metadata.json")
     readarray -t chap_starts < <(jq -r '.chapters[] | .start' "metadata.json" 2>/dev/null)
   fi
@@ -281,7 +281,7 @@ reindex(){
     if [[ "$rmmatch" = true ]]; then
       writeindex "$reintitle"
       [[ "$newchapters" = true ]] && curl -X POST "$absserver/api/items/$(itemid)/scan" -H "Authorization: Bearer $abstoken"
-    elif confirm "${bold}${red}Apply index? ${tput0}"; then
+    elif confirm -y "${bold}${red}Apply index?${tput0}"; then
       writeindex "$reintitle"
       [[ "$newchapters" = true ]] && curl -X POST "$absserver/api/items/$(itemid)/scan" -H "Authorization: Bearer $abstoken"
       rmmatch=true  #at this point, having said yes to apply index, yes the rest of the way.
@@ -775,6 +775,8 @@ while [[ "$#" -gt 0 ]]; do
      fi
   elif [[ "$1" = @(-r|--reindex|reindex) ]]; then
     reindex=true
+  elif [[ "$1" = --reindex=metadata.json ]]; then
+    reindex=true; usemetadata=1
   elif [[ "$1" = @(-h|help|--help) ]]; then
     usage
   else
