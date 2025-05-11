@@ -1,3 +1,55 @@
+confirm(){
+  local def prompt reply msg
+
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -1)
+        empty=1
+        shift
+        ;;
+      -y|-Y|-n|-N)
+        def="${1#-}"
+        shift
+        ;;
+      -d|--default)
+        def="$2"
+        shift 2
+        ;;
+      --default=*)
+        def="${1#*=}"
+        shift 1
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        echo "Unknown option: $1" >&2
+        return 2
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+#  msg=$1
+  msg="$(printf %b "$1")"
+  shift
+
+  case $def in
+    y|Y) prompt=" [Y/n] "; def=y ;;
+    n|N) prompt=" [y/N] "; def=n ;;
+    *)   prompt=" [y/n] "; def= ;;
+  esac
+
+  read -p "$msg$prompt" -n 1 -r reply
+  printf \\n
+
+  reply=${reply:-$def}
+
+  [[ $reply =~ ^[Yy]$ ]]
+}
 
 delugecreds(){
   hostlistconf="$HOME/.config/deluge/hostlist.conf"
@@ -7,6 +59,71 @@ delugecreds(){
   delugeport="${confvalues[2]}"
   delugeuser="${confvalues[3]}"
   delugepass="${confvalues[4]}"
+  tracker="$(jq -r '.trackers.mam' "$hostlistconf")"
+}
+
+
+delugecreds(){
+  # Generic config structure example:
+  # -------------------------------
+  # {
+  #   "trackers": {
+  #     "tracker_name": "https://your.tracker.url/announce"
+  #   },
+  #   "hosts": {
+  #     "host_name": {
+  #       "host": "hostname_or_ip",
+  #       "port": 12345,
+  #       "user": "username",
+  #       "pass": "password"
+  #     }
+  #   }
+  # }
+  #
+  # The config file should be located at:
+  # $HOME/.config/mklnbook/mklnbook.conf
+
+  # expected default config structure:
+  local example='{
+  "trackers": {
+    "trackername": "https://example.com/tracker/announce"
+  },
+  "hosts": {
+    "hostname": {
+      "host": "host.example.com",
+      "port": 12345,
+      "user": "username",
+      "pass": "password"
+    }
+  }
+}'
+
+ local conf="$HOME/.config/mklnbook/mklnbook.conf"
+
+ OPTIND=1
+
+  while getopts 'ch:t:l' opt; do
+    case $opt in
+      c) [[ -z "$OPTARG" ]] && { printf 'Missing config file for -c option!\n\nExample config file format:\n%s\n' "$example"; return 1; } || conf=$OPTARG ;;
+      h) host=$OPTARG ;;
+      t) sitetracker=$OPTARG ;;
+      l)
+        echo "Hosts:"
+        jq -r '.hosts | keys[]' "$conf"
+        echo
+        echo "Trackers:"
+        jq -r '.trackers | keys[]' "$conf"
+        return 0
+        ;;
+      *) echo "Usage: delugecreds [-c config] [-h host] [-t tracker]" >&2; return 1 ;;
+    esac
+  done
+
+  delugehost="$(jq -r ".hosts.\"$host\".host" "$conf")"
+  delugeport="$(jq -r ".hosts.\"$host\".port" "$conf")"
+  delugeuser="$(jq -r ".hosts.\"$host\".user" "$conf")"
+  delugepass="$(jq -r ".hosts.\"$host\".pass" "$conf")"
+  tracker="$(jq -r ".trackers.\"$sitetracker\"" "$conf")"
 }
 
 mklnbook(){
@@ -31,8 +148,8 @@ mklnbook(){
   swd="$(pwd)"
   [[ "$1" = @(-v|--verbose) ]] && shift && verbose=1
   abscover="cover.jpg"
-  hostlistconf="$HOME/.config/deluge/hostlist.conf"
-  delugecreds
+#  hostlistconf="$HOME/.config/deluge/hostlist.conf"
+  delugecreds -h gigabyte -t mam 
   linked='/library/torrent/seeds/mam/linked'
   printf '\nDirectory/symlink link destination:\n%s\n' "$linked"
   [[ ! "$1" ]] && set -- .
@@ -57,7 +174,7 @@ mklnbook(){
   [[ "$t" = \[* ]] && t="${t#*\] }"
 # mediainfo "$1"/*\ --\ Audiobook.opus
   mi "$1"/*\ --\ Audiobook.opus|head -n$(($(mi "$1"/*\ --\ Audiobook.opus |\grep -En Menu|cut -f1 -d:) - 1 ))
-  if confirm "Set book metadata from ABS metadata.json? "; then
+  if confirm -y "Set book metadata from ABS metadata.json?"; then
     bookmetadata "$1"||return 1
   fi
   mi "$1"/*\ --\ Audiobook.opus #|head -n$(($(mi "$1"/*\ --\ Audiobook.opus |\grep -En Menu|cut -f1 -d:) - 1 ))
@@ -66,9 +183,9 @@ mklnbook(){
 
   jq -r '.chapters[] | "\(.start) \(.title)"' metadata.json | while read -r start title; do   printf "%-42s : %s\n" "$(sec2sex "$start")" "$title"; done
 
-  if confirm "Reindex $t? "; then
+  if confirm -y "Reindex $t?"; then
     cd "$1"
-    indexopus -r
+    indexopus --reindex=metadata.json
     cd -
   fi
   printf '\nLooking for attached cover:\n'
@@ -86,10 +203,10 @@ mklnbook(){
   if [[ ! -f "$1/$cover" ]] && [[ -f "$abscover" ]]; then
     printf '%s/%s does not exist.\n' "$1" "$cover"
     mediainfo "$abscover" --Inform="Image;$abscover:\n%Height% × %Width%\n"
-    confirm "mv $abscover $1/$cover: " && mv "$abscover" "$1/$cover"
+    confirm -y "mv $abscover $1/$cover: " && mv "$abscover" "$1/$cover"
   fi
   mediainfo "$1/$cover" --Inform="Image;$cover:\n%Height% × %Width%\n"
-  if confirm "Embed $cover? "; then
+  if confirm -y "Embed $cover? "; then
 (( verbose )) && lla "$1/$cover"
 (( verbose )) && read -rp "$1/$cover" temp
 #defults for cover image:
@@ -102,7 +219,7 @@ h=$(mediainfo --Inform="Image;%Height%" "$1/$cover")
 tmpimg=$(mktemp --suffix=.jpg)
 [[ -f "$1/$t -- Audiobook-2.opus" ]] && {
   printf '\nTemporary output opus file exists:\n  %s -- Audiobook-2.opus\n\n' "$1/$t"
-  if confirm "rm $1/$t -- Audiobook-2.opus? "; then
+  if confirm -y "rm $1/$t -- Audiobook-2.opus? "; then
     rm "$1/$t -- Audiobook-2.opus"
   else
     printf 'Temp output opus file exists.  Investigate.\nexit 1\n'
@@ -147,11 +264,12 @@ tmpimg=$(mktemp --suffix=.jpg)
   done
     mediainfo "$1/$t -- Audiobook-2.opus" | \grep --color=always -iE '^Cover[[:space:]]+:'
     ffprobe "$1/$t -- Audiobook-2.opus" 2>&1| \grep --color=always Cover
-    confirm "mv '$1/$t -- Audiobook-2.opus' '$1/$t -- Audiobook.opus'? " && mv "$1/$t -- Audiobook-2.opus" "$1/$t -- Audiobook.opus"
+    confirm -y "mv '$1/$t -- Audiobook-2.opus' '$1/$t -- Audiobook.opus'? " && mv "$1/$t -- Audiobook-2.opus" "$1/$t -- Audiobook.opus"
   fi
   printf 'Check cover, etc., before symlinking:\n'
   eza -la -sold -r --no-user "$1"
-  read -p "..."
+#  read -p "..."
+  confirm -y "...continue?" || return 1
   printf \\n
 #  pause "$1/$t* linked $d"
   ln -sf "$1/$t"* "$linked/$d"
@@ -171,21 +289,26 @@ tmpimg=$(mktemp --suffix=.jpg)
     mv "$i" "${i//\\/_}"
   done 2>/dev/null
   ebook=("$PWD"/*\ --\ eBook.*)
-  if [[ -L "${ebook[0]}" ]] && printf '\neBook found!\n%s\n' "$(eza -la --no-user *\ --\ eBook.*)" && confirm "Remove eBook? "; then
+  if [[ -L "${ebook[0]}" ]] && printf '\neBook found!\n%s\n' "$(eza -la --no-user *\ --\ eBook.*)" &&       confirm -y "Remove eBook? "; then
     rm *\ --\ eBook.*
   fi
   webp=("$PWD"/*.webp)
-  if [[ -L "${webp[0]}" ]] && printf '\nwebp found!\n%s\n' "$(eza -la --no-user *.webp)" && confirm "Remove *.webp? "; then
+  if [[ -L "${webp[0]}" ]] &&
+   printf '\nwebp found!\n%s\n' "$(eza -la --no-user *.webp)" &&
+   confirm  -y "Remove *.webp? "; then
     rm *.webp
   fi
   opf=("$PWD"/*.opf)
-  if [[ -L "${opf[0]}" ]] && printf '\nopf found!\n%s\n' "$(eza -la --no-user *.opf)" && confirm "Remove *.opf? "; then
+  if [[ -L "${opf[0]}" ]] &&
+   printf '\nopf found!\n%s\n' "$(eza -la --no-user *.opf)" &&
+   confirm -y "Remove *.opf? "; then
     rm *.opf
   fi
   (( SSHTRUSTED )) && pwd|xclip || printf 'Cannot use xclip; copy the folder location manually...\n'
   printf '\nCheck files before returning to swd:\n'
   eza -la -sold -r --no-user
-  read -p "..."
+#  read -p "..."
+  confirm -d y "...continue?" || return 1
   torrentfile="/library/torrent/${PWD##*/}.torrent"
   transmission-create -p -t "$tracker" -o "$torrentfile" "$(pwd)"
 #  { cd "$linked/$d; mediainfo $t -- Audiobook.ogg"; }
@@ -193,6 +316,7 @@ tmpimg=$(mktemp --suffix=.jpg)
 [[ "$torrentfile" = *\;* ]] && cp "$torrentfile" "${torrentfile//\;/_}" && torrentfile="${torrentfile//\;/_}" && read -rp "torrent file copied to $torrentfile as deluge-console cannot accpet semicolons in file names!"
   deluge-console "connect $delugehost:$delugeport $delugeuser $delugepass; add -p ${linked@Q} ${torrentfile@Q}"
   mediainfo "$t -- Audiobook.ogg"
+  mediainfo "$t -- Audiobook.ogg"|xclip
   printf '\nLeaving: \n%s\n' "$(pwd)"
   printf '\nReturning to %s\n\n' "$swd"
   cd - > /dev/null

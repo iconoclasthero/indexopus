@@ -1,16 +1,16 @@
 #!/bin/bash
 . /usr/local/bin/editscript
+. $HOME/bin/gits/indexopus/mklnbook.functions
 
-exarray(){
-local output delim
-delim="$1"
-echo "$delim"
-shift
-output="$(IFS="$delim"; printf %s "$*")"
-output="${output//"$delim"/"$delim" }"
-printf %s\\n "$output"
-}
-
+#exarray(){
+#  local output delim
+#  delim="$1"
+#  echo "$delim"
+#  shift
+#  output="$(IFS="$delim"; printf %s "$*")"
+#  output="${output//"$delim"/"$delim" }"
+#  printf %s\\n "$output"
+#}
 
 exarray(){
   local i delim output
@@ -28,40 +28,26 @@ exarray(){
 striptags(){
   local output="$1" mp4grep mp4opustags chaptag tags ck4tags args
   [[ ! "$removemp4tags" ]] &&
-    removemp4tags=("major_brand" "minor_version" "compatible_brands" "encoded_by" 'OverDrive MediaMarkers' "handler_name" "vendor_id" "ITUNPGAP" "iTunSMPB" "iTunNORM" "CUESHEET" "json64" "Track name" "engiTunSMPB" "engiTunPGAP" "engiTunNORM")
+  removemp4tags=("major_brand" \
+                 "minor_version" \
+                 "compatible_brands" \
+                 "encoded_by" \
+                 "OverDrive MediaMarkers" \
+                 "handler_name" \
+                 "vendor_id" \
+                 "ITUNPGAP" \
+                 "iTunSMPB" \
+                 "iTunNORM" \
+                 "CUESHEET" \
+                 "json64" \
+                 "Track name" \
+                 "engiTunSMPB" \
+                 "engiTunPGAP" \
+                 "engiTunNORM" \
+                )
 
-##pause "$(printf %s\\n "${removemp4tags[@]}")"
-#
-#
-##this works, why won't it work in the array?
-## opustags -d "OverDrive MediaMarkers" -i "$output"
-#  if [[ "$(opustags "$output")" = *CHAPTER* ]]
-#    then
-#      printf '\n%s%s%s contains existing tags; removing...%s\n' "$relipsis" "$bold" "$title" "$tput0"
-#      tags=( $(opustags "$output") )
-#      tags=( $(printf -- '-d%s\n' "${tags[@]%=*}"|\grep CHAPTER|sort -u) )
-#      printf '\n%smediainfo of existing %s:%s\n' "$relipsis" "$output" "$tput0"
-#      mediainfo "$output"
-#      printf '\n%sremoving exiting CHAPTER tags with opustags...%s\n\n' "$relipsis" "$tput0"
-#      opustags "${tags[@]}" -i "$output"
-#      ck4tags=( "$(opustags "$output" | grep --color=always -i chapter)" ) &&
-#      printf 'Error!\nCHAPTER tags still present in opus file.\n%s' "${ck4tags[@]}" &&
-#      exit
-#  else
-#    printf '%smediainfo of existing %s:%s\n' "$relipsis" "$output" "$tput0"
-#    mediainfo "$output"
-#  fi
-#
-#  while read -r chaptag
-#    do
-#      args+=(-a "$chaptag"\ )
-#    done < "$tmp/opusindex"
-#
-#  opustags -i "$output" "${args[@]}"
-#  printf '%sChapter info added...\n%s' "$relipsis" "$tput0"
-  printf '%sStripping MP4 tags%s\n%s' "$relipsis" "$relipsis" "$tput0"
+  printf '%sStripping unwanted tags%s\n%s' "$relipsis" "$relipsis" "$tput0"
 
-#  [[ "$rmmatch" != 'true' ]] &&    ####why the fuck is this here?
   mp4grep="$(IFS=\|; echo "${removemp4tags[*]}")"
 
 #  This is method one to remove the unwanted mp4 tags:
@@ -79,15 +65,10 @@ striptags(){
     done
 
     mp4args+=(-i "$output")    # Should I also use readarray here?  difference?
-    opustags "${mp4argss[@]}"
+    opustags "${mp4args[@]}"
   fi
 
 }
-
-
-
-
-
 
 
 [[ "$1" = @(-v|--verbose) ]] && verbose=1 && shift
@@ -108,12 +89,43 @@ fi
 
 (( verbose )) && pause "title: $title"
 
-opustitle=("$bookdir"/*.opus)
+#bookdir="$(pwd)"
+shopt -s nullglob
+allopus=("$bookdir"/*opus)
+opustitle=("$bookdir"/*" -- Audiobook.opus")
+[[ "${allopus[*]}" != "${opustitle[*]}" ]] && opusmatch=1
+if (( "${#opustitle[@]}" < 1 )); then
+  printf 'No audiobook in the format of <title> -- Audiobook.opus found!\n'
+  (( opusmatch )) && { printf 'Multiple *.opus files found!\nUnmerged audiobook?\n\n'
+                       printf %s\\n "${allopus[@]}"
+                       printf '\nInvestigate (exit 1)\n'
+                     }
+  exit 1
+elif (( "${#opustitle[@]}" > 1 )); then
+  printf 'Error: not exaclty one <title> -- Audiobook.opus file in %s:\n' "$bookdir"
+  if (( opusmatch )); then
+    printf 'Multiple *.opus files found!\nUnmerged audiobook?\n'; \
+    printf %s\\n "${allopus[@]}"
+    printf '\nInvestigate. (exit 1)\n\n'
+    exit 1
+  else
+    printf %s\\n "${opustitle[@]}"
+    printf '\nInvestigate. (exit 1)\n\n'
+    exit 1
+  fi
+elif (( opusmatch )); then
+  printf 'Error: directory contains multiple .opus files including <title> -- Audiobook.opus:\n'
+  printf %s\\n "${allopus[@]}"
+  printf \\n
+  ! confirm "Proceed with tagging ${opustitle[*]}?" &&
+    { printf 'Investigate. (exit 1)\n\n'; exit 1; }
+fi
+
 opustitle="${opustitle[*]##*\/}"
 opustitle="${opustitle% -- Audiobook.opus}"
 
 [[ "$title" != "$opustitle" ]] &&
-  { printf '\nTitle from directory name does not match the title of the opus file:\n$title [from directory name]: %s\n$opustitle [from .opus name]: %s\nInvestigate (exit 1)\n\n' "$title" "$opustitle"; \
+  { printf '\nTitle from directory name does not match the title of the opus file:\n$title [from directory name]: %s\n$opustitle [from .opus name]: %s\nInvestigate. (exit 1)\n\n' "$title" "$opustitle"; \
   exit 1; }
 
 (( verbose )) && pause "Reveiew titles:"
@@ -138,13 +150,14 @@ else
   album="$title"
   unset subtitle TIT3
 fi
+genre="$(jq -r '.genres | join("; ")' "$metadata")"
 readarray -t genres < <(jq -r '.genres[]' "$metadata")
 series="$(jq -r '.series | join ("; ")' "$metadata")"
-genre="$(jq -r '.genres | join("; ")' "$metadata")"
+readarray -t mseries < <(jq -r '.series[]' "$metadata")
 readarray -t tagarray < <(jq -r '.tags[]' "$metadata")
 date="$(jq -r '.publishedYear' "$metadata")"
 description="$(jq -r '.description' "$metadata")"
-# replaced by the jq below [[ "$descrption" = \<p\>* ]] && description="${description#\<p\>}" && description="${descrption//\<\/p\>}"
+# replaced by the jq below [[ "$descrption" = \<p\>* ]] && description="${description#\<p\>}" && description="${description//<\/p>/}"
 
 # this might not be a good idea because then then the whole thing won't render properly as html...
 #description="$(jq -r '
@@ -155,7 +168,7 @@ description="$(jq -r '.description' "$metadata")"
 #' metadata.json)"
 
 comment="$description"
-#readarray -t narrators < <(jq -r '.narrators[]' "$metadata")
+readarray -t narrators < <(jq -r '.narrators[]' "$metadata")
 composer="$(jq -r '.narrators | join("; ")' "$metadata")"
 copyright="$(jq -r '.publisher' "$metadata")"
 publisher="$copyright"
@@ -164,52 +177,38 @@ language="$(jq -r '.language' "$metadata")"
 isbn="$(jq -re '.isbn | select(. != null)' "$metadata" || unset isbn)"
 asin="$(jq -re '.asin | select(. != null)' "$metadata" || unset asin)"
 
+[[ "$language" != "English" ]] && confirm -y "The language tag is \"$language\", not \"English\"$'!'\nWould you like to set \"language=English\"?" && language="English"
 
-#printf %s\\n\\n "$description" "$title: $subtitle" "${authors[@]}" "${narrators[0]}"
-#composer="$(IFS=,; printf "${narrators[*]}")"
-#composer="${composer//,/, }"
-#artist="$(IFS=,; echo "${authors[*]}")"
-#artist="${artist//,/, }"
-#artist="$( exarray ", " "${authors[@]}" )"
-#artist="$(jq -r '.authors | join(", ")' "$metadata")"
-#composer="$(exarray ", " "${narrators[@]}")"
-#genre="$(exarray "; " "${genres[@]}")"
-
-#printf %s\\n "$title" "$artist" "$album_artist" "$album" "$TIT3" "$genre" "$date" "$comment" "$description" "$composer" "$copyright" "$publisher" "$TRACKTOTAL" "${isbn:+$isbn}" "${asin:+$asin}"
-
-
-#printf title=%s\\n "$title"
-#printf artist=%s\\n "$artist"
-#printf ALBUMARTIST=%s\\n "$album_artist"
-#printf composer=%s\\n "$composer"
-#printf album=%s\\n "$album"
-#printf subtitle=%s\\n "$subtitle"
-#printf TIT3=%s\\n "$TIT3"
-#printf date=%s\\n "$date"
-##printf copyright=%s\\n "$copyright"
-#printf genre=%s\\n "$genre"
-#printf DESCRIPTION=%s\\n "$description"
-#printf publisher=%s\\n "$publisher"
-##printf comment="$comment"
-#args=("opustags")
 args=(-i)
 args+=("$book")
-args+=("--set" "title=$title")
-args+=("--set" "artist=$artist")
-args+=("--set" "ALBUMARTIST=$album_artist")
-args+=("--set" "composer=$composer")
+args+=("--set" "Title=$title")
+#args+=("--set" "artist=$artist")
+for i in "${authors[@]}"; do args+=("--set" "artist=$i"); done
+for i in "${authors[@]}"; do args+=("--set" "Author=$i"); done
+#args+=("--set" "ALBUMARTIST=$album_artist")
+for i in "${authors[@]}"; do args+=("--set" "ALBUMARTIST=$i"); done
+#args+=("--set" "composer=$composer")
+for i in "${narrators[@]}"; do args+=("--set" "composer=$i"); done
+for i in "${narrators[@]}"; do args+=("--set" "Narrator=$i"); done
 args+=("--set" "album=$album")
-[[ "$subtitle" ]] && args+=("--set" "subtitle=$subtitle")
-[[ "$TIT3" ]] && args+=("--set" "TIT3=$TIT3")
-[[ "$series" ]] && args+=("--set" "grouping=$series")
-args+=("--set" "Language=English")
+[[ "$subtitle" ]] && args+=("--set" "Subtitle=$subtitle")
+#[[ "$series" ]] && args+=("--set" "grouping=$series")
+[[ "$series" ]] && for i in "${series[@]}"; do args+=("--set" "grouping=$i"); done
+[[ "$series" ]] && for i in "${series[@]}"; do args+=("--set" "Series=$i"); done
+args+=("--set" "Language=$language")
 args+=("--set" "date=$date")
 #args+=("--set" "copyright=$copyright")
-args+=("--set" "genre=$genre")
+#args+=("--set" "genre=$genre")
+for i in "${genres[@]}"; do args+=("--set" "genre=$i"); done
 args+=("--set" "DESCRIPTION=$description")
 args+=("--set" "publisher=$publisher")
 for i in "${tagarray[@]}"; do args+=("--set" "Tags=$i"); done
 #args+=("--set" "comment=$comment")
+
+[[ "$series" ]] && for i in "${series[@]}"; do args+=("--set" "TIT1=$i"); done
+args+=("--set" "TIT2=$title")
+[[ "$TIT3" ]] && args+=("--set" "TIT3=$TIT3")
+
 (( verbose )) && printf %s\\n "${args[@]}" && pause "tag? "
 opustags "${args[@]}"
 striptags "$book"
