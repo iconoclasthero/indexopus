@@ -309,14 +309,14 @@ while (( $# > 0 )); do
   [[ "$1" = @(edit|e|nano) ]] && editscript
   [[ "$1" = "-y" ]] && shift && rmmatch=true
   [[ "$1" = "--stats" ]] && shift && stats=true
-  [[ "$1" = @(--screen|-s) ]] && shift && screened=true
-  [[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=true
+  [[ "$1" = @(--screen|-s) ]] && shift && screened=1
+  [[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=1
   [[ -f "$1" ]] && clifile="$1" && shift  #these don't actually do anything
   [[ -d "$1" ]] && clidir="$1" && shift   #at the moment but they could...there has to be some catchall condition for things not in this list or it will loop endlessly...
   [[ "$1" = "" ]] && shift
 done
 
-if "${screened:=false}"; then
+if (( screened )); then
   printline "$bold Calling m4b2opus in GNU screen $tput0"
   printf \\n\\n
   allm4s=(*.m4[ab])

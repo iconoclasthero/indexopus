@@ -1,5 +1,6 @@
 #!/bin/bash
 . /usr/local/bin/editscript
+. $HOME/.config/indexopus.conf
 . $HOME/bin/gits/indexopus/mklnbook.functions
 
 #exarray(){
@@ -11,6 +12,14 @@
 #  output="${output//"$delim"/"$delim" }"
 #  printf %s\\n "$output"
 #}
+
+red="$(tput setaf 9)" #red fg
+green="$(tput setaf 2)" #green fg
+white="$(tput setaf 15)" #white fg
+tput0="$(tput sgr0)" #reset tput changes
+bold="$(tput bold)" #bold on
+boldred="$(tput setaf 9 bold)"
+relipsis="$red..."
 
 exarray(){
   local i delim output
@@ -27,8 +36,8 @@ exarray(){
 
 striptags(){
   local output="$1" mp4grep mp4opustags chaptag tags ck4tags args
-  [[ ! "$removemp4tags" ]] &&
-  removemp4tags=("major_brand" \
+  [[ ! "$removetags" ]] &&
+  removetags=("major_brand" \
                  "minor_version" \
                  "compatible_brands" \
                  "encoded_by" \
@@ -44,14 +53,16 @@ striptags(){
                  "engiTunSMPB" \
                  "engiTunPGAP" \
                  "engiTunNORM" \
+                 "TRACKNUMBER" \
+                 "tracknumber" \
                 )
 
   printf '%sStripping unwanted tags%s\n%s' "$relipsis" "$relipsis" "$tput0"
 
-  mp4grep="$(IFS=\|; echo "${removemp4tags[*]}")"
+  mp4grep="$(IFS=\|; echo "${removetags[*]}")"
 
 #  This is method one to remove the unwanted mp4 tags:
-  readarray -t mp4opustags -- < <(printf -- '-d\n%s\n' "${removemp4tags[@]}")
+  readarray -t mp4opustags -- < <(printf -- '-d\n%s\n' "${removetags[@]}")
   mp4opustags+=(-i "$output")
   [[ $( opustags "$output" |grep -E "$mp4grep" ) ]] && opustags "${mp4opustags[@]}"
 
@@ -60,7 +71,7 @@ striptags(){
 #  Keeping for reference for a while since this is such a fucking pain in the ass.
 
   if [[ $( opustags "$output" |grep -E "$mp4grep" ) ]]; then
-    for i in "${removemp4tags[@]}"; do
+    for i in "${removetags[@]}"; do
       mp4args+=(-d "$i")
     done
 
@@ -82,9 +93,11 @@ title="${title% \[TTC\]*}"
 title="${title%%:*}"
 
 if [[ "$title" =~ ^\[.+\] ]]; then
-  printf '\nWARN: Title from directory begins with "%s" which will be stripped!\n\n' "${title%%\]*}]"
-  pause "Press any key to continue or ^C to exit"
-  title="${title#*\] }"
+  verbose=1
+#  printf '\nWARN: Title from directory begins with "%s" which will be stripped!\n\n' "${title%%\]*}]"
+  printf '\nWARN: Title from directory begins with "%s"!\n\n' "${title%%\]*}]"
+#  pause "Press any key to continue or ^C to exit"
+  confirm "${boldred}Strip ${title%%\]*}] from linked directory title?$tput0" && title="${title#*\] }"
 fi
 
 (( verbose )) && pause "title: $title"
@@ -96,11 +109,13 @@ opustitle=("$bookdir"/*" -- Audiobook.opus")
 [[ "${allopus[*]}" != "${opustitle[*]}" ]] && opusmatch=1
 if (( "${#opustitle[@]}" < 1 )); then
   printf 'No audiobook in the format of <title> -- Audiobook.opus found!\n'
-  (( opusmatch )) && { printf 'Multiple *.opus files found!\nUnmerged audiobook?\n\n'
-                       printf %s\\n "${allopus[@]}"
-                       printf '\nInvestigate (exit 1)\n'
-                     }
-  exit 1
+    if (( opusmatch )); then
+      printf '%sMultiple *.opus files found!\nUnmerged audiobook?\n\n%s' "$boldred" "$tput0"
+      printf %s\\n "${allopus[@]}"
+      confirm -Y "${boldred}\nMerge opus files with indexopus?$tput0" && indexopus &&
+        opustitle=("$bookdir"/*" -- Audiobook.opus")  ||
+        { printf '\nInvestigate (exit 1)\n'; exit 1; }
+    fi
 elif (( "${#opustitle[@]}" > 1 )); then
   printf 'Error: not exaclty one <title> -- Audiobook.opus file in %s:\n' "$bookdir"
   if (( opusmatch )); then
@@ -124,17 +139,22 @@ fi
 opustitle="${opustitle[*]##*\/}"
 opustitle="${opustitle% -- Audiobook.opus}"
 
-[[ "$title" != "$opustitle" ]] &&
+if [[ "$title" != "$opustitle" ]]; then
+  strippedtitle="${title#*\] }"; strippedtitle="${strippedtitle% \[*}"
+(( verbose )) && printf .%s.\\n "$strippedtitle"
+  [[ "$strippedtitle" != "$opustitle" ]] &&
   { printf '\nTitle from directory name does not match the title of the opus file:\n$title [from directory name]: %s\n$opustitle [from .opus name]: %s\nInvestigate. (exit 1)\n\n' "$title" "$opustitle"; \
   exit 1; }
+fi
 
 (( verbose )) && pause "Reveiew titles:"
 printf '\n$title [from directory name]: %s\n$opustitle [from .opus file name]: %s\n\n' "$title" "$opustitle"
 
 metadata="$bookdir/metadata.json"
-book="$bookdir/$title -- Audiobook.opus"
+book="$bookdir/${strippedtitle:-title} -- Audiobook.opus"
 (( verbose )) && pause "$book"
 
+## what is this doing?? shouldn't this be a -f?
 [[ "$book" = *\*Audiobook.opus ]] && printf 'Audiobook does not exist!\nCheck %s.\nexit 1\n\n' "$bookdir" && exit 1
 
 title="$(jq -r '.title' "$metadata")"
@@ -211,6 +231,7 @@ args+=("--set" "TIT2=$title")
 
 (( verbose )) && printf %s\\n "${args[@]}" && pause "tag? "
 opustags "${args[@]}"
+
 striptags "$book"
 
 printf \\n

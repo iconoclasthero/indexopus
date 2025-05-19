@@ -13,7 +13,7 @@ pause(){ read -rp "$*" ; }
 ext="opus"
 #ext="m4b"
 #ext="flac"
-#ext="mp3"
+ext="mp3"
 #ext="${1##*.}"
 scriptname="$(realpath $0)"
 

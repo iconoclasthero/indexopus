@@ -111,17 +111,27 @@ confirm(){
 
 
 printline(){
-  local lead linetitle leader strippedleader leader_length remaining_width line
+  local lead linetitle leader strippedleader leader_length remaining_width line endlines
   #line="$(printf '%s%*s\n' "$red" "$(tput cols)"|tr ' ' "-")$tput0"
-  linetitle="$1"
+
+  [[ "$1" ]] && linetitle="$1" ||
+  linetitle="${bold} $scriptpath $tput0"
+
+  # Allow for "$1" to contain `\n`s to pad the line before...
+  while [[ "$linetitle" = "\n"* ]]; do
+    printf \\n
+    linetitle="${linetitle#\\n}"
+  done
+  # ...And after
+  while [[ "$linetitle" = *"\n" ]]; do
+    (( endlines++ ))
+    linetitle="${linetitle%\\n}"
+  done
 
   # Define the lead including formatting
-  lead="${red}---------${white}${bold}"
+  lead="${red}—————————${white}${bold}"
 
   # Define the title and leader including formatting
-  [[ -n "$1" ]] &&
-  linetitle="$1" ||
-  linetitle="${bold} $scriptpath $tput0"
   leader="$lead$linetitle"
 
   # Strip control characters from the leader
@@ -131,9 +141,54 @@ printline(){
   remainingwidth=$(( $(tput cols) - ${#strippedleader} ))
 
   # Construct the line
-  line="${leader}${red}$(printf '%*s' "$remainingwidth" | tr ' ' '-')${tput0}"
-  echo "$line"
+# line="${leader}${red}$(printf '%*s' "$remainingwidth" | tr ' ' '—')${tput0}"
+  line="${leader}${red}$(printf '%*s' "$remainingwidth" '' | sed 's/ /—/g')${tput0}"
+
+  printf %s\\n "$line"
+
+  for (( i=0; i<endlines; i++ )); do
+    printf \\n
+  done
 }
+##--> printline() <--################################################################
+
+hr2(){
+  local width="$(tput -T $TERM cols)"
+  local status=""
+  local left_padding=22
+
+  # Determine the status and padding based on the input
+  if [[ "$1" = "--center" ]]; then
+    status="$2"
+    left_padding=$(( (width - ${#status} - 2) / 2 ))
+  elif [[ "$2" == "--center" ]]; then
+    status="$1"
+    left_padding=$(( (width - ${#status} - 2) / 2 ))
+  elif [[ "$1" =~ ^[0-9]+$ ]]; then
+    status="$2"
+    left_padding="$1"
+  elif [[ "$2" =~ ^[0-9]+$ ]]; then
+    status="$1"
+    left_padding="$2"
+  elif [[ "$1" == "center" || "$2" == "center" ]]; then
+    if [[ "$1" == "center" ]]; then
+      status="$2"
+    else
+      status="$1"
+    fi
+    left_padding=$(( (width - ${#status} - 2) / 2 ))
+  else
+    status="$1"
+    left_padding="${2:-22}"
+  fi
+
+  local left_dashes=$(printf -- '%.0s—' $(seq 1 "$left_padding"))
+  local right_dashes=$(printf -- '%.0s—' $(seq 1 "$((width - left_padding - ${#status} - 2))"))
+
+  printf '%s %s %s\n' "$left_dashes" "$status" "$right_dashes"
+}
+##--> hr2() <--################################################################
+
 
 sex2sec(){
   local time="$1";
@@ -146,7 +201,7 @@ sex2sec(){
 #  pause "no min $(local total_seconds=$(( (10#$hours * 3600) + (10#$seconds) )) )"
 #  pause "no hours $(local total_seconds=$(( (10#$minutes * 60) + (10#$seconds) )) )"
   echo "$total_seconds" ;  }
-##--> sexagesimal_to_sec() <--##################################################################
+##--> sex2sec() <--##################################################################
 
 checkdur(){  #came from opus.book.4  #refactored below to be more concise.
   local m4as m4bs opuss mp3s checkdurexts
