@@ -109,12 +109,18 @@ opustitle=("$bookdir"/*" -- Audiobook.opus")
 [[ "${allopus[*]}" != "${opustitle[*]}" ]] && opusmatch=1
 if (( "${#opustitle[@]}" < 1 )); then
   printf 'No audiobook in the format of <title> -- Audiobook.opus found!\n'
-    if (( opusmatch )); then
+    if (( opusmatch )) && (( "${#allopus[@]}" > 1 )); then
       printf '%sMultiple *.opus files found!\nUnmerged audiobook?\n\n%s' "$boldred" "$tput0"
       printf %s\\n "${allopus[@]}"
       confirm -Y "${boldred}\nMerge opus files with indexopus?$tput0" && indexopus &&
         opustitle=("$bookdir"/*" -- Audiobook.opus")  ||
         { printf '\nInvestigate (exit 1)\n'; exit 1; }
+    elif (( opusmatch )) && (( "${#allopus[@]}" == 1 )); then
+      printf 'It appears you need to rename the opus files in your book directory.\n'
+      confirm "Move\n  ${allopus[0]} \n  ${allopus[0]%.opus} -- Audiobook.opus\nConfirm move?" &&
+        mv "${allopus[0]}" "${allopus[0]%.opus} -- Audiobook.opus" ||
+        printf 'Unable to find suitible file in the form of %s -- Audiobook.opus\nExiting (exit 1)\n\n' "$title"
+      exit 1
     fi
 elif (( "${#opustitle[@]}" > 1 )); then
   printf 'Error: not exaclty one <title> -- Audiobook.opus file in %s:\n' "$bookdir"
@@ -151,7 +157,7 @@ fi
 printf '\n$title [from directory name]: %s\n$opustitle [from .opus file name]: %s\n\n' "$title" "$opustitle"
 
 metadata="$bookdir/metadata.json"
-book="$bookdir/${strippedtitle:-title} -- Audiobook.opus"
+book="$bookdir/${strippedtitle:-$title} -- Audiobook.opus"
 (( verbose )) && pause "$book"
 
 ## what is this doing?? shouldn't this be a -f?
@@ -229,8 +235,12 @@ for i in "${tagarray[@]}"; do args+=("--set" "Tags=$i"); done
 args+=("--set" "TIT2=$title")
 [[ "$TIT3" ]] && args+=("--set" "TIT3=$TIT3")
 
-(( verbose )) && printf %s\\n "${args[@]}" && pause "tag? "
-opustags "${args[@]}"
+if (( verbose )); then
+  printf %s\\n "${args[@]}"
+  confirm -y "Apply tags to audiobook with opustags?" && opustags "${args[@]}"
+else
+  opustags "${args[@]}"
+fi
 
 striptags "$book"
 

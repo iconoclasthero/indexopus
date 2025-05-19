@@ -285,7 +285,8 @@ mklnbook(){
   audiobookopus=( "$1"/*\ --\ Audiobook.opus )
   [[ "$audiobookopus" ]] && mediainfo "$1"/*\ --\ Audiobook.opus|head -n$(($(mediainfo "$1"/*\ --\ Audiobook.opus |\grep -En Menu|cut -f1 -d:) - 1 ))
   if confirm -y "${boldred}Set book metadata from ABS metadata.json?$tput0"; then
-    bookmetadata --verbose "$1"||return 1
+    (( verbose )) && { bookmetadata --verbose "$1"||return 1; } ||
+      { bookmetadata "$1"||return 1; }
   fi
   mediainfo "$1"/*\ --\ Audiobook.opus #|head -n$(($(mi "$1"/*\ --\ Audiobook.opus |\grep -En Menu|cut -f1 -d:) - 1 ))
 
@@ -433,12 +434,13 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
   w=$(mediainfo --Inform="Image;%Width%" "$1/$cover")
   h=$(mediainfo --Inform="Image;%Height%" "$1/$cover")
   (( w > h )) && largest="$w" || largest="$h"
-  unset embedcover
+  unset embedcover embeddef
   (( w == 2400 && h == 2400 )) && embedcover=1 &&
     printf 'Cover is 2400×2400 — likely Audible default. Skipping embed prompt.\n'
 
   printf '\nLooking for attached cover:\n'
   mediainfo "$1/$t -- Audiobook.opus" | \grep --color=always -iE '^Cover[[:space:]]+:'
+  mediainfo "$1/$t -- Audiobook.opus" | \grep --color=always -A10 Image
   ec1="$?"
 #  ffprobe "$1/$t -- Audiobook.opus" 2>&1 | \grep --color=always Cover
 #  ffprobe "$1/$t -- Audiobook.opus" 2>&1 | { \grep --color=always 'Stream #0:1' -A2 || \grep --color=always Cover; }
@@ -467,7 +469,12 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
 #  w=$(mediainfo --Inform="Image;%Width%" "$1/$cover")
 #  h=$(mediainfo --Inform="Image;%Height%" "$1/$cover")
 #  (( w > h )) && largest="$w" || largest="$h"
+
   tmpimg=$(mktemp --suffix=.jpg)
+  cp "$1/$cover" "$tmpimg"
+
+(( verbose )) && { printf %s\\n "$tmpimg"; mediainfo "$tmpimg"; }
+
   [[ -f "$1/$t -- Audiobook-2.opus" ]] &&
     {
      printf '\nTemporary output opus file exists:\n  %s -- Audiobook-2.opus\n\n' "$1/$t"
@@ -486,39 +493,87 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
 #      opustags -o "$1/$t -- Audiobook-2.opus" --set-cover "$cover" "$1/$t -- Audiobook.opus"
 #    fi
 
-  while :; do
-    if (( largest < scale )); then
-      tmpimg="$1/$cover"
-      scale="$largest"
-(( verbose )) && read -rp "$tmpimg"
-    elif (( w >= h )); then
-      convert "$1/$cover" -resize "${scale}x" -strip -quality 85 "$tmpimg"
-    else
-      convert "$1/$cover" -resize "x${scale}" -strip -quality 85 "$tmpimg"
-    fi
+#  while :; do
+#    if (( largest < scale )); then
+#      tmpimg="$1/$cover"
+#      scale="$largest"
+#(( verbose )) && read -rp "$tmpimg"
+#    elif (( w >= h )); then
+#      convert "$1/$cover" -resize "${scale}x" -strip -quality 85 "$tmpimg"
+#    else
+#      convert "$1/$cover" -resize "x${scale}" -strip -quality 85 "$tmpimg"
+#    fi
+#
+#    size=$(stat -c %s "$tmpimg"); echo "${scale}: $size"
+#(( verbose )) && read -rp "${scale}: $size"
+#    if (( size < maxcover )); then
+#      opustags -o "$1/$t -- Audiobook-2.opus" --set-cover "$tmpimg" "$1/$t -- Audiobook.opus"
+#      ec="$?"
+#      (( ec )) && { printf 'opustags reported an unknown error embedding %s, see above.\nexiting (return 1)' "$tmpimg"; return 1; }
+#      break
+## 2025-05-18T21:37-04:00
+## mediainfo now does not report conformance erros for large images so there was never a problem
+## and this check is unnecessary.  If 1200x1200 is the starting size and it gets scaled down further
+## that's fine.  this can go in a couple weeks.
+##      mediainfo "$1/$t -- Audiobook-2.opus" | grep -q 'Conformance errors'
+##      ec="$?"
+##      if (( ec == 1 )); then
+##        break
+##      elif (( ec == 0 )); then
+##        printf 'Image still larger than max page size\nContinue resizing...\n'
+##      elif (( ec != 0 )); then
+##        printf 'Error checking conformance\n' >&2
+##        info=$(mediainfo "$1/$t -- Audiobook-2.opus")
+##        printf %s\\n "$info"
+##        grep 'Conformance errors' <<< "$info"
+##        exit $ec
+##      fi
+#    fi
+#    (( scale -= 50 ))
+#    (( scale <= 0 )) && {     echo "image too large even at minimal scale" >&2;     exit 1;   }
+#  done
 
-    size=$(stat -c %s "$tmpimg"); echo "${scale}: $size"
-(( verbose )) && read -rp "${scale}: $size"
-    if (( size < maxcover )); then
-      opustags -o "$1/$t -- Audiobook-2.opus" --set-cover "$tmpimg" "$1/$t -- Audiobook.opus"
-      mediainfo "$1/$t -- Audiobook-2.opus" | grep -q 'Conformance errors'
-      ec="$?"
-      if (( ec == 1 )); then
-        break
-      elif (( ec == 0 )); then
-        printf 'Image still larger than max page size\nContinue resizing...\n'
-      elif (( ec != 0 )); then
-        printf 'Error checking conformance\n' >&2
-        info=$(mediainfo "$1/$t -- Audiobook-2.opus")
-        printf %s\\n "$info"
-        grep 'Conformance errors' <<< "$info"
-        exit $ec
-      fi
-    fi
-    (( scale -= 50 ))
-    (( scale <= 0 )) && {     echo "image too large even at minimal scale" >&2;     exit 1;   }
-  done
+
+# need to delete in a couple weeks 2025-05-18T22:08-04:00
+
+size=$((1<<30)) # 1 GiB size
+
+until (( size < maxcover )); do
+
+(( verbose )) && mediainfo "$tmpimg"
+  (( scale > largest )) && scale="$largest"
+
+  (( verbose )) && read -rp "Preparing: $tmpimg"
+
+  if (( w >= h )); then
+    convert "$1/$cover" -resize "${scale}x" -strip -quality 85 "$tmpimg"
+  else
+    convert "$1/$cover" -resize "x${scale}" -strip -quality 85 "$tmpimg"
+  fi
+
+  size=$(stat -c %s "$tmpimg")
+  echo "${scale}: $size"
+  (( verbose )) && read -rp "${scale}: $size"
+
+  (( scale -= 50 ))
+  (( scale <= 0 )) && {
+    echo "image too large even at minimal scale" >&2
+    exit 1
+  }
+done
+
+(( verbose )) && { printf 'Adding %s to audiobook\n'; mediainfo "$tmpimg"; }
+
+opustags -o "$1/$t -- Audiobook-2.opus" --set-cover "$tmpimg" "$1/$t -- Audiobook.opus"
+ec=$?
+if (( ec )); then
+  printf 'opustags reported an unknown error embedding %s, see above.\n' "$tmpimg" >&2
+  return "$ec"
+fi
+
+
     mediainfo "$1/$t -- Audiobook-2.opus" | \grep --color=always -iE '^Cover[[:space:]]+:'
+    mediainfo "$1/$t -- Audiobook-2.opus" | \grep --color=always -A10 Image
 #    ffprobe "$1/$t -- Audiobook-2.opus" 2>&1| \grep --color=always Cover
     ffprobe "$1/$t -- Audiobook-2.opus" 2>&1| \grep -E --color=always -A 2 Stream\ #0\:1\|Cover
     confirm -y "\n${boldred}mv '$t -- Audiobook-2.opus' '$t -- Audiobook.opus'?$white" && mv "$1/$t -- Audiobook-2.opus" "$1/$t -- Audiobook.opus"
