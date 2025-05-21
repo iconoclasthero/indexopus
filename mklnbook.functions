@@ -198,12 +198,13 @@ mklnbook(){
   }
 ##--> sec2sex() <--################################################################
 
-  local a sd f t i d abscover linked hostlistconf delugehost delugeport delugeuser delugepass swd verbose cktorrent
+  local a sd f t i d abscover linked hostlistconf delugehost delugeport delugeuser delugepass swd verbose cktorrent yes
   clear -x
   printline "\n Starting ${FUNCNAME[0]} \n"
 
   swd="$(pwd)"
   [[ "$1" = @(-v|--verbose) ]] && shift && verbose=1
+  [[ "$1" = -Y ]] && shift && yes=1
 #  hostlistconf="$HOME/.config/deluge/hostlist.conf"
   delugecreds -h gigabyte -t mam
   linked='/library/torrent/seeds/mam/linked'
@@ -284,7 +285,8 @@ mklnbook(){
 # mediainfo "$1"/*\ --\ Audiobook.opus
   audiobookopus=( "$1"/*\ --\ Audiobook.opus )
   [[ "$audiobookopus" ]] && mediainfo "$1"/*\ --\ Audiobook.opus|head -n$(($(mediainfo "$1"/*\ --\ Audiobook.opus |\grep -En Menu|cut -f1 -d:) - 1 ))
-  if confirm -y "${boldred}Set book metadata from ABS metadata.json?$tput0"; then
+
+  if { (( yes )) || confirm -Y "${boldred}Set book metadata from ABS metadata.json?$tput0"; }; then
     (( verbose )) && { bookmetadata --verbose "$1"||return 1; } ||
       { bookmetadata "$1"||return 1; }
   fi
@@ -356,17 +358,23 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
 
 
 
-
 ## why the fuck is this cd "$1" and then cd -??
 ## this does not make sense on the surface of it.
+## commenting out 2025-05-20T08:01-04:00
+## remove after reasonable time
 
 
 
 
   if (( ec1 || ec2 )) && confirm -y "\n${boldred}Reindex $it?$white"; then
-    cd "$1"
-    indexopus --reindex=metadata.json
-    cd - >/dev/null
+#    startPWD="$PWD"
+#    cd "$1"
+#    middlePWD="$PWD"
+    indexopus --reindex=metadata.json -y
+#    cd - >/dev/null
+#    endPWD="$PWD"
+#    printf %s\\n%s\\n "$startPWD" "$middlePWD"
+#    read -rp "$endPWD"
   else
     printf '\nIndex of metadata.json matches output of mediainfo for %s -- Audiobook.opus\n\n' "$it"
   fi
@@ -420,7 +428,7 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
       [[ ! -f "$t -- Cover 0$cn.jpg" ]] && { mv "$t -- Cover.jpg" "$t -- Cover 0$cn.jpg"; break; }
     done
   fi
-  (( mvcover )) && { printf '\nCover files were moved or deleted; review changes:\n'; eza -glB --color=always *jpg; confirm -y "\n${boldred}Continue?${tput0}" || { printf 'Exiting... (return 1)\n\n'; return 1; }; }
+  (( mvcover )) && { printf '\nCover files were moved or deleted; review changes:\n'; eza -glB --color=always *jpg; { (( yes )) || confirm -y "\n${boldred}Continue?${tput0}"; } || { printf 'Exiting... (return 1)\n\n'; return 1; }; }
 (( verbose )) && read -rp "$cover " temp
 #  abscover="$1/$abscover"
 #  if [[ ! -f "$1/$cover" ]] && [[ -f "$abscover" ]]; then
@@ -440,14 +448,16 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
 
   printf '\nLooking for attached cover:\n'
   mediainfo "$1/$t -- Audiobook.opus" | \grep --color=always -iE '^Cover[[:space:]]+:'
-  mediainfo "$1/$t -- Audiobook.opus" | \grep --color=always -A10 Image
   ec1="$?"
+  mediainfo "$1/$t -- Audiobook.opus" | \grep --color=always -A10 Image
+
 #  ffprobe "$1/$t -- Audiobook.opus" 2>&1 | \grep --color=always Cover
 #  ffprobe "$1/$t -- Audiobook.opus" 2>&1 | { \grep --color=always 'Stream #0:1' -A2 || \grep --color=always Cover; }
-  ffprobe "$1/$t -- Audiobook.opus" 2>&1| \grep -E --color=always -A 2 Stream\ #0\:1\|Cover
+
+  ffprobe "$1/$t -- Audiobook.opus" 2>&1| \grep -E --color=always -A 2 Stream\ #0\:1\|Cover\ 
   ec2="$?"
   if (( ec1 && ec2 )); then
-    printf 'No cover information from mediainfo and ffprobe!\n'
+    printf '%sNo cover information from mediainfo and ffprobe!\n%s' "$yellow" "$white"
   elif ! (( ec2 )); then
     printf 'Cover information found by ffprobe; inspect output!\n'
     embeddef="-n"
@@ -455,8 +465,19 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
   fi
 
 (( verbose )) && printf '$1: %s\n$cover: %s\n\n' "$1" "$cover"
-  mediainfo "$1/$cover" --Inform="Image;\"$cover\":\n%Height% × %Width%\n"
-  if (( embedcover )) || confirm "${embeddef:--y}" "${red}Embed $icover?$tput0"; then
+## this works, but doesn't show the whole context.  adding the |$ to the regex adds everything (as would -C <large number>), however the regex is more restrictive... also it does not allow for changing the color.
+
+##  mediainfo "$1/$cover" | grep --color=always -E '^(Width|Height)[[:space:]]+:[[:space:]]+[0-9]+ pixels'
+
+#  printf '\nFound cover to embed: %s%s%s pixles:\n\n' "$red" "$(mediainfo "$1/$cover" --Inform="Image;\"$cover\":\n%Height% × %Width%\n")" "$white"
+ printf '\nFound cover to embed:\n%s%s%s\n\n' "$red" "$cover" "$white"
+
+## regular red: GREP_COLORS='mt=1;31'
+
+ mediainfo "$1/$cover" | GREP_COLORS='mt=38;5;9' grep --color=always -E '^(Width|Height).*|$'|grep --color=always -Ev '^General|^Complete\ name[[:space:]]+\:*'
+
+
+  if (( embedcover )) || (( yes )) || confirm "${embeddef:--y}" "${red}Embed $icover?$tput0"; then
 
 (( verbose )) && eza -glB --color=always "$cover"
 (( verbose )) && { printf \\n; read -rp "$1/$cover" temp; }
@@ -477,12 +498,12 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
 
   [[ -f "$1/$t -- Audiobook-2.opus" ]] &&
     {
-     printf '\nTemporary output opus file exists:\n  %s -- Audiobook-2.opus\n\n' "$1/$t"
-     if confirm -y "rm $1/$t -- Audiobook-2.opus? "; then
+     printf '%s\nTemporary output opus file exists:\n%s  %s -- Audiobook-2.opus\n\n' "$red" "$white" "$1/$t"
+     if confirm -y "${red}rm $1/$t -- Audiobook-2.opus?$white"; then
        rm "$1/$t -- Audiobook-2.opus"
      else
-       printf 'Temp output opus file exists.  Investigate.\nexit 1\n'
-       exit 1
+       printf 'Temp output opus file exists; investigate\n.Exiting (return 1)\n'
+       return 1
      fi
     }
 
@@ -537,11 +558,15 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
 # need to delete in a couple weeks 2025-05-18T22:08-04:00
 
 size=$((1<<30)) # 1 GiB size
+(( scale > largest )) && scale="$largest"
+
+printf 'Rescaling:\n'
+printf 'pixles — bytes\n'
+printf ' %s  — %s (original)\n' "${scale}" "$(stat -c %s "$tmpimg")"
 
 until (( size < maxcover )); do
 
 (( verbose )) && mediainfo "$tmpimg"
-  (( scale > largest )) && scale="$largest"
 
   (( verbose )) && read -rp "Preparing: $tmpimg"
 
@@ -552,7 +577,7 @@ until (( size < maxcover )); do
   fi
 
   size=$(stat -c %s "$tmpimg")
-  echo "${scale}: $size"
+  printf ' %s  — %s\n' "${scale}" "$size"
   (( verbose )) && read -rp "${scale}: $size"
 
   (( scale -= 50 ))
@@ -561,6 +586,8 @@ until (( size < maxcover )); do
     exit 1
   }
 done
+
+printf \\n
 
 (( verbose )) && { printf 'Adding %s to audiobook\n'; mediainfo "$tmpimg"; }
 
@@ -572,11 +599,16 @@ if (( ec )); then
 fi
 
 
-    mediainfo "$1/$t -- Audiobook-2.opus" | \grep --color=always -iE '^Cover[[:space:]]+:'
+    ckcoverout="$(mediainfo "$1/$t -- Audiobook-2.opus" | \grep --color=always -iE '^Cover[[:space:]]+:\ Yes')"
+    ec1="$?"
+    ! (( ec1 )) && printf 'Audiobook contains embedded cover image:\n\n%s\n' "$ckcoverout"
     mediainfo "$1/$t -- Audiobook-2.opus" | \grep --color=always -A10 Image
 #    ffprobe "$1/$t -- Audiobook-2.opus" 2>&1| \grep --color=always Cover
+    printf '\nffprobe output:\n'
     ffprobe "$1/$t -- Audiobook-2.opus" 2>&1| \grep -E --color=always -A 2 Stream\ #0\:1\|Cover
-    confirm -y "\n${boldred}mv '$t -- Audiobook-2.opus' '$t -- Audiobook.opus'?$white" && mv "$1/$t -- Audiobook-2.opus" "$1/$t -- Audiobook.opus"
+    ec2="$?"
+    (( verbose )) && printf 'yes= %s\nec1= %s\nec2= %s\n' "$yes" "$ec1" "$ec2"
+    { (( yes && ! ec1 && ! ec2 )) || confirm -y "\n${boldred}mv '$t -- Audiobook-2.opus' '$t -- Audiobook.opus'?$white"; } && mv "$1/$t -- Audiobook-2.opus" "$1/$t -- Audiobook.opus"
   fi
 
   if [[ -f "$t -- Cover.jpg" ]] && (( $(stat -c %s "$t -- Cover.jpg") == $(stat -c %s "$cover") )); then
@@ -591,7 +623,7 @@ fi
   printf '\nCheck cover, etc., before symlinking:\n'
   eza -la -sold -r --no-user "$1"
 #  read -p "..."
-  confirm -y "$boldred...continue?$tput0" || return 1
+  { (( yes )) || confirm -Y "$boldred...continue?$tput0"; } || return 1
   printf \\n
 #  pause "$1/$t* linked $d"
   ln -sf "$1/$t"* "$linked/$d"
@@ -611,8 +643,8 @@ fi
     mv "$i" "${i//\\/_}"
   done 2>/dev/null
   ebook=("$PWD"/*\ --\ eBook.*)
-  if [[ -L "${ebook[0]}" ]] && printf '\neBook found!\n%s\n' "$(eza -la --no-user *\ --\ eBook.*)" &&       confirm -y "\n${boldred}Remove eBook?$tput0"; then
-    rm *\ --\ eBook.*
+  if [[ -L "${ebook[0]}" ]] && printf '\neBook found!\n%s\n' "$(eza -la --no-user *\ --\ eBook.*)" &&       { (( yes )) || confirm -y "\n${boldred}Remove eBook?$tput0"; };  then
+    rm *\ --\ eBook.* && printf '\neBook removed.\n'
   fi
   webp=("$PWD"/*.webp)
   if [[ -L "${webp[0]}" ]] &&
@@ -628,11 +660,15 @@ fi
   fi
   [[ -L wget-log ]] && rm wget-log
 
-  (( SSHTRUSTED )) && pwd|xclip || printf 'Cannot use xclip; copy the folder location manually...\n'
+## this is not actually needed since the torrent's being generated automatically.
+## also, xclip doesn't work even with trusted
+## also, I'd rather have the final mediainfo / genre & tags output xclipped anyway.
+#  (( SSHTRUSTED )) && pwd|xclip || printf '\nCannot use xclip; copy the folder location manually...\n'
+
   printf '\nCheck files before returning to swd:\n'
   eza -la -sold -r --no-user
 #  read -p "..."
-  confirm -d y "$red...continue?$tput0" || return 1
+  { (( yes )) || confirm -d y "$red...continue?$tput0"; } || return 1
 #  torrentfile="/library/torrent/${PWD##*/}.torrent"  #to be removed: the directory should be $d
 #  torrentfile="/library/torrent/$d.torrent"          #this is defined when the directory is defined
   [[ "$cktorrent" ]] && { confirm -y "${cktorrent[@]} exists.\nContinue to create torrent?" || return 1; }
@@ -642,7 +678,7 @@ fi
   chmod go+r,g+w "$torrentfile"
   chgrp media "$torrentfile"
   [[ "$torrentfile" = *\;* ]] && cp "$torrentfile" "${torrentfile//\;/_}" &&
-    torrentfile="${torrentfile//\;/_}" && read -rp "torrent file copied to $torrentfile as deluge-console cannot accpet semicolons in file names!"
+    torrentfile="${torrentfile//\;/_}" && { (( yes )) || read -rp "torrent file copied to $torrentfile as deluge-console cannot accpet semicolons in file names!"; }
   deluge-console "connect $delugehost:$delugeport $delugeuser $delugepass; add -p ${linked@Q} ${torrentfile@Q}"
   printf \\n
   printline "MediaInfo of $t -- Audiobook.ogg and Genres & Tags"
@@ -650,17 +686,30 @@ fi
 #  hr2 "mediainfo of $t -- Audiobook.ogg"
   mediainfo "$t -- Audiobook.ogg"
   mediainfo "$t -- Audiobook.ogg"|xclip 2>/dev/null
+  pubdate="$(mediainfo "$t -- Audiobook.ogg" |\grep -E ^Recorded\ date\ +\:)"
+  pubdate="${pubdate#* : }"
+  readarray -t duration < <(mediainfo "$t -- Audiobook.ogg" |\grep -E ^Duration\ +\:|sort -u)
+  duration="${duration[0]#* : }"
+  hh="${duration% h*}"; (( "${#hh}" < 3 )) && hh="$(printf '%02d' "$hh")"
+  mm="${duration#* h }"; mm="${mm% min}"; mm="$(printf '%02d' "$mm")"
+  (( "${#hh}" > 3 )) && { printf 'Error: Book appears to have a duration over 1000 hours!  Investigate.\nExiting (return 1)\n\n'; return 1; }
+  (( "${#hh}" == 3 )) && hhmm="$hh:$mm hhh:mm" || hhmm="$hh:$mm hh:mm"
   readarray -t genretags < <({ mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Genre[[:space:]]\+: //p'; mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Tags[[:space:]]\+: //p'; } | tr '/' '\n'|sed 's/^[[:space:]]*//;s/[[:space:]]*$//'|sort -u )
   printf \\n
 #  printline "Tags and genres"
 #  hr2 "Tags and genres"
+  printf %s\ \|\ %s\ \|\  "$pubdate" "$hhmm"
   printf %s\ \|\   "${genretags[@]}"
-  printf \\n
+  printf '17 kb/s opus transcode | embedded chapter index and cover\n\n'
   printline "\n Returning to starting working directory "
   printf '\nLeaving: \n%s\n' "$(pwd)"
   printf '\nReturning to %s\n' "$swd"
   cd - > /dev/null
+
+  confirm -y "Run updatetracker function?" && updatetracker || return 0
+
   printline "\n ${FUNCNAME[0]} finished \n\n"
+  return "$?"
 }
 ##--> mklnbook() <--################################################################
 

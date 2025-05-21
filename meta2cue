@@ -1,0 +1,49 @@
+#!/bin/bash
+
+. /usr/local/bin/editscript
+
+## depends on files being named `<title> -- Audiobook.@(opus|ogg)` and
+## outputs `<title> -- Index.cue`
+## "PERFORMER" corresponds to the first author, NOT the narrator.
+
+shopt -s extglob nullglob
+files=(*\ --\ Audiobook.@(opus|ogg))
+file="${files[0]:-audio.opus}"
+
+json="${2:-metadata.json}"
+cue="${file%% -- *} -- Index.cue"
+
+# Write header
+title=$(jq -r .title "$json")
+performer=$(jq -r '.authors[0]' "$json")
+
+{
+  printf 'PERFORMER "%s"\n' "$performer"
+  printf 'TITLE "%s"\n' "$title"
+  printf 'FILE "%s" MP3\n' "$file"
+
+  jq -c '.chapters[]' "$json" | nl -v 1 -w2 -nrz | while read -r num line; do
+    title="$(jq -r .title <<< "$line")"
+    start="$(jq -r .start <<< "$line")"
+    mm=$((start / 60))
+    ss=$((start % 60))
+
+#mm=$(printf '%02d' $((10#$start / 60)))
+#ss=$(printf '%02d' $((10#$start % 60)))
+    [[ "$start" = *.* ]] && dec="${start#*.}" || dec=0
+    dec="${dec}000"
+    dec=${dec:0:3}
+
+    ff=$(( 10#$dec * 75 / 1000 ))
+#   ff=$(printf '%02d' "$((10#$ff))")
+
+    printf '  TRACK %02d AUDIO\n' "$((10#$num))"
+    printf '    TITLE "%s"\n' "$title"
+    printf '    PERFORMER "%s"\n' "$performer"
+    printf '    INDEX 01 %02d:%02d:%02d\n' "$mm" "$ss" "$ff"
+  done
+} > "$cue"
+
+echo "Wrote: $cue"
+
+exit "$?"

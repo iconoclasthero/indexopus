@@ -1,14 +1,7 @@
 #!/bin/bash
 # nb: the swp file that editscript relies on is provided by nano
 
-editscript(){
-  local scriptpath script path swp; scriptpath=$(realpath "$0" 2>/dev/null); script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
-     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptpath") && exit
-     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit ;}
-
-pause(){ read -rp "$*" ; }
-
-[[ "$1" == @(edit|e|nano|-e|-E) ]] && editscript
+. /usr/local/editscript
 
 ext="opus"
 #ext="m4b"
@@ -16,7 +9,6 @@ ext="opus"
 ext="mp3"
 #ext="${1##*.}"
 scriptname="$(realpath $0)"
-
 
 shopt -s extglob
  if [[ "$1" = --ext=@(m4b|m4a|mp3) ]]; then

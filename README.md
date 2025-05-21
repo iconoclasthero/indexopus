@@ -37,6 +37,7 @@ Not sure what this does anymore...  If you figure it out, lemme know.
 
 # concat
 Sort of a rough script for concatenating audiofiles. It should be set up to do whatever ffmpeg can do. There may be problems with files containing `'` because ffmpeg can't handle them.
+**What it does do is allow you to edit the script and change the extension it handles and thus you can concat whatever files ffmpeg can handle.**  This would be better if it took the extension as a cli flag, but I rarely use it so it's not worth the trouble.
 
 # downconvert
 Not really something that belongs in this repo, but it was untracked in `~/bin/` and that made me nervous so here we are with a file to convert flacs down to 16 bit/48 kHz.
