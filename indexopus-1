@@ -924,9 +924,15 @@ if ! "${quiet:=false}" && [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].ti
       reindex=true
 fi
 
-if ! compgen -G *\ --\ Part\ @(??|???)\:\ *.opus &> /dev/null; then
-  rename
-fi
+## this should still work, but the array version is probably cleaner...
+#if ! compgen -G '* -- Part @(??|???): *.opus' &> /dev/null; then
+#  rename
+#fi
+
+## depends on nullglob
+matches=( * -- Part @(??|???): *.opus )
+! (( ${#matches[@]} )) && rename
+
 
 d=0
 t=0
@@ -953,13 +959,31 @@ if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]; then
 fi
 
 
-[[ "$opuspartdur" ]] && duration="$opuspartdur" ||
+#[[ "$opuspartdur" ]] && duration="$opuspartdur" ||
+##also changing what its using for part digits here to just straight fuckin' parts:
+##           duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
+#           duration=$(find . -type f \( -iname "$title -- Part *: *.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
+#           xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+#           perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
+#           tail -n 1)
+
+
+if [[ "$opuspartdur" ]]; then
+  duration="$opuspartdur"
+else
+  if [[ "$title" = *\[* ]] || [[ "$title" = *\]* ]]; then
+    findtitle="${title//\[/\\[}"; findtitle="${findtitle//\]/\\]}"
+    pause "findtitle=$findtitle"
 #also changing what its using for part digits here to just straight fuckin' parts:
 #           duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
-           duration=$(find . -type f \( -iname "$title -- Part *: *.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
+           duration=$(find . -type f \( -iname "$findtitle -- Part *: *.opus" -o -iname "$findtitle -- Part ???:*.opus" \) -print0 |
            xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
            perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
            tail -n 1)
+  fi
+fi
+
+
 
 printf '\n%sGenerating the index for %s -- Audiobook.opus from...%s\n\n' "$relipsis" "$ititle" "$tput0"
 
