@@ -204,7 +204,8 @@ mklnbook(){
 
   swd="$(pwd)"
   [[ "$1" = @(-v|--verbose) ]] && shift && verbose=1
-  [[ "$1" = -Y ]] && shift && yes=1
+  [[ "$1" = -y ]] && shift && yes=1
+  [[ "$1" = -Y ]] && shift && YES=1 && yes=1
 #  hostlistconf="$HOME/.config/deluge/hostlist.conf"
   delugecreds -h gigabyte -t mam
   linked='/library/torrent/seeds/mam/linked'
@@ -366,7 +367,7 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
 
 
 
-  if (( ec1 || ec2 )) && confirm -y "\n${boldred}Reindex $it?$white"; then
+  if (( ec1 || ec2 )) && { (( YES )) || confirm -y "\n${boldred}Reindex $it?$white"; }; then
 #    startPWD="$PWD"
 #    cd "$1"
 #    middlePWD="$PWD"
@@ -642,9 +643,9 @@ fi
   for i in *\\*; do
     mv "$i" "${i//\\/_}"
   done 2>/dev/null
-  ebook=("$PWD"/*\ --\ eBook.*)
-  if [[ -L "${ebook[0]}" ]] && printf '\neBook found!\n%s\n' "$(eza -la --no-user *\ --\ eBook.*)" &&       { (( yes )) || confirm -y "\n${boldred}Remove eBook?$tput0"; };  then
-    rm *\ --\ eBook.* && printf '\neBook removed.\n'
+  ebook=("$PWD"/*\ --\ eBook*.*)
+  if [[ -L "${ebook[0]}" ]] && printf '\neBook found!\n%s\n' "$(eza -la --no-user *\ --\ eBook*.*)" &&       { (( yes )) || confirm -y "\n${boldred}Remove eBook?$tput0"; };  then
+    rm *\ --\ eBook*.* && printf '\neBook removed.\n'
   fi
   webp=("$PWD"/*.webp)
   if [[ -L "${webp[0]}" ]] &&

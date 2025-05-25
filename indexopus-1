@@ -628,6 +628,9 @@ mvopus(){
     mvopus
 
   elif [[ "${opusarray[@]}" =~ ([[:digit:]]{1,3})\ (.+).opus ]]; then
+
+## this pattern matches: `001 Author Name - Book Title - Part Name.opus`
+
     renpat="6.0"
 
     printf 'Using rename pattern %s\n' "$renpat"
@@ -639,9 +642,13 @@ mvopus(){
     for i in *.opus; do
       if [[ "$i" =~ $regex ]]; then
          n="${BASH_REMATCH[1]}"
-## this is unnecessary:  (( "${#opusarray[@]}" < 100 )) && (( "${#n}" > 2 )) && n="${n#0}"
-         t="$(pwd)"; t="${t##*\/}"; t="${t%%\:*}"
          p="${BASH_REMATCH[2]}.opus"
+         [[ "$p" = *\ -\ *.opus ]] && p="${p##* - }"
+         [[ "$p" = *Chapter\ ?.opus ]] && p="${p/Chapter /Chpater 0}"
+## this is unnecessary:  (( "${#opusarray[@]}" < 100 )) && (( "${#n}" > 2 )) && n="${n#0}"
+         t="$(pwd)"; t="${t##*\/}"
+         [[ "$t" = *\:* ]] && t="${t%%:*}"
+         [[ "$t" =~ .+\ \([[:digit:]]{4}\) ]] && t="${t% \(*}"
 
 #      n="${i%% *}"; p="Part ${i##*Part }"; t="${i%, Part *}"
 #      [[ $n =~ ^[0-9]+$ ]] || pause "There's probably a problem in rename pattern $renpat, here's the value of \$n: $n"
