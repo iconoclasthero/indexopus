@@ -1,0 +1,1076 @@
+#!/bin/bash
+# depends: opustags, ffmpeg/ffprobe, mediainfo
+# config: "$HOME/.config/indexopus.conf"
+#          absserver="https://web.address.com"
+#          abssqlite="/path/to/location/of/config/absdatabase.sqlite"
+# files must be in the format of Title -- Part ##: Chapter Title.opus and present ONLY works for .opus; there are other tools for e.g., m4b: use them.
+# presumably, this script could easily be changed out for another codec, however opustags would need to change to something else that can write metadata, e.g, ffmpeg which should be able to do any format.
+# that said, the author feels that this satisfices for the purposes at hand and if/when the codec changes, that bridge will be burnt when it is arrived upon.
+# Would like to make it so that the files do not need a chapter name and are iterated with 000, 001, 002, .... for Chapter Title
+# ffmpeg could presumably take over for opustags to eliminate that dependency and then all that would be required is ffmpeg
+# Also, given that tagging is being done, it might be useful to tag at least the tracknumber and the track title in this script rather than doing it after.
+# ffprobe -sexagesimal -> "00:00:00.00"
+#
+# Promlem with colons in the part description:
+# That could still indicate a problem if the code is later attempting to do shell arithmetic on the value, in which case you got lucky by having printf throw an error. You could fix that by adding a test and failing early, because printf won't cause the script to exit.
+# https://mywiki.wooledge.org/BashFAQ/054 -- How can I tell whether a variable contains a valid number?
+#m4b2opus calls     indexopus -t "$title" -m "$convertdir" -s "$stamp" -d "$opuspartdur"
+
+shopt -s extglob nullglob dotglob
+scriptpath=$(realpath "$0")
+scriptname="${scriptpath##*\/}"
+confpath="$HOME/.config/indexopus.conf"
+. "$confpath"                                 #this needs to move.
+. "$HOME/bin/gits/indexopus/indexopus.lib"
+ulon="$(tput smul)"  #underline on
+uloff="$(tput rmul)" #underline off
+iton="$(tput sitm)" #italics on
+itoff="$(tput ritm)" #italics off
+red="$(tput setaf 9)" #red fg
+white="$(tput setaf 15)" #white fg
+tput0="$(tput sgr0)" #reset tput changes
+bold="$(tput bold)" #bold on
+relipsis="$red..."
+stamp="$(date +%s)"  #sets datecode for all of indexopus - could use info from m4b2opus later
+tmp="/tmp/indexopus-$stamp" #this could change based on info from m4b2opus
+[[ ! "$removetags" ]] &&
+  removetags=("major_brand" \
+               "minor_version" \
+               "compatible_brands" \
+               "encoded_by" \
+               "OverDrive MediaMarkers" \
+               "handler_name" \
+               "vendor_id" \
+               "ITUNPGAP" \
+               "iTunSMPB" \
+               "iTunNORM" \
+               "CUESHEET" \
+               "json64" \
+               "Track name" \
+               "engiTunSMPB" \
+               "engiTunPGAP" \
+               "engiTunNORM" \
+               "TRACKNUMBER" \
+               "tracknumber" \
+              )
+
+
+####this needs to be done better, but for now if the dependencies aren't here, i want it to just exit the script
+! command -v opustags > /dev/null && sudo apt install opustags
+! command -V opustags > /dev/null && { echo "opustags missing; exit 1"; exit 1; }
+
+#editscript(){
+#  local script path; script="${scriptpath##*/}"; path="${scriptpath%/*}"; swp="$path/.$script.swp"
+#     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptpath"); exit
+#     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit;
+#  fi; }
+###--> editscript() <--#################################################################################
+
+pause(){ read -p "$*" ; }
+##--> pause() <--######################################################################################
+
+usage() {
+    echo "Usage: $0 [-e] [-y] [-t <title>] [-s <timestamp>] [-m <temp path>] [-c <config path>] [-r] [-h]"
+    echo "Options:"
+    echo "  -e, --edit               Call editscript function"
+    echo "  -y, -f, --force          Accept all prompts if the times line up"
+    echo "  -t, --title <title>      Specify title"
+    echo "  -s, --stamp <timestamp>  Specify timestamp"
+    echo "  -m, --tmp <temp path>    Specify temporary path"
+    echo "  -c, --config <config path> or blank for default location: $HOME/.config/indexopus.conf"
+    echo "  -r, --reindex, reindex   Reindex the file"
+    echo "  -h, --help               Display this help message"
+    exit 1 ; }
+##--> usage() <--######################################################################################
+
+#confirm(){
+# local ans IFS=
+# while read -rp "$1" -n1 ans
+#   do
+#     printf '\n'
+#     case "$ans" in
+#       [Yy]) return 0;;
+#       [Nn]) return 1;;
+#     esac
+#   done
+#}
+##--> confirm() <--###################################################################################
+
+#unused
+#tagtt(){
+#  for i in *\ --\ Part\ ??\:\ *opus
+#    do
+#      title="${i%.opus}"
+#      title="${title#* -- }"
+#      tracknumber="${i%:*}"
+#      tracknumber="${tracknumber#*Part }"
+#      opustags -i "$i" -s title="$title" -s tracknumber="$tracknumber"
+#    done
+#}
+##--> tagtt() <--######################################################################################
+
+
+rmyn(){
+  while true
+  read -rp "$1" rmyn
+   do
+     case "$rmyn" in
+       [yY] ) "${@:3}"; rmynres=0; break;;
+       [nN] ) printf '\n%s\n' "$2"; rmynres=1; break;;
+          * ) printf "Invalid response...\n";;
+     esac
+   done
+}
+##--> rmyn() <--#######################################################################################
+
+#yn(){
+#  while true
+#  read -p "$1" yn
+#   do
+#     case "$yn" in
+#       [yY] ) "$2"; break;;
+#       [nN] ) "$3"; break;;
+#          * ) printf "Invalid response...\n";;
+#     esac
+#   done
+#}
+##--> yn() <--#########################################################################################
+
+
+#is_even() {
+#    if [ $(( $1 % 2 )) -eq 0 ]; then return 0
+#    else return 1; fi
+#}
+##--> is_even() <--####################################################################################
+
+gettitle(){
+[[ ! -n "$title" ]] && titles=(*Part\ ??*.opus) && title="${titles[0]% -- Part*}"
+ititle="${iton}$title${itoff}"
+output="$title -- Audiobook.opus"
+ioutput="$ititle -- Audiobook.opus"
+}
+##--> gettitle() <--###################################################################################
+
+createindex(){
+  [[ -f "$tmp/opusindex" ]] && rm "$tmp/opusindex"
+  [[ -f "$tmp/opusfiles" ]] && rm "$tmp/opusfiles"
+
+  chno=0
+  for i in "$title -- Part "*.opus; do
+    chna="${i#* -- Part }"; chna="${chna%.opus}"; chna="${chna#*: }"
+    [[ "$chna" = @(Chapter|Part)\ ? || "$chna" = @(Chapter|Part)\ ?\ * ]] && chna="${chna/ / 0}"
+    if [[ "$t" != 0 ]]; then
+        ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", $t/3600, $t/60%60, $t%60 + $t-int($t)' | tail -n 1)
+        printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  "$tmp/opusindex"
+        printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
+        createdindex+=( "$i" )
+        createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
+        createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
+        rawindex+=( "$ts" )
+        rawindex+=( "$chna" )
+   else
+        ts="00:00:00.000"
+        printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> "$tmp/opusindex"
+        printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
+        createdindex+=( "$i" )
+        createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
+        createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
+        rawindex+=( "$ts" )
+        rawindex+=( "$chna" )
+    fi
+    d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
+#     d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
+    t=$(echo "$d + ${t:-0}" | bc)  ## changed 2025-05-15
+    ((chno++))
+  done
+
+#ffmpeg will not take filenames with ' in them, they must be quoted:
+#check index for single quotes:
+#took out the strict chapter or 3 digit check...
+#  for f in @("$title -- Part "??\:\ *.opus|"$title -- Part "???\:\ *.opus); do
+  for f in "$title"\ --\ Part\ *\:\ *.opus; do
+    if [[ "$PWD/$f" == *\'* ]]; then
+      ff="$f"; dir="$PWD"
+      [[ "$f" == *\'* ]] && ff="${f//\'/\'\\\'\'}" || ff="$f"
+      [[ "$PWD" = *\'* ]] && dir="${PWD//\'/\'\\\'\'}"
+      echo "file '$dir/$ff'" >> "$tmp/opusfiles"
+    else
+      echo "file '$PWD/$f'" >> "$tmp/opusfiles"
+    fi
+  done
+
+}
+##--> createindex() <--################################################################################
+##
+## Need to check metadata.json files to see if the keys match up with the abs pattern...
+## Need to check chapter.json files for `{"error":"Chapters not found"}`
+##
+
+itemid_pwd(){
+    local itempwd="${1:-"${PWD}"}}"
+    sqlitepwd="${PWD//\'/\'\'}"
+   }
+
+reindex(){
+  local t chap_title chap_starts reintitle
+  t=0
+  chno=0
+
+
+  if [[ ! -f "chapters.json" ]] && ! (( usemetadata )) &&
+    confirm "${bold}No chapters.json; retrieve chapter info from the web? ${tput0}"; then
+
+      curl -X POST "$absserver/api/items/$(itemid)/scan"   -H "Authorization: Bearer $abstoken" -sSo /dev/null
+      curl "$absserver/api/search/chapters?asin=$(jq -r '.asin' metadata.json)"   -H "Authorization: Bearer $abstoken" -sSo chapters.json
+      newchapters=true
+  fi
+
+  if [[ -f "chapters.json" ]] && [[ ! $(grep '{"error":"Chapters not found"}' "chapters.json") ]]; then
+    readarray -t chap_titles < <(jq -r '.chapters[] | .title' "chapters.json" 2>/dev/null)
+    readarray -t chap_starts < <(jq -r '.chapters[] | .startOffsetMs' "chapters.json" 2>/dev/null)
+
+    for ((i=0; i<"${#chap_starts[@]}"; i++)); do
+      sec=$(( chap_starts[i] / 1000 ))
+      ms=$(( chap_starts[i] % 1000 ))
+      chap_starts[i]="${sec}.${ms}"
+    done
+
+  else
+#   readarray -t chap_titles < <(jq -r '.chapters[] | .title' "metadata.json" 2>/dev/null)
+#   need to strip literal `\n` characters from chapter titles otherwise it fucks things up
+    jsonfile="metadata.json"
+    readarray -t chap_titles < <(jq -r '.chapters[] | .title | gsub("\\n"; " ")' "metadata.json")
+    readarray -t chap_starts < <(jq -r '.chapters[] | .start' "metadata.json" 2>/dev/null)
+  fi
+
+ [[ ! "${chap_titles[@]}" ]] || [[ ! "${chap_starts[@]}" ]] &&
+    printf 'Error with %s/metadata.json; check and retry.\nexit 1' "$PWD" &&
+    exit 1
+
+  reintitle=( *\ --\ Audiobook.@(opus|ogg) )
+
+  [[ ! "${#reintitle[@]}" -eq 1 ]] && printf 'No suitable audiobook found in pwd of format * -- Audiobook.opus\nCheck path %s and try again.\nexit 1' "$PWD" && exit 1
+
+  for ((chno=0;chno<"${#chap_titles[@]}";chno++))
+    do
+      t="${chap_starts[$chno]}"
+#      pause "${chap_starts[0]} $t"
+      if [[ "$t" != @(0|0.0) ]]; then
+        ts=$(echo "$t" | perl -nle '/([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%06.03f\n", int($t / 3600), int($t / 60) % 60, $t % 60 + ($t - int($t))' | tail -n 1)
+        chna="${chap_titles[$chno]}"
+#        [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
+        chna=$(echo "$chna" | sed -E 's/^(Part|Chapter)[[:space:]]*/\1 /')
+        [[ "$chna" =~ ^(Part|Chapter)\ [0-9]($|[.:\ ].*)$ ]] && chna="${chna/ / 0}"
+        [[ "$chna" =~ ^[0-9]($|[.:\ ].*)$ ]] && chna="0$chna"
+        chna="${chna%"${chna##*[![:space:]]}"}"
+        printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  "$tmp/opusindex"
+        printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
+        rawindex+=( "$ts" )
+        rawindex+=( "$chna" )
+        createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
+        createdindex+=( "$chno" )
+        createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
+        createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
+      else
+        ts="00:00:00.000"
+        chna="${chap_titles[$chno]}"
+#        [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
+        chna=$(echo "$chna" | sed -E 's/^(Part|Chapter)[[:space:]]*/\1 /')
+        [[ "$chna" =~ ^(Part|Chapter)\ [0-9]($|[.:\ ].*)$ ]] && chna="${chna/ / 0}"
+        [[ "$chna" =~ ^[0-9]($|[.:\ ].*)$ ]] && chna="0$chna"
+        chna="${chna%"${chna##*[![:space:]]}"}"
+        printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> "$tmp/opusindex"
+        printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
+        rawindex+=( "$ts" )
+        rawindex+=( "$chna" )
+        createdindex+=( "$chno" )
+        createdindex+=( "$(printf 'CHAPTER%03d=%s' "$chno" "$ts")" )
+        createdindex+=( "$(printf 'CHAPTER%03dNAME=%s' "$chno" "$chna")" )
+      fi
+    done
+
+  mediainfo "$reintitle"
+  printf '%s%sProposed index for %s:%s%s\n' "$red" "$bold" "$reintitle" "${tput0}" "$bold"
+  printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
+# printf '%s                             : %s\n' "${rawindex[@]}"
+  itemid_pwd
+  readarray -t itemids < <( sqlite3 "$abs_sqlite" "select id FROM libraryitems WHERE path=='$sqlitepwd';" )
+  if (( ${#itemids[@]} > 1 )); then
+    printf '\n%s%saudiobookself reports more than one matching title; investigate: %s\n' "$red" "$bold" "$tput0"
+    for itemid in "${itemids[@]}"; do
+    printf '%s/item/%s\n' "$absserver" "$itemid"
+    done
+  else
+    printf '%s\n%sThis index was generated from existing %s;\n' "$tput0" "$relipsis" "$jsonfile"
+    [[ "$itemids" ]] && printf '...look up new chapter information at\ngoogle-chrome %s/audiobook/%s/chapters\n\n\n' "$absserver" "$itemids"
+    [[ ! "$itemids" ]] && printf '%s%s not found in absdatabase.sqlite!%s\n%sCheck path and metadata.json file\n\n\n' "$bold" "$PWD" "$tput0" "$red"
+
+    if [[ "$rmmatch" = true ]]; then
+      writeindex "$reintitle"
+      [[ "$newchapters" = true ]] && curl -X POST "$absserver/api/items/$(itemid)/scan" -H "Authorization: Bearer $abstoken"
+    elif confirm -y "${bold}${red}Apply index?${tput0}"; then
+      writeindex "$reintitle"
+      [[ "$newchapters" = true ]] && curl -X POST "$absserver/api/items/$(itemid)/scan" -H "Authorization: Bearer $abstoken"
+      rmmatch=true  #at this point, having said yes to apply index, yes the rest of the way.
+    else
+      mediainfo "$reintitle"
+      printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
+      if confirm "Would you like to start over so you can look up chapter information in audiobookshelf?  "; then
+        exec indexopus reindex
+        exit
+      else
+        printf 'Not reindexing opus file with above index; exiting.'
+        exit
+      fi
+    fi
+ fi
+  mediainfo *Audiobook.opus
+  rm -rf "$tmp"
+#  (( usemetadata )) && return 3
+}
+
+##reindex()####################################################################################
+
+writeindex(){
+  local output="$1" mp4grep mp4opustags chaptag tags ck4tags args
+#  [[ ! "$removetags" ]] && removetags=("major_brand" "minor_version" "compatible_brands" "encoded_by" "OverDrive MediaMarkers")
+
+#pause "$(printf %s\\n "${removetags[@]}")"
+
+
+#this works, why won't it work in the array?
+# opustags -d "OverDrive MediaMarkers" -i "$output"
+  if [[ "$(opustags "$output")" = *CHAPTER* ]]
+    then
+      printf '\n%s%s%s contains existing tags; removing...%s\n' "$relipsis" "$bold" "$title" "$tput0"
+      tags=( $(opustags "$output") )
+      tags=( $(printf -- '-d%s\n' "${tags[@]%=*}"|\grep CHAPTER|sort -u) )
+      printf '\n%smediainfo of existing %s:%s\n' "$relipsis" "$output" "$tput0"
+      mediainfo "$output"
+      printf '\n%sremoving exiting CHAPTER tags with opustags...%s\n\n' "$relipsis" "$tput0"
+      opustags "${tags[@]}" -i "$output"
+# i think this line is causing a problem because "chapter" can be used e.g., in the description
+#      ck4tags=( "$(opustags "$output" | grep --color=always -i chapter)" ) &&
+      ck4tags=( "$(opustags "$output" | grep --color=always CHAPTER)" ) &&
+      printf 'Error!\nCHAPTER tags still present in opus file.\n%s' "${ck4tags[@]}" &&
+      exit
+  else
+    printf '%smediainfo of existing %s:%s\n' "$relipsis" "$output" "$tput0"
+    mediainfo "$output"
+  fi
+
+  while read -r chaptag
+    do
+      args+=(-a "$chaptag"\ )
+    done < "$tmp/opusindex"
+
+  opustags -i "$output" "${args[@]}"
+  printf '%sChapter info added...\n%s' "$relipsis" "$tput0"
+  printf '%sStripping unwanted tags%s\n%s' "$relipsis" "$relipsis" "$tput0"
+
+#  [[ "$rmmatch" != 'true' ]] &&    ####why the fuck is this here?
+  mp4grep="$(IFS=\|; echo "${removetags[*]}")"
+
+#  This is method one to remove the unwanted mp4 tags:
+  readarray -t mp4opustags -- < <(printf -- '-d\n%s\n' "${removetags[@]}")
+  mp4opustags+=(-i "$output")
+  [[ $( opustags "$output" |grep -E "$mp4grep" ) ]] && opustags "${mp4opustags[@]}"
+
+#  This is method two to remove the unwanted mp4 tags...
+#  Both of them work, but I couldn't get the first one to work so I wrote this one
+#  Keeping for reference for a while since this is such a fucking pain in the ass.
+
+  if [[ $( opustags "$output" |grep -E "$mp4grep" ) ]]; then
+    for i in "${removetags[@]}"; do
+      mp4args+=(-d "$i")
+    done
+
+    mp4args+=(-i "$output")    # Should I also use readarray here?  difference?
+    opustags "${mp4argss[@]}"
+  fi
+
+
+
+}
+
+
+##--> writeindex() <--#################################################################################
+
+
+
+rename(){
+  ext=opus #local?
+  declare -A confirm_rename
+  declare -A parts
+  local hundreds width length
+
+mvopus(){
+  max_length=0
+  width=$(tput cols)
+  for i in "${confirm_rename[@]}"; do
+    rnlength="${#i}"
+    if (( rnlength > max_length )); then
+      max_length="$rnlength"
+    fi
+  done
+
+   length=$((${#i} + max_length + 10))
+   offset=$(( width - max_length - 2 ))
+
+   for i in "${!confirm_rename[@]}"; do
+     if (( length > width )); then
+#      printf '%s    %s---->%s\n  %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+       for key in "${!confirm_rename[@]}"; do break; done
+       if [[ "$key" =~ .+\ -\ .+\.opus && ! "$key" =~ .+\ --\ .+\.opus ]]; then
+          printrn+=( "$(printf '  %s    %s---->%s   %s%s\n%s' "${i##* - }" "$bold" "$tput0" "$red" "${confirm_rename["$i"]##* -- }" "$tput0")" )
+        else
+          printrn+=( "$(printf '  %s    %s---->%s   %s%s\n%s' "${i##* -- }" "$bold" "$tput0" "$red" "${confirm_rename["$i"]##* -- }" "$tput0")" )
+#       printrn1+=( "$(printf '%s    %s---->%s\n%*s%s%s\n%s' "$i" "$bold" "$tput0" "$offset" "" "$red" "${confirm_rename["$i"]}" "$tput0")" )
+        fi
+
+      else
+        unset printrn1 printrn2
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      fi
+    done
+#      [[ "$printrn1" ]] && printf %s\\n "${printrn1[@]}"
+   (( length > width )) && printf '%s --\n' "${opusarray[0]% -- *}"
+      [[ "$printrn" ]] && printf %s "${printrn[@]}"
+
+      echo
+      [[ "$rmmatch" = true ]] || confirm -y "${bold}Continue with Proposed Rename?${tput0}" &&
+      for i in "${!confirm_rename[@]}"; do
+ #       [[ "$i" != "${confirm_rename["$i"]}" ]] &&
+        mv "$i" "${confirm_rename["$i"]}" #|| true
+      done || exit 1
+
+}  #end of mvopus
+   ##############
+
+#  if [[ "${opusarray[0]}" =~ .+\ --\ ((C|c)hapter|(P|p)art|(D|d)isc)|(T|t)rack\ [[:digit:]]{1,3}\.opus ]]; then
+  if [[ "${opusarray[0]}" =~ .+\ --\ (([Cc]hapter|[Pp]art|[Dd]isc|[Tt]rack)\ [[:digit:]]{1,3})\.opus ]]; then
+    echo "Using rename pattern 1."
+   if "${quiet:=false}"; then rmmatch=true; fi
+
+    for i in "${opusarray[@]}"; do
+      n="${i%.opus}"; n="${n##* }"
+      [[ "$n" =~ \ [[:digit:]]\.opus ]] && n="0$n"
+      title="${i% -- *}"
+      order="${i##* -- }"
+      newname="${i/ -- @(@(p|P)art|@(c|C)hapter|@(d|D)isc|@(t|T)rack) */ -- Part $n: Part $n.opus}"
+      confirm_rename["$i"]="$newname"
+     done
+
+    mvopus
+
+  elif [[ "${opusarray[0]}" =~ .+\ --\ (([Cc]hapter|[Pp]art|[Dd]isc|[Tt]rack)\ [[:digit:]]{1,3})\:\ .+\.opus ]]; then
+    echo "Using rename pattern 1.1."
+    for i in "${opusarray[@]}"; do
+      n="${i#* -- }"; n="${n%%:*}"; n="${n#* }"
+      [[ "$n" =~ ^[[:digit:]]$ ]] && n="0$n"
+      title="${i% -- *}"
+      [[ "$title" =~ \[(.*)\] ]] && bracket="${BASH_REMATCH[1]}" && title="${title/ \[${bracket}\]}"
+      chapt="${i##* -- }"
+      newname="$title -- Part $n: ${chapt#*: }"
+#      printf %s\\n%s\\n\\n "$i" "$newname"
+      confirm_rename["$i"]="$newname"
+#      pause "${confirm_rename["$i"]}"
+     done
+    mvopus
+
+  elif [[ "$opusarray" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc)|(T|t)rack\ [[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 2."
+    for i in "${opusarray[@]}"; do
+      n="${i%.opus}"; n="${n##* }"
+#      [[ "$n" =~ \ [[:digit:]]\.opus ]] && n="0$n"  #this won't work, .opus was removed but the logic's wrong too
+      (( "${#n}" == 1 )) && n="0$n"
+      title="${i% - *}"
+      order="${i##* - }"
+      newname="${i/ - @(@(P|p)art|@(c|C)hapter|@(d|D)isc|@(t|T)rack) */ -- Part $n: Part $n.opus}"
+      confirm_rename["$i"]="$newname"
+     done
+
+    mvopus
+
+
+
+  elif [[ "${opusarray[0]}" =~ .+-\ ?(p|P)art[[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 3."
+#    for i in *-Part??.opus; do
+    [[ "${opusarray[0]}" =~ .+-(p|P)art[[:digit:]]{1,3}\.opus ]] &&
+      for i in "${opusarray[@]}"; do
+        n="${i%.opus}" && n="${n##*-Part}"
+#        [[ "$n" =~ [[:digit:]] ]] && n="0$n"
+        [[ "$n" =~ ^[[:digit:]]$ ]] && n="0$n"
+        newname="${i/-@(p|P)art/ -- Part $n: Part }"
+        confirm_rename["$i"]="$newname"
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      done
+    [[ "${opusarray[0]}" =~ .+-\ (p|P)art[[:digit:]]{1,3}\.opus ]] &&
+      for i in "${opusarray[@]}"; do
+        n="${i%.opus}" && n="${n##*- Part}"
+        [[ "$n" =~ ^[[:digit:]]$ ]] && n="0$n"
+        newname="${i/- @(p|P)art/ -- Part $n: Part }"
+        confirm_rename["$i"]="$newname"
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      done
+
+    mvopus
+
+  elif [[ "$opusarray" = .+\ Part\ [[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 4."
+
+#   this is logic to add double or triple digits to all the part numbers.
+
+    for i in "${opusarray[@]}"; do n="${i%.opus}"; n="${n##* }"; parts["$i"]="$n"; done
+    (( "$(printf %s\\n "${parts[@]}"|sort|tail -n1)" > 99 )) && hundreds=true
+
+#
+
+    for i in "${opusarray[@]}"; do
+      n="${i%.opus}"; n="${n##* }"; [[ "$hundreds" = true ]] && n="$(printf %03d "$n")" || n="$(printf %02d "$n")"
+      newname="${i% *}"; newname="${newname% @(p|P)art*} -- Part $n: Part $n.opus"
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+    mvopus
+
+
+  elif [[ "${opusarray[@]}" =~ .+[[:space:]]-[[:space:]][[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 5."
+    regex=".+[[:space:]]-[[:space:]][[:digit:]]{1,3}\.opus"
+    for i in *\ -\ @(?|??|???).opus; do
+      n="${i%.opus}"; n="${n##* - }"
+      (( 10#$n < 10 ))
+      [[ $n =~ ^[0-9]+$ ]] || pause "There's probably a problem, here's the value of \$n: $n"
+      newname="${i/ - / -- Part $n: Part }"
+      confirm_rename["$i"]="$newname"
+#      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+
+    mvopus
+
+  elif [[ "${opusarray[@]}" =~ .+[[:space:]]-[[:space:]][[:digit:]]{1,3}\ .+\.opus ]]; then
+    renpat="5.5"
+# 'The Ocean of Churn - Sanjeev Sanyal - 001 - (Begin).opus'
+# 'The Ocean of Churn - Sanjeev Sanyal - 002 - Introduction.opus'
+
+    echo "Using rename pattern $renpat"
+    regex=".+[[:space:]]-[[:space:]][[:digit:]]{1,3}\ .+\.opus"
+
+    for i in *\ -\ @(?|??|???)\ *.opus; do
+        n="${i%.opus}"; n="${n##* - }"; b="${n#* }"; n="${n%% *}"; newname="${i% - *}"
+
+      [[ ! "$n" =~ ^[[:digit:]]+$ ]] &&
+        { n="${i%.opus}"; b="${n##* - }"; n="${n% - *}"; newname="${n% - *}"; n="${n##* - }"; n="${n%% *}"; }
+      [[ ! "$n" =~ ^[[:digit:]]+$ ]] && exit 1
+
+      (( 10#$n < 10 ))
+      [[ $n =~ ^[0-9]+$ ]] || pause "There's probably a problem in rename pattern $renpat, here's the value of \$n: $n"
+      newname="$newname -- Part $n: $b.opus"
+#      newname="${newname/ - / -- Part $n: Part }"
+      confirm_rename["$i"]="$newname"
+#      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+
+    mvopus
+
+  elif [[ "${opusarray[@]}" =~ [[:digit:]]\ .+\,\ Part\ [[:digit:]]{1,3}.opus ]]; then
+    renpat="6.1"
+
+#  For TTC merges:
+#  01 Great Artists of the Italian Renaissance, Part 1.opus
+#  02 Great Artists of the Italian Renaissance, Part 2.opus
+
+    echo "Using rename pattern $renpat"
+    regex="[[:digit:]]\ .+\,\ Part\ [[:digit:]]{1,3}.opus"
+
+    for i in ??\ *\,\ Part\ @(?|??|???).opus; do
+      n="${i%% *}"; p="Part ${i##*Part }"; t="${i%, Part *}"
+      [[ $n =~ ^[0-9]+$ ]] || pause "There's probably a problem in rename pattern $renpat, here's the value of \$n: $n"
+      newname="${t#* } -- Part $n: $p"
+      confirm_rename["$i"]="$newname"
+    done
+
+    mvopus
+
+  elif [[ "${opusarray[0]}" =~ ^[[:digit:]]{1,3}\.opus$ ]]; then
+    renpat="6.2"
+    echo "Using rename pattern $renpat"
+    regex="^[[:digit:]]{1,3}\.opus$"
+    for file in "${opusarray[@]}"; do
+      [[ "$file" = ???.opus ]] && digit3=1
+      [[ "$file" = ??.opus ]] && digit2=1
+      [[ "$file" = ?.opus ]] && digit1=1
+    done
+    (( digit1 )) && digit2=1 && for i in ?.opus; do mv "$i" "0$i"; done
+    (( digit3 && digit2 )) && for i in ??.opus; do mv "$i" "0$i"; done
+
+    for i in *.opus; do
+      n="${i%.opus}"; t="title missing"
+      [[ $n =~ ^[0-9]+$ ]] || { printf 'There is probably a problem in rename pattern %s using regex %s, here is the value of $n: %s\n' "$renpat" "$regex" "$n"; pause "Use ^C to exit or [[Enter]] to continue. "; }
+      newname="$t -- Part $n: Part $n.opus"
+      confirm_rename["$i"]="$newname"
+    done
+
+    mvopus
+
+  elif [[ "${opusarray[@]}" =~ .+[[:space:]][[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 6.3:"
+    regex=".+[[:space:]][[:digit:]]{1,3}\.opus"
+    if [[ "${opusarray[0]}" =~ .+\ (p|P)art\ [[:digit:]]{1,3}\ of\ [[:digit:]]{1,3}\.opus ]]; then
+      for (( i=0; i<"${#opusarray[@]}"; i++ )); do
+        j="${opusarray[i]% of *}"
+        if [[ "$j" != "${opusarray[i]}" ]]; then
+#          j="${j/ part / -- Part }.opus"
+          j="${j/part }.opus"
+#          opusarray[i]="$j"
+          n="${j##* }"; n="${n%.opus}"
+          (( "${#n}" < 2 )) && n="0$n"
+          newname="${j% *}"; newname="$newname -- Part $n: Part $n.opus"
+          confirm_rename["${opusarray[i]}"]="$newname"
+
+# the following is apparently done in mvopus?
+#          printf '%s    %s---->%s    %s%s\n%s' \
+#                 "${opusarray[i]}" \
+#                 "$bold" \
+#                 "$tput0" \
+#                 "$red" \
+#                 "${confirm_rename[${opusarray[i]}]}" \
+#                 "$tput0"
+        fi
+      done
+    else
+      for i in "${opusarray[@]}"; do
+        n="${i##* }"; n="${n%.opus}"; (( "${#n}" < 2 )) && n="0$n"
+        newname="${i% *}"; newname="$newname -- Part $n: Part $n.opus"
+        confirm_rename["$i"]="$newname"
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      done
+    fi
+
+    mvopus
+
+ ###############################################################################################################
+ ## The above pattern search fails on file names with this pattern.  This would, in theory, be pretty hard
+ ## to come up with a regex for without somehow checking for those digits at the beginning.
+ ## it is a terrible naming format and hopefully will not be run across much.  Regardless,
+ ## THE CURRENT SCRIPT CANNOT ACCOMIDATE THIS FILE PATTERN AND IT MUST BE MANUALLY CHANGED FOR NOW.
+ ## '001 Barry Posen - Restraint_ A New Foundation for U.S. Grand Strategy - Opening Credits.opus'
+ ## '002 Barry Posen - Restraint_ A New Foundation for U.S. Grand Strategy - Chapter 1.opus'
+ ## ⋮
+ ## '018 Barry Posen - Restraint_ A New Foundation for U.S. Grand Strategy - Chapter 17.opus'
+ ## '019 Barry Posen - Restraint_ A New Foundation for U.S. Grand Strategy - End Credits.opus'
+ ###############################################################################################################
+
+  elif [[ "${opusarray[0]}" =~ [[:digit:]]{1,3}\ -\ (.+)\.opus ]]; then
+    echo "Using rename pattern 7:"
+    if [[ "${opusarray[0]}" =~ ^[[:digit:]]{1,3}\ -\ (.+)\.opus ]]; then
+      echo "Using rename pattern 7a:"
+      regex="^[[:digit:]]{1,3}\ -\ (.+)\.opus"
+      for i in "${opusarray[@]}"; do
+        n="${i%% *}"
+        newname="${i%.opus}"; newname="${newname#* - } -- Part $n: Part $n.opus"
+        confirm_rename["$i"]="$newname"
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      done
+    elif [[ "${opusarray[0]}" =~ .+\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\ -\ (.+)\.opus ]]; then
+
+#'The Ocean of Churn -- Part 01 - (Begin).opus'
+#'The Ocean of Churn -- Part 09 - Treasure and Spice.opus'
+#'The Ocean of Churn -- Part 02 - Introduction.opus'
+
+      pause "Using rename pattern 7b:"
+      regex="^[[:digit:]]{1,3}\ -\ (.+)\.opus"
+      for i in "${opusarray[@]}"; do
+#        n="${i#* ((C|c)hapter|(P|p)art|(D|d)isc)|(T|t)rack) }"
+n="${i#* @(@(C|c)hapter|@(P|p)art|@(T|t)rack|@(D|d)isc) }"; n="${n%% *}"
+        newname="${i%.opus}"; newname="${newname%% -- *} -- Part $n: ${newname#* - }.opus"
+        confirm_rename["$i"]="$newname"
+        printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+      done
+    fi
+
+    mvopus
+
+  elif [[ "$opusarray" =~ .+_[[:digit:]]{1,3}\.opus ]]; then
+    echo "Using rename pattern 8:"
+    for i in "${opusarray[@]}"; do
+      n="${i%.opus}"; n="${n##*_}"
+      newname="${i%_*} -- Part $n: Part $n.opus"
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+
+    mvopus
+
+  elif [[ "$opusarray" =~ ^[\(\[]?[[:digit:]]{2,3}[.]?[\]\)]?\ .+\.opus$ ]]; then
+    echo "Using rename pattern 9:"
+    for i in "${opusarray[@]}"; do
+      if [[ "$i" =~ ^[\(\[] ]]; then
+        n="${i#*[([]}"; n="${n%%[]).]}"
+        newname="${i#* }"; newname="${newname%.opus}"
+      elif [[ "$i" =~ ^[[:digit:]] ]]; then
+        n="${i%%[ .]*}"
+        newname="${i#*[. ]}"; newname="${newname%.opus}"
+        [[ "$newname" =~ ^\  ]] && newname="${newname#\ }"
+        newname="$newname -- Part $n: Part $n.opus"
+      fi
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+
+    mvopus
+
+  elif [[ "$opusarray" =~ .+\ \([[:digit:]]{1,3}\)\.opus ]]; then
+    echo "Using rename pattern 10:"
+    for i in "${opusarray[@]}"; do
+#     n="${i%).opus}"; n="${n:0:-3}-- ${n: -2}"
+      n="${i%).opus}.opus"; n="$(echo "$n"|rev)"; n="$(echo "${n/\( / traP :00 traP -- }"|rev)"
+#      newname="${i%_*} -- Part $n: Part $n.opus"
+      newname="$n"
+      confirm_rename["$i"]="$newname"
+      printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirm_rename["$i"]}" "$tput0"
+    done
+
+   mvopus
+
+  fi
+    # Check if files match the expected naming pattern after renaming
+    renopus=( *\ --\ Part\ *.opus )
+    if ! compgen -G '@(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus)' &> /dev/null; then
+        pause "Using naming pattern zulu!"
+        # If files do not match expected naming pattern, attempt to rename them
+        if [[ "${renopus[0]/ -- Part / -- Part 00: Part }" == *\ --\ Part\ ??\:\ *.opus ]]; then
+        pause "!! USING NAMING PATTERN ZULU !!"
+            for i in "${renopus[@]}"; do
+                n="${i#* -- Part }"; n="${n%%:*}" #n="${n%.opus}"
+                confirm_rename["$i"]="${i/ -- Part / -- Part $n: Part }"
+                printf '%s    %s---->%s    %s%s\n%s' \
+                       "$i"   "$bold" \
+                                     "$tput0" \
+                                           "$red" "${confirm_rename["$i"]}" \
+                                                 "$tput0"
+            done
+          mvopus
+        else
+            allfiles=(*)
+            # Exit if files do not match expected naming pattern and cannot be renamed
+            [[ "${allfiles[@]}" != *.opus\ * ]] && printf 'This directory does not contain files in the expected format or filename.\n'
+            [[ "${allfiles[@]}"  = *.opus\ * ]] && printf 'The rudimentarly built-in file renaming was unable to put the opus files into the pattern of <Title> -- Part ##: <Chapter Title>.opus\nPlease rename files and retry indexopus.'
+            exit
+        fi
+     fi
+}
+
+
+##--> Main Code <--####################################################################################
+##--> indexopus <--####################################################################################
+
+echo
+printline "${bold}  Welcome to ${red}indexopus  ${tput0}"
+echo
+
+# Parse command-line options
+while [[ "$#" -gt 0 ]]; do
+  if [[ "$1" = @(e|edit|--edit) ]]; then
+     editscript;
+  elif [[ "$1" = @(-y|--force) ]]; then
+     rmmatch=true
+  elif [[ "$1" = -f ]]; then
+     fd="$2"; shift
+  elif [[ "$1" = @(-d) ]]; then
+     opuspartdur="$2"; shift
+  elif [[ "$1" = @(-q|--quiet) ]]; then
+     quiet=true; shift
+  elif [[ "$1" = @(-t|--title) ]]; then
+     title="$2"; shift
+  elif [[ "$1" = @(-s|--stamp) ]]; then
+     stamp="$2"; shift
+  elif [[ "$1" = @(-m|--tmp) ]]; then
+     tmp="$2"; shift
+  elif [[ "$1" = @(c|config|--config) ]]; then
+     if [[ -n "$2" && -f "$2" && $(grep -q "absserver" "$2") ]]; then
+       config="$2"
+       shift
+     else
+#      if [[ -f "$confpath" && $(grep -q "absserver" "$confpath") ]]; then
+#         config="$confpath"
+#      fi
+       echo "Default config file location: $confpath"
+     fi
+  elif [[ "$1" = @(-r|--reindex|reindex) ]]; then
+    reindex=true
+  elif [[ "$1" = --reindex=metadata.json ]]; then
+    reindex=true; usemetadata=1
+  elif [[ "$1" = @(-h|help|--help) ]]; then
+    usage
+  else
+    echo "Unknown option: $1"
+    exit 1
+  fi
+  shift
+done
+
+if [[ ! -d "$tmp" ]]; then
+ mkdir "$tmp" || printf '%s%sFailed to create %s!\nexit 1\n%s' "$red" "$bold" "$tmp" "$tput0" #&& exit
+fi
+
+if [[ "$reindex" = true ]]; then   #if reindex is true, check for rmmatch and reindex.
+  reindex
+  reindexreturn="$?"
+  printf '%sPlease see %s/%s for indexed file.%s\n\n' "$red" "$PWD" "$reintitle" "$tput0"
+  exit "$reindexreturn"
+fi
+
+opusarray=( *.opus )
+
+# this checks for a metadata.json, ideally from audiobookshelf.  there could be other metadata.json files
+# abs doesn't support json files with other names, nor is there anything in the json identifying it
+# as an abs file.  It does check the .json for the chapter index, so there's at least that...
+if ! "${quiet:=false}" && [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].title' metadata.json)" ]]; then
+  reindex=true; itemid_pwd
+  [[ "$(jq -r '.chapters[0] | .title' metadata.json)".opus = "${opusarray[0]}" ]] ||
+     [[ "$(jq -r '.chapters[0] | .title' metadata.json)" = "001" ]] && reindex=false
+
+  [[ "$reindex" = false ]] &&
+    printf '%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s/audiobook/%s/chapters\n\n' "$red" "$absserver" "$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$sqlitepwd';" ".exit")" &&
+      [[ ! "$rmmatch" = true ]] && confirm "${bold}Would you like to try to reindex the file after importing chapter information? ${tput0}" &&
+      reindex=true
+fi
+
+if ! compgen -G *\ --\ Part\ @(??|???)\:\ *.opus &> /dev/null; then
+  rename
+fi
+
+d=0
+t=0
+gettitle "$title"
+
+if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]; then
+  printf 'This directory already contains %s\n\n' "$ioutput"
+  if confirm "Overwrite the existing file? (y/n) "; then
+    printf '\n%sOverwriting %s -- Audiobook.opus...%s\n' "$relipsis" "$ititle" "${tput0}"
+  else
+#      [[ -f metadata.json ]] &&
+#        confirm "$(printf '\nNot overwriting.\nA metadata.json file was found. Would you like to reindex the file?')" &&
+#        reindex=true && overwrite=false ||
+#        printf '\n%s\n\n' "$(printline "  Exiting ${scriptname}: ${red}user abort. exit (130)${tput0}  ")"
+#        exit 130
+    if [[ -f metadata.json ]] && confirm "$(printf '\nNot overwriting.\nA metadata.json file was found. Would you like to reindex the file?')"; then
+      reindex=true
+      overwrite=false
+    else
+      printf '\n%s\n\n' "$(printline "  Exiting ${scriptname}: ${red}user abort. exit (130)${tput0}")"
+      exit 130
+    fi
+  fi
+fi
+
+
+[[ "$opuspartdur" ]] && duration="$opuspartdur" ||
+#also changing what its using for part digits here to just straight fuckin' parts:
+#           duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
+           duration=$(find . -type f \( -iname "$title -- Part *: *.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
+           xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+           perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
+           tail -n 1)
+
+printf '\n%sGenerating the index for %s -- Audiobook.opus from...%s\n\n' "$relipsis" "$ititle" "$tput0"
+
+createindex
+
+printf '%s:~%s~%s\n\n' "${createdindex[@]}"|paste|column -t -s "~"
+printf '\n%s%sProposed index for %s:%s%s\n' "$red" "$bold" "$ititle" "${tput0}" "$bold"
+
+printf '%s .. %s\n' "${rawindex[@]}"  # DO NOT touch this line
+echo
+
+if [[ "$rmmatch" != "true" ]] &&
+  ! $(confirm -y "Continue with concatination?"); then
+  printf '\n\nWell why are you here then?%s\n\n' "$tput0"
+  printline "  ${bold}Leaving ${scriptname}: ${red}User abort. exit (130)  ${tput0}$(echo)"
+  exit 130
+fi
+
+printf '\n\n%sConcatenating %s -- Part ??: *.opus...%s\n\n' "$relipsis" "$ititle" "$tput0"
+
+#concatination step:
+dirsize="$(du -csb *Part*opus|tail -n1)"
+dirsize="${dirsize%%$'\t'*}" #remove everything after first tab stop
+dirsize="$((dirsize/1024))"  #convert bytes to KiB  ## changed to 1024 2025-05-15
+#printf %sPart\ files\:\\n%s  "$red" "$tput0"
+#printf '%ssize   %s: %sKiB\n%stime   %s: %s\n' \
+#       "$red" \
+#       "$tput0" \
+#       "$dirsize" \
+#       "$red" \
+#       "$tput0" \
+#       "$duration"
+
+#[[ "$overwrite" != false ]] && ffout="$(ffmpeg -nostdin -hide_banner -v error -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
+#[[ "$overwrite" != false ]] &&
+ffout="$(ffmpeg -nostdin -hide_banner -v info -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
+
+#ffout="$(printf %s|tail -n2|head -n1)"
+#ffout="$(printf %s|tail -n2|head -n1)"
+
+if [[ "$ffout" =~ $'\r' ]]; then declare -p ffout; ffout="${ffout#*$'\r'}"; fi
+
+ffsize=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^size=/) {print $(1+i)} }' <<< "$ffout" | sed 's/size=//')
+ffsize="${ffsize%KiB}"
+fftime=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^time=/) {print $i} }' <<< "$ffout" | sed 's/time=//')
+ffbitrate=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^bitrate=/) {print $(i+1)} }' <<< "$ffout" | sed 's/bitrate=//')
+ffspeed=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^speed=/) {print $i} }' <<< "$ffout" | sed 's/speed=//')
+
+labelwidth=12
+valuewidth=15
+totalwidth=$((labelwidth + valuewidth + 5))
+
+printf "\n%-${totalwidth}s    | %-${totalwidth}s\n" "${red}Concatenated file${tput0}:" "${red}Part files${tput0}:"
+
+printf "%-${labelwidth}s %-${valuewidth}s | %-${labelwidth}s %s\n" \
+  "${red}size   ${tput0}:" "$ffsize KiB" "${red}size${tput0}:" "${dirsize} KiB"
+
+printf "%-${labelwidth}s %-${valuewidth}s | %-${labelwidth}s %s\n" \
+  "${red}time   ${tput0}:" "$fftime" "${red}time${tput0}:" "$duration"
+
+printf "%-${labelwidth}s %-${valuewidth}s |\n" \
+  "${red}bitrate${tput0}:" "$ffbitrate"
+
+printf "%-${labelwidth}s %-${valuewidth}s |\n" \
+ "${red}speed  ${tput0}:" "$ffspeed"
+
+# adding the "${ffsize:=0}" here is cheating since it shouldn't be but it's to see what's going on in the code
+printf '\n%sSize reduction%s: %s KiB / %s%%\n' "$red" "$tput0" "$(( dirsize - ffsize ))" "$(( ( 100*dirsize - 100 * ${ffsize:=0} ) / dirsize ))"
+
+if [[ "$overwrite" != false ]] && [[ "$?" != 0 ]]; then
+  printf "\nffmpeg failed to concatinate; exit 1\n\n" && exit 1
+fi
+
+if [[ ! -f "$tmp/$output" ]]; then
+  printf '\n\n\n%s%sWhere the fuck is %s/%s?\nexit 1%s' "$red" "$bold" "$tmp" "$output" "$tput0"
+  printline "Leaving $scriptname: error, exit 1!"
+  exit 1
+fi
+
+printf '\n\n%sIncorporating index into%s %s -- Audiobook.opus%s\n\n%s' "$relipsis" "$white" "$ititle" "$relipsis" "$tput0"
+
+#mvout="$(mv "$tmp/$output" "$output" 2>&1)"
+#mvec="$?"
+#
+#pause "$tmp/$output $PWD/$output $mvec $mvout"
+#
+#if (( mvec == 0 )); then
+#  echo "File moved successfully."
+#else
+#  if echo "$mvout" | grep -q "are the same file"; then
+#    echo "Source and destination files are identical. Deleting the source file."
+#    rm "$tmp/$output"
+#  else
+#    echo "Error: $mvout"
+#    exit 1
+#  fi
+#fi
+output="$tmp/$output"
+
+writeindex "$output"
+wiec="$?"
+(( "$?" != 0 )) && { echo "writeindex did not exit cleanly, exit 1"; exit 1; }
+
+if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null; then
+  printf '%sChecking output from mediainfo...\n\n%s' "$relipsis" "$tput0"
+  mediainfo "$output"
+  outdur="$(mediainfo -f "$output"|grep Duration|head -n1)"
+  outdur="${outdur#*: }"
+  outdur="$(echo "$outdur" | perl -nle '/([0-9\.]+)/ && ($t += $1) && printf "%02d:%02d:%02d\n", $t/3600000, ($t/60000)%60, ($t/1000)%60')"
+
+  data=( "${bold}Duration(s):${tput0}"
+         "${red}${bold} $duration ${tput0}${ititle} -- Part .*opus $tput0"
+         "${red}${bold} $outdur ${tput0}${ititle} -- Audiobook.opus $tput0")
+
+  # Print the aligned data using column, right justifying durations
+  printf '%s\n' "${data[@]}" #| column -s "~" -t -R 2
+  echo "$tput0 $white"
+elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null; then
+  printf 'Checking the output from ffprobe...\n\n'
+  ffprobe "$output"
+  printf 'Original duration... %s' "$duration"
+else
+  echo "Indexed opus file not found! Exit 1"
+  rmyn "Remove $tmp? " "leaving files" rm -r "$tmp"
+# (( $rmynres == 1 )) && >&2 echo "$tmp"
+  printline "${bold}  Exiting (1) ${white}indexopus  ${tput0}"
+  exit 1
+fi
+
+if "${quiet:=false}"; then rmmatch=true; fi
+
+
+if [[ "$rmmatch" = true && "$duration" = "$outdur" ]]; then
+  printf '%sDurations of part and indexed opus files match, automatically deleting temporary files!\n' "$relipsis"
+  rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index)
+  if mvoutput="$(mv "$output" "$PWD" 2>&1)"; then
+    printf '\nPlease see %s%s%s/%s%s\n\n%sDone.\n\n%s' "$white" "$bold" "$PWD" "$ioutput" "$tput0" "$relipsis" "$tput0"
+    rm -r "$tmp"
+    printline "${bold}  Exiting (0) ${white}indexopus  ${tput0}"
+    exit 0
+  elif [[ "$mvoutput" =~ ^mv\:\ [\'\"].+[\'\"]\ and\ [\'\"].+[\'\"]\ are\ the\ same\ file$ ]]; then
+    printf '\nPlease see %s%s%s/%s%s\n\n%sDone.\n\n%s' "$white" "$bold" "$PWD" "$ioutput" "$tput0" "$relipsis" "$tput0"
+    printf '%sNB: $tmp = %s%s%s\n             and\n    $PWD = %s%s%s\n' "$red" "$white" "$tmp" "$red" "$white" "$PWD" "$red"
+    if [[ "$tmp" != "$PWD" ]]; then
+      rmr "$tmp"
+      printf '    %sremoving %s%s\n\n' "$relipsis" "$white" "$tmp"
+    else
+      printf '    %snot removing %s%s\n\n' "$relipsis" "$white" "$tmp"
+    fi
+    printline "${bold}  Exiting (0) ${white}indexopus  ${tput0}"
+    exit 0
+  else
+    echo "mvoutput= $mvoutput"
+    pause "output=$output; PWD=$PWD; tmp=$tmp"
+    printf '\nthere is something wrong here.  exit 1\n\n'
+    printline "${bold}  Exiting (1) ${white}indexopus  ${tput0}"
+    exit 1
+  fi
+fi
+
+#this isnt working right tonight and it is late.
+#this was "$reindex" != true...  changing to "$rmmatch":
+#[[ "$reindex" != true ]] && rmyn "${bold}${red}Remove $title -- Part *.opus & temp files? (y/n) ${tput0}" "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index) && iorm=true ||
+
+
+
+[[ "$rmmatch" != true ]] &&
+  rmyn "${bold}${red}Remove $title -- Part *.opus & temp files? (y/n) ${tput0}" "$bold Leaving temporary files $tput0" rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index) && iorm=true ||
+ rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index)
+#DB pause "PWD=$PWD tmp=$tmp output=$output"
+ [[ "$PWD" != "$tmp" ]] && mv "$output" "$PWD" && rm -r "$tmp"
+
+! "${quiet:=false}" && "${reindex:=false}" && confirm -y "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info? %s' "${red}" "${bold}" "${tput0}")" && exec indexopus --reindex=metadata.json
+
+printf '\n\n%sDone.\n\nPlease see %s%s%s/%s\n\n' "$relipsis" "$white" "$bold" "$PWD" "$ioutput"
+
+#exec 5<> "$tmp/5"
+
+(( $rmynres == 1 )) 2>/dev/null && echo "$tmp remains"
+
+#clean up /tmp/indexopus-* files older than two days:
+find /tmp -iname "indexopus-1*" -mtime -2 -exec rm -rf {} 2>/dev/null \;
+
+printf '%s' "$tput0"
+
+printline "${bold}  Exiting (0) ${white}indexopus  ${tput0}"
+echo
+
+[[ "$iorm" = true ]] && exit 2 || exit 0 # this exit 2 has to be here so that it is passed back to m4b2opus
+
+exit 1 #how did it get here?!?
+
+
+
+
+to get chapters for a new abs book, it looks like the following api calls:
+curl -X POST "$absserver/api/items/$(itemid)/scan"   -H "Authorization: Bearer $abstoken"
+curl "$absserver/api/search/chapters?asin=$(jq -r '.asin' metadata.json)"   -H "Authorization: Bearer $abstoken" >chapters.json
+curl -X POST "$absserver/api/items/$(itemid)/match"   -H "Authorization: Bearer $abstoken"   -H "Content-Type: application/json"   -d '{"provider": "audible", "overrideDefaults": "true"}'
