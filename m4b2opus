@@ -326,7 +326,8 @@ while (( $# > 0 )); do
   [[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=1
 #  [[ -f "$1" ]] && clifile="$1" && shift  #these don't actually do anything
   [[ -f "$1" || -d "$1" ]] && clifile="$1" && shift  #these don't actually do anything ## want to have filecheck evaluate whether the clifile is a -f or -d
-  [[ -d "$1" ]] && clidir="$1" && shift   #at the moment but they could...there has to be some catchall condition for things not in this list or it will loop endlessly...
+#  [[ -d "$1" ]] && clidir="$1" && shift   #at the moment but they could...there has to be some catchall condition for things not in this list or it will loop endlessly...
+##  the -f "$1" doesn't really work right because I'm not checking the starting m4b duration properly.  this needs to be fixed so that -y can work right
   [[ "$1" = "" ]] && shift
 done
 
