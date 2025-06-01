@@ -111,46 +111,59 @@ done
 ##--> editscript() <--##############################################################################
 
 filecheck(){
-   clifilename="$1"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
-   [[ -d "$clifilename" ]] && clidir="${clifilename%/*}" && cd "$clidir" && unset clifilename
-   [[ -f "$clifilename" ]] && clidir="${clifilename%/*}" && cd "$clidir" && clifilename="${clifilename##*/}"
+  local clifilename clipath files startm4a mvoutput mvec  ## not sure what to do here.  need to see the scope of these variables.
+  [[ -e "$1" ]] && clifilename="$(realpath "$1")"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
+(( verbose )) && read -rp "$clifilename"
+  [[ -d "$clifilename" ]] && clipath="${clifilename%/}" && cd "$clipath" && unset clifilename
+  [[ -f "$clifilename" ]] && clipath="${clifilename%/*}" && cd "$clipath" && clifilename="${clifilename##*/}" ## add an || unset clifilename here?
+(( verbose )) && read -rp "$clifilename"
+(( verbose )) && read -rp "$clipath"
 
-  if [[ -n "$clifilename" ]] && [[ "$clifilename" != *\ --\ Audiobook.m4b ]]
-    then
-    printf 'The file specified: %s\nis not in the correct format of\n* -- Audiobook.m4b, checking directory for an m4b file...' "$clifilename"
-  elif [[ "$clifilename" == *\ --\ Audiobook.m4b ]] && [[ -f "$1" ]]
-    then
-    m4bin="$1"
-  else
-    files=(*.m4[ba])
+#  [[ "$clifilename" = *\ --\ Audiobook.m4b ]] && [[ -f "$1" ]] && m4bin="$1" && return 0
+  [[ "$clifilename" = *\ --\ Audiobook.m4b ]] && [[ -f "$clifilename" ]] && { m4bin="$clifilename"; return 0; }
+
+## at this point the pwd should either be the swd or it should be the local "$clipath" from the cd "$clipath" above.
+(( verbose )) && read -rp "$(pwd)"
+
+  [[ "$clifilename" ]] && files=("$clifilename") || files=(*.m4[ba])
+
     if (( "${#files[@]}" == 1 )); then
 
       # to handle the case where there's an unindexed m4a or a misnamed m4b,
       # for simplicity sake, just rename to m4b
       # probably want to change it back at the end, but it is going to get deleted anyway
-      [[ "$files" = *m4a ]] && startm4a="${files}" && mv "$files" "${files%.m4a}.mb4"
+      if [[ "${files[0]}" = *.m4a ]]; then
+        startm4a="${files[0]}"
+        files[0]="${files[0]%.m4a}.m4b"
+        mv "$startm4a" "${files[0]}"
+        (( "$?" )) && { printf 'The starting file was an m4a which could not be renamed to m4b:\n mv %s %s\nInvestigate. (return 1)' "${startm4a@Q}" "${files[0]@Q}"; return 1; }
+      fi
 
-      if [[ "${files[@]}" == *\ --\ Audiobook.m4b ]]; then
-        m4bin="$files"
-      elif [[ "${files[@]}" == *m4b ]]; then
-        m4bin="${files/.m4b/ -- Audiobook.m4b}"
-        mvoutput="$(mv "$files" "$m4bin" 2>&1)"
+      if [[ "${files[0]}" = *\ --\ Audiobook.m4b ]]; then
+        m4bin="${files[0]}"
+      elif [[ "${files[0]}" = *.m4b ]]; then
+        m4bin="${files[0]/.m4b/ -- Audiobook.m4b}"
+        mvoutput="$(mv "${files[0]}" "$m4bin" 2>&1)"
         mvec="$?"
         if (( mvec > 0 )); then
-          if [[ "$mvoutput" = "mv: cannot move "*\ to\ *": Permission denied" ]]; then
-            own && mv "$files" "$m4bin" || { printf 'Unable to gain write permission for %s. exit 1\n\n' "${files[@]}"; exit 1; }
+          if [[ "$mvoutput" = "mv: cannot move "*": Permission denied" ]]; then
+            own && mv "${files[0]}" "$m4bin" || { printf 'Unable to gain write permission for %s. exit 1\n\n' "${files[@]}"; exit 1; }
           else
             printf 'Unknown error renaming %s. exit 1\n\n' "${files[@]}"
             exit 1
           fi
         fi
+      else
+        printf 'The file passed to the script was not an *m4[a|b]:\n %s\n.  This cannot be allowed to stand!\n\nInvestigate. (return 1)\n' "$1"
+        return 1
       fi
     else
       echo "No single m4b/m4a input file found or specified, please check and retry..."
       ls
       exit 1
     fi
-  fi; }
+#  fi
+}
 ##--> filecheck() <--#################################################################################
 
 calctime(){
@@ -311,7 +324,8 @@ while (( $# > 0 )); do
   [[ "$1" = "--stats" ]] && shift && stats=true
   [[ "$1" = @(--screen|-s) ]] && shift && screened=1
   [[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=1
-  [[ -f "$1" ]] && clifile="$1" && shift  #these don't actually do anything
+#  [[ -f "$1" ]] && clifile="$1" && shift  #these don't actually do anything
+  [[ -f "$1" || -d "$1" ]] && clifile="$1" && shift  #these don't actually do anything ## want to have filecheck evaluate whether the clifile is a -f or -d
   [[ -d "$1" ]] && clidir="$1" && shift   #at the moment but they could...there has to be some catchall condition for things not in this list or it will loop endlessly...
   [[ "$1" = "" ]] && shift
 done
@@ -342,14 +356,18 @@ allm4s=(*.m4[ab])
 printf '\n%s/*.m4[ab]: \n' "$(pwd)"
 printf ' %s%s%s\n' "$red" "${allm4s[@]}" "$white"
 
-filecheck "$1" && [[ ! "$?" = 0 ]] && exit  # this function returns "$m4bin"
+#filecheck "$1" && [[ ! "$?" = 0 ]] && exit  # this function returns "$m4bin"
+
+filecheck "${clifile:-""}" && [[ ! "$?" = 0 ]] && { printf 'The files failed filecheck()!\nInvestigate (exit 1)\n.'; exit 1; }  # this function returns "$m4bin"
+
+(( verbose )) && read -rp "$clifile"
 
 [[ "$stats" = true ]] && mediainfo "$m4bin"
 
 m4bindur="$(checkdur m4b)"                  # this function returns the duration of m4bs
 
 printf '\n%sStarting .m4b file: %s%s%s' "$bold" "$red" "$m4bin" "$tput0"
-printf ' %s%s%s\n' "$boldred" "$m4bin" "$tput0"
+##printf ' %s%s%s\n' "$boldred" "$m4bin" "$tput0"  ## this appears to be redundant
 printf '%sStarting duration :%s' "$bold" "$tput0"
 printf ' %s%s%s\n' "$boldred" "$m4bindur" "$tput0"
 title="${m4bin% -- *}"
