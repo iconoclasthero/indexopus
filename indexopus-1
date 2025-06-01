@@ -143,6 +143,26 @@ rmyn(){
 #}
 ##--> is_even() <--####################################################################################
 
+rmsources(){
+  local mp3s m4abs
+  pause "in rmsources"
+  mp3s=( *mp3 )
+  m4abs=( *m4@(a|b) )
+  (( verbose )) && printf 'mp3s=%s\n' "${mp3s[@]}"
+  (( verbose )) && printf 'm4abs=%s\n' "${m4abs[@]}"
+  if [[ "$mp3s" ]] && [[ "$m4abs" ]]; then
+    printf 'Both mp3(s) and m4a/m4b(s) found.\nNot proceedig with removal of source files'
+  elif [[ "$mp3s" ]]; then
+    printf 'Duration of source mp3 files: %s\n' "$(mediaduration mp3)"
+    printf 'Duration of %s -- Audiobook.opus:\n %s\n' "$title" "$(mediainfo "$title -- Audiobook.opus"|gdu)"
+    printf 'Remove source mp3s:\n'
+    printf '  %s\n' "${mp3s[@]}"
+    confirm -Y && rm "${mp3s[@]}"
+  fi
+}
+##--> rmyn() <--#######################################################################################
+
+
 gettitle(){
 [[ ! -n "$title" ]] && titles=(*Part\ ??*.opus) && title="${titles[0]% -- Part*}"
 ititle="${iton}$title${itoff}"
@@ -218,7 +238,7 @@ reindex(){
 
 
   if [[ ! -f "chapters.json" ]] && ! (( usemetadata )) &&
-    confirm "${bold}No chapters.json; retrieve chapter info from the web? ${tput0}"; then
+    confirm "${bold}No chapters.json; retrieve chapter info from the web?${tput0}"; then
 
       curl -X POST "$absserver/api/items/$(itemid)/scan"   -H "Authorization: Bearer $abstoken" -sSo /dev/null
       curl "$absserver/api/search/chapters?asin=$(jq -r '.asin' metadata.json)"   -H "Authorization: Bearer $abstoken" -sSo chapters.json
@@ -271,9 +291,9 @@ reindex(){
         chna="${chaptitles[$chno]}"
 #        [[ "$chna" = *@(Part|Chapter)\ ? ]] && chna="${chna/ / 0}"
         chna=$(echo "$chna" | sed -E 's/^(Part|Chapter)[[:space:]]*/\1 /')
-        (( outline )) && [[ "$chna" =~ ^\.\.\.\.\.\. ]] && chna="${chna/....../      }"
-        (( outline )) && [[ "$chna" =~ ^\.\.\.\. ]] && chna="${chna/..../    }"
-        (( outline )) && [[ "$chna" =~ ^\.\. ]] && chna="${chna/../  }"
+        (( outline )) && [[ "$chna" = '......'* ]] && chna="${chna/....../      }"
+        (( outline )) && [[ "$chna" = '....'* ]] && chna="${chna/..../    }"
+        (( outline )) && [[ "$chna" = '..'* ]] && chna="${chna/../  }"
         [[ "$chna" =~ ^(Part|Chapter)\ [0-9]($|[.:\ ].*)$ ]] && chna="${chna/ / 0}"
         [[ "$chna" =~ ^[0-9]($|[.:\ ].*)$ ]] && chna="0$chna" && barenum=1
         chna="${chna%"${chna##*[![:space:]]}"}"
@@ -530,7 +550,9 @@ mvopus(){
      done
     mvopus
 
-  elif [[ "$opusarray" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc)|(T|t)rack\ [[:digit:]]{1,3}\.opus ]]; then
+## changed from a splat to the first index item
+#  elif [[ "$opusarray" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]]; then
+  elif [[ "${opusarray[0]}" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]]; then
     echo "Using rename pattern 2."
     for i in "${opusarray[@]}"; do
       n="${i%.opus}"; n="${n##* }"
@@ -860,6 +882,8 @@ echo
 while [[ "$#" -gt 0 ]]; do
   if [[ "$1" = @(e|edit|--edit) ]]; then
      editscript;
+  elif [[ "$1" = @(-v|--verbose) ]]; then
+    verbose=1
   elif [[ "$1" = @(-y|--force) ]]; then
      rmmatch=true
   elif [[ "$1" = -f ]]; then
@@ -930,9 +954,11 @@ fi
 #fi
 
 ## depends on nullglob
-matches=( * -- Part @(??|???): *.opus )
-! (( ${#matches[@]} )) && rename
+matches=( *\ --\ Part\ @(??|???)\:\ *.opus )
 
+(( verbose )) && { [[ "$matches" ]] && pause "Files that match '* -- Part @(??|???): *.opus': $(printf %s\\n "${matches[@]}")" || pause "No files match '* -- Part @(??|???): *.opus'"; }
+
+! (( ${#matches[@]} )) && rename
 
 d=0
 t=0
@@ -940,7 +966,7 @@ gettitle "$title"
 
 if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]; then
   printf 'This directory already contains %s\n\n' "$ioutput"
-  if confirm "Overwrite the existing file? (y/n) "; then
+  if confirm "Overwrite the existing file?"; then
     printf '\n%sOverwriting %s -- Audiobook.opus...%s\n' "$relipsis" "$ititle" "${tput0}"
   else
 #      [[ -f metadata.json ]] &&
@@ -973,14 +999,17 @@ if [[ "$opuspartdur" ]]; then
 else
   if [[ "$title" = *\[* ]] || [[ "$title" = *\]* ]]; then
     findtitle="${title//\[/\\[}"; findtitle="${findtitle//\]/\\]}"
-    pause "findtitle=$findtitle"
+  else
+    findtitle="$title"
+  fi
+
+(( verbose )) && pause "findtitle=$findtitle"
 #also changing what its using for part digits here to just straight fuckin' parts:
 #           duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
            duration=$(find . -type f \( -iname "$findtitle -- Part *: *.opus" -o -iname "$findtitle -- Part ???:*.opus" \) -print0 |
            xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
            perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
            tail -n 1)
-  fi
 fi
 
 
@@ -1155,6 +1184,8 @@ fi
  rm -r "$title"\ --\ Part\ *.opus "$tmp"/opus@(files|index)
 #DB pause "PWD=$PWD tmp=$tmp output=$output"
  [[ "$PWD" != "$tmp" ]] && mv "$output" "$PWD" && rm -r "$tmp"
+
+ (( rmsrc )) && rmsources
 
 ! "${quiet:=false}" && "${reindex:=false}" && confirm -y "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info? %s' "${red}" "${bold}" "${tput0}")" && exec indexopus --reindex=metadata.json
 

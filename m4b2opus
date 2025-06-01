@@ -212,7 +212,7 @@ m4bsplit(){
   local bpath outputdir START first start end partnum n chapter max_digits
   outputdir="$2"
   START=1
-  bpath="$(basename "$PWD")"
+  bpath="$(basename "$(pwd)")"
   ffmpeg -i "$1" 2> "/tmp/.tmp$stamp"
 
   chapters=$(grep -cE 'Chapter #[[:digit:]]:[[:digit:]]{1,3}: start' "/tmp/.tmp$stamp")
@@ -339,7 +339,7 @@ fi
 
 allm4s=(*.m4[ab])
 
-printf '\n%s/*.m4[ab]: \n' "$PWD"
+printf '\n%s/*.m4[ab]: \n' "$(pwd)"
 printf ' %s%s%s\n' "$red" "${allm4s[@]}" "$white"
 
 filecheck "$1" && [[ ! "$?" = 0 ]] && exit  # this function returns "$m4bin"
@@ -353,7 +353,7 @@ printf ' %s%s%s\n' "$boldred" "$m4bin" "$tput0"
 printf '%sStarting duration :%s' "$bold" "$tput0"
 printf ' %s%s%s\n' "$boldred" "$m4bindur" "$tput0"
 title="${m4bin% -- *}"
-swd="$PWD"
+swd="$(pwd)"
 convertdir="$CACHE/m4b2opus-$title"
 
 [[ "$convertdir" = *\'* ]] && convertdir="${convertdir//\'}"  #check $convertdir for \'s and remove them
@@ -532,7 +532,7 @@ if [[ "$rmmatch" = true ]] && (( opusdursec > 0 )); then
     [[ "$m4bindursec" != "$opusdursec" ]] &&
        printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tput sitm)" "$(tput ritm)" "$tput0" ||
        printf '%sDurations match!%s\n' "$relipsis" "$tput0"
-    printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
+    printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$(pwd)" "$ioutput" "$tput0"
     exit
   elif [[ "$rmmatch" = true ]] && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
     printf '%s%sThe m4b and opus audiobook durations do not match!\n' "$bold" "$red"

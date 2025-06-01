@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#. /usr/local/bin/editscript
+
 sourcefn(){
   local lib fn verbose awkout OPTIND
   while getopts 'l:f:v' opt; do
@@ -198,14 +200,45 @@ mklnbook(){
   }
 ##--> sec2sex() <--################################################################
 
-  local a sd f t i d abscover linked hostlistconf delugehost delugeport delugeuser delugepass swd verbose cktorrent yes
+
+  getcoverurl(){
+    local jsondir asin
+    jsondir="$1"
+## from vito: Book ASINs are either just numbers or A-Z0-9, but start with B0.
+    asin="$(jq -r .asin "$jsondir/metadata.json")"
+(( verbose )) && read -rp "$asin"
+    if [[ "$asin" =~ ^(B[0-9A-Z]{9}|[0-9]{10})$ ]]; then
+      (( verbose )) && printf 'ASIN in metadata.json appears to be valid: %s\n' "$asin"
+    elif [[ "$asin" != "null" ]]; then
+      printf 'ASIN in metadata.json does not match the regex: %s\n' "$asin"
+      confirm "Use this ASIN to look for a cover url?" || unset asin
+    else
+      printf 'The metadata.json file does not have an ASIN (returned null).\n'
+      unset asin
+    fi
+
+    [[ "$asin" ]] && coverurl=$(curl -s -H 'accept: application/json' \
+                   "https://audimeta.de/book/$asin" | jq -r '.imageUrl')
+    [[ "$coverurl" = https*jpg ]] && { (( verbose )) && printf 'Cover url:\n\n'; printf %s\\n "$coverurl"; return 0; }
+
+    return 1
+
+  }
+##--> getcoverurl() <--################################################################
+
+
+
+  local a sd f t i d abscover linked hostlistconf delugehost delugeport delugeuser delugepass swd verbose cktorrent yes asin
   clear -x
   printline "\n Starting ${FUNCNAME[0]} \n"
 
   swd="$(pwd)"
+
   [[ "$1" = @(-v|--verbose) ]] && shift && verbose=1
   [[ "$1" = -y ]] && shift && yes=1
   [[ "$1" = -Y ]] && shift && YES=1 && yes=1
+  [[ "$1" = @(-c|--cover) ]] && shift && coveronly=1 && { getcoverurl "$swd"; printf \\n; return "$?"; }
+
 #  hostlistconf="$HOME/.config/deluge/hostlist.conf"
   delugecreds -h gigabyte -t mam
   linked='/library/torrent/seeds/mam/linked'
@@ -697,11 +730,16 @@ fi
   (( "${#hh}" == 3 )) && hhmm="$hh:$mm hhh:mm" || hhmm="$hh:$mm hh:mm"
   readarray -t genretags < <({ mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Genre[[:space:]]\+: //p'; mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Tags[[:space:]]\+: //p'; } | tr '/' '\n'|sed 's/^[[:space:]]*//;s/[[:space:]]*$//'|sort -u )
   printf \\n
+
 #  printline "Tags and genres"
 #  hr2 "Tags and genres"
   printf %s\ \|\ %s\ \|\  "$pubdate" "$hhmm"
   printf %s\ \|\   "${genretags[@]}"
   printf '17 kb/s opus transcode | embedded chapter index and cover\n\n'
+
+## not sure I want to use "$swd" here, but it should suffice, at least to start.
+  coverurl=$(getcoverurl "$swd") && printf %s\\n "${"$coverurl":-'Unable to retrieve cover url!'}"
+
   printline "\n Returning to starting working directory "
   printf '\nLeaving: \n%s\n' "$(pwd)"
   printf '\nReturning to %s\n' "$swd"

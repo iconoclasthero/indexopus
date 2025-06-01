@@ -4,7 +4,7 @@
 . /usr/local/bin/editscript
 . ~/.config/indexopus.conf
 
-tmp=/cache/
+tmp=/cache
 mp=tmp
 scriptname=$(realpath "$0")
 ulon=$(tput smul)         # underline on
@@ -16,8 +16,12 @@ white="$(tput setaf 15)"  # white fg
 relipsis="${red}..."
 shopt -s nullglob extglob dotglob
 [[ ! "$threads" ]] && threads=4
-rmmatch=false
-screened=false
+#rmmatch=false
+#screened=false
+
+sourcefn -l "$HOME/bin/gits/indexopus/indexopus.lib" -f printline -f confirm
+
+
 
 cd-(){ cd - >/dev/null ; }
 
@@ -34,10 +38,16 @@ rmyn(){
 }
 
 calculatetime(){
-duration=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
-hours=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' | tail -n 1)
-minutes=$(find -type f -name "$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' | tail -n 1)
-seconds=$(find -type f -name "*$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' | tail -n 1)
+  local findtitle
+  findtitle="$1"
+  [[ "$findtitle" = *\[* || "$findtitle" = *\]* ]] && findtitle="${findtitle//\[/\\[}" && findtitle="${findtitle//\]/\\]}"
+
+(( verbose )) && pause "findtitle=$findtitle"
+
+duration=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+hours=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' | tail -n 1)
+minutes=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' | tail -n 1)
+seconds=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' | tail -n 1)
 
 [[ "$hours"   =~ "0*(.*)" ]] &&   hours=${BASH_REMATCH[1]}
 [[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
@@ -53,6 +63,7 @@ secmin=$((secmin*60))
 seconds="${seconds#0}"
 totalsec=$(( "$seconds" + "$secmin" ))
 divsec=$(python3 -c "print($totalsec/$threads)")
+(( verbose )) && printf 'hours: %s\nminutes: %s\nseconds: %s\ntotalsec: %s\ndivsec: %s\n' "$hours" "$minutes" "$seconds" "$totalsec" "$divsec"
 
 }  #calculatetime()
 
@@ -69,17 +80,17 @@ rmyn(){
 }
 ##--> rmyn() <--######################################################################################
 
-confirm(){
- local ans IFS=
- while
-  printf '%s' "$1"
-  read -rp " " -n1 ans
-   do
-     printf '\n'
-     case "$ans" in [Yy]) return 0;; [Nn]) return 1;;
-     esac
-   done
-}
+#confirm(){
+# local ans IFS=
+# while
+#  printf '%s' "$1"
+#  read -rp " " -n1 ans
+#   do
+#     printf '\n'
+#     case "$ans" in [Yy]) return 0;; [Nn]) return 1;;
+#     esac
+#   done
+#}
 ##--> confirm() <--###################################################################################
 
 checkdur(){
@@ -115,15 +126,16 @@ if [[ "$1" ]]
 #####################################################
 
 [[ "$1" = @(edit|e|nano) ]] && editscript
+[[ "$1" = @(-v|--verbose) ]] && verbose=1
 [[ "$1" = --force ]] && force=1 && shift
-[[ "$1" = @(|-)@(-ys|-yes) ]] && shift && rmmatch=true && screened=true
-[[ "$1" = -y ]] && shift && rmmatch=true
+[[ "$1" = @(|-)@(-ys|-yes) ]] && shift && rmmatch=1 && screened=1
+[[ "$1" = -y ]] && shift && rmmatch=1
 
-if "$screened"; then
+if (( screened )); then
   allfiles=( *.mp3 )
   [[ ! "$allfiles" ]] && allfiles=( *.m4[ab] )
   . indexopus.lib
-  printline "$bold Calling m4b2opus in GNU screen $tput0"
+  printline "$bold Calling quartero4 in GNU screen $tput0"
   printf \\n\\n
 #  allm4s=(*.m4[ab])
   screenname="q.o.4-${allfiles[0]}"
@@ -133,7 +145,7 @@ if "$screened"; then
   exit
 fi
 
-SWD="$PWD"
+SWD="$(pwd)"
 
 if [[ -n "$1" ]] && [[ -f "$1" ]]; then
     path="$1"
@@ -155,12 +167,13 @@ if [[ "$path" != *\ --\ Audiobook.@(mp3|m4@(a|b)|wav) ]]
     printf '\n%s%sFile is not in the format of <title> -- Audiobook.@(mp3|m4a|m4b)!\n%s\n' "$red" "$bold" "$tput0"
       ckbookfile="${ckbook%.*}"; ckbookext="${ckbook##*.}"
 #      [[ "$ckbookfile" =~ \. ]] && n_ckbookfile="${ckbookfile//./_}"
-#      if "$rmmatch" || confirm "Rename $path to ${ckbook%.*} -- Audiobook.${ckbook##*.}? (y/n) "
-      n_ckbook="${n_ckbookfile:-$ckbookfile} -- Audiobook.$ckbookext"
-      if "$rmmatch" || { printf 'Rename\n %s \nto\n %s\n' \
+#      if (( rmmatch )) || confirm "Rename $path to ${ckbook%.*} -- Audiobook.${ckbook##*.}? (y/n) "
+#      n_ckbook="${n_ckbookfile:-$ckbookfile} -- Audiobook.$ckbookext"
+      n_ckbook="$ckbookfile -- Audiobook.$ckbookext"
+      if (( rmmatch )) || { printf 'Rename\n %s \nto\n %s\n' \
                                 "$path" \
                                 "$n_ckbook";
-                          confirm "(y/n) ?"; }
+                          confirm -y; }
         then
           mv "$ckbook" "$n_ckbook"
         else
@@ -178,7 +191,7 @@ title="${title%% -- *}"
 ititle="${ulon}$title${uloff}"
 
 
-if [[ "$inext" = @(m4b|m4a) ]]; then
+if [[ "$inext" = m4b ]]; then
    ext="$inext"
    outext="m4a"
 pause "$outext"
@@ -204,6 +217,7 @@ fi
 
 for i in *"$ext"; do
   wholefile="$i"
+(( verbose )) && pause "wholefile=$wholefile"
   printf '\nFile to split: %s\n' "$wholefile"
   calculatetime "$wholefile"
   printf '\n\n%sSplitting file into %s pieces:\n%s' "$relipsis" "$threads" "$tput0"
@@ -225,15 +239,22 @@ cd "$tmp"
 #  done
 #done
 
-printf '#####################################################\nentering opus.book.4\n#####################################################\n\n'
+#printf '#####################################################\nentering opus.book.4\n#####################################################\n\n'
+
+printline "  Entering opus.book.4  "
 
 threads="$threads" opus.book.4
 
-printf '#####################################################\nleaving opus.book.4\n#####################################################\n\n'
+#printf '#####################################################\nleaving opus.book.4\n#####################################################\n\n'
+
+printline "  Leaving opus.book.4  "
 
 mediaduration
 
-printf '#####################################################\nentering indexopus\n#####################################################\n\n'
+#printf '#####################################################\nentering indexopus\n#####################################################\n\n'
+
+printline "  Entering indexopus  "
+
 
 indexopus -y -t "$title" || { echo "indexopus failed, exit 1" ; exit 1; }
 
@@ -242,38 +263,47 @@ indexopus -y -t "$title" || { echo "indexopus failed, exit 1" ; exit 1; }
 #(( ioexit==1 )) && echo "indexopus failed, exit 1" && exit 1
 
 
-printf '#####################################################\nleaving indexopus\n#####################################################\n\n'
+#printf '#####################################################\nleaving indexopus\n#####################################################\n\n'
 
+printline "  Leaving indexopus  "
 
 #printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
 
 #printf '%s\n%s\n' "$(ls *\ Audiobook.opus)" "$(mediainfo *\ Audiobook.opus|grep ^Duration\ |uniq)"
 
 
-printf '\n%smoving ./tmp/%s -- Audiobook.opus to %s%s\n\n' "$relipsis" "$ititle" "$SWD" "$tput0"
+printf '\n%smoving %s/%s -- Audiobook.opus to %s%s\n\n' "$relipsis" "$tmp" "$ititle" "$SWD" "$tput0"
+
 
 mv *\ Audiobook.opus "$SWD"
 
 lsopus=( *opus )
-((${#lsopus[@]} > 0)) &&
-  printf '%sopus files still remain in ./tmp!\nls *opus:\n%s' "$relipsis" "$tput0" &&
+(( "${#lsopus[@]}" )) &&
+  printf '%sopus files still remain in %s!\nls *opus:\n%s' "$relipsis" "$tmp" "$tput0" &&
   printf '%s\n' "${lsopus[@]}" &&
-  echo
+  printf \\n
 
 ckparts=( "$title -- Part "*.opus )
-(( "${#ckparts[@]}" > 0 )) &&
+(( "${#ckparts[@]}" )) &&
     printf -- '--> %sThe duration of the %s -- Part *opus is %s\n\n%s' "$relipsis" "$ititle" "$duration" "$tput0" &&
-    rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ *.opus
+#    rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ *.opus
+    confirm -Y "Remove $ititle -- Part *.opus files?" && rm "$title -- Part "*.opus || printf '...Leaving %s -- Part *.opus files...\n' "$ititle"
 
 cd "$SWD"
 
 # for now i need to just remove the temp files....  at the end of the day, if indexopus sent them back without error, they can just be removed.
-rm -r ./tmp
+#rm -r "$tmp"
 
-#rmyn "Remove ./tmp? " "...Leaving ./tmp" rm -r ./tmp
+if (( rmmatch )); then
+  rm -r "$tmp"
+else
+  confirm "Remove $tmp?" && rm -r "$tmp" || printf '...Leaving %s\n' "$tmp"
+fi
 
 checkdur
-echo
+printf \\n
+(( verbose )) && pause "..."
+
 
 #printf '%s\n%s\n' "$(ls *\ Audiobook.m4?)" "$(mediainfo *\ Audiobook.m4?|grep ^Duration\ |uniq)"
 
@@ -285,7 +315,7 @@ opusdursec=$(mediainfo --Inform="General;%Duration%" *\ --\ Audiobook.opus)
 
 for i in "${allfiles[@]}"; do allfilesdur=$(( allfilesdur + $(mediainfo --Inform="General;%Duration%" "$i") )); done
 
-if [[ "$rmmatch" = true ]]; then # && (( opusdursec > 0 )); then
+if (( rmmatch )); then # && (( opusdursec > 0 )); then
   verifydur=$(bc <<< "scale=4; ($allfilesdur - $opusdursec) / $opusdursec " )
   verifydur="${verifydur/#-}"
   if [[ $(bc <<< "scale=4; $verifydur < 0.001") ]]; then
@@ -306,6 +336,7 @@ if [[ "$rmmatch" = true ]]; then # && (( opusdursec > 0 )); then
     printf '%s-y/-f specified, but the durations do not match!\n%s' "$bold" "$tput0"
   fi
 else
+(( verbose )) && pause "rm -i *.@(mp3|m4@(a|b)):"
   rm -i *.@(mp3|m4@(a|b))
 fi
 
