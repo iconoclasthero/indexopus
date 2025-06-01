@@ -1,0 +1,35 @@
+#!/bin/bash
+sourcefn(){
+  local lib fn verbose awkout OPTIND
+
+  while getopts 'l:f:v' opt; do
+    case "$opt" in
+      l) lib="$OPTARG" ;;
+      f) fn+=("$OPTARG") ;;
+      v) verbose=1 ;;
+      *) echo "Usage: sourcefunc -l <libfile> -f <funcname> [-v]" >&2; return 1 ;;
+    esac
+  done
+
+  (( verbose )) && printf 'lib=%s\nverbose=%s\n' "$lib" "$verbose"
+  (( verbose )) && printf 'fn=%s\n' "${fn[@]}"
+
+  [[ -z "$lib" || -z "$fn" ]] && { printf 'Library and function name required.\n\n' >&2; return 1; }
+  [[ ! -f "$lib" ]] && { printf 'Library file not found: %s\n\n' "$lib" >&2; return 1; }
+
+  for f in "${fn[@]}"; do
+    awkout="$(awk -v fn="$f" '
+      $0 ~ "^"fn"\\(\\)\\{" {infn=1}
+      infn {print}
+      $0 ~ "^##--> "fn"\\(\\) <--" {infn=0}
+    ' "$lib")"
+
+    [[ -z "$awkout" ]] && { printf 'Function %s not found in %s\n\n' "$f" "$lib" >&2; return 1; }
+
+    (( verbose )) && printf %s\\n "$awkout"
+    source <(echo "$awkout")
+  done
+
+
+}
+##--> sourcefn() <--################################################################
