@@ -1,0 +1,45 @@
+#!/bin/bash
+
+tput="$(tput sgr0)"
+red="(tput setaf 7)"
+relipsis="${red}..."
+rmmatch=1
+
+. /usr/local/bin/editscript
+sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec
+
+[[ "$1" = -n ]] && unset rmmatch && shift
+
+opus.book.4
+indexopus "${rmmatch:+-y}"
+#readarray -t durations < <(mediaduration|sed 's/^[^:]*: //')
+readarray -t durations < <(mediaduration)
+printf %s\\n "${durations[@]}"
+sourcedur="${durations[0]#*: }"
+opusdur="${durations[1]#*: }"
+opusdursec="$(sex2sec "$opusdur")"
+sourcedursec="$(sex2sec "$sourcedur")"
+
+ioutput="$(tput sitm)$title$(tput ritm) -- Audiobook.opus"
+
+if (( opusdursec > 0 )); then
+  verifydur=$(( (1000 * (sourcedursec - opusdursec)) / opusdursec ))
+  verifydur="${verifydur/#-}"
+  if (( verifydur < 1 )); then  #this is 0.1% difference
+    { (( rmmatch )) || confirm -y "Durations are within 0.1%.\n  $(ls *mp3) \n\nRemove starting mp3 files?"; } && rm *.mp3
+    [[ "$sourcedursec" != "$opusdursec" ]] &&
+       printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tput sitm)" "$(tput ritm)" "$tput0" ||
+       printf '%sDurations match!%s\n' "$relipsis" "$tput0"
+    printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$(pwd)" "$ioutput" "$tput0"
+    exit
+  elif (( rmmatch )) && (( verifydur )); then
+    printf '%s%sThe source and opus audiobook durations do not match!\n' "$bold" "$red"
+    printf '%s%s%s will not automatically delete starting and temporary files!\n' "$white" "$tput0" "$0"
+    printf '\n\n'
+    printf '%s-y/-f specified, but the durations do not match!\n%s' "$bold" "$tput0"
+  fi
+elif (( opusdursec = 0 )); then
+  printf 'The duration of the opus files [in seconds] is zero and would present a divide by zero error. Investigate.\n(exit 1)\n.'
+  exit 1
+fi
+
