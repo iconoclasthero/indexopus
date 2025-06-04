@@ -192,7 +192,7 @@ hr2(){
 
 sex2sec(){
   local time="$1";
-  [[ ! "$time" =~ [[:digit:]]{2}:[[:digit:]]{2}:[[:digit:]]{2} ]] && time='00:00:00' #&& pause "${time@A}"
+  [[ ! "$time" =~ [[:digit:]]{2,3}:[[:digit:]]{2}:[[:digit:]]{2} ]] && time='00:00:00' #&& pause "${time@A}"
   local hours=$(echo "$time" | awk -F: '{print $1}');   #pause "$hours"
   local minutes=$(echo "$time" | awk -F: '{print $2}'); #pause "$minutes"
   local seconds=$(echo "$time" | awk -F: '{print $3}'); #pause "$seconds"

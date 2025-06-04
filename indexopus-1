@@ -198,7 +198,7 @@ createindex(){
         rawindex+=( "$ts" )
         rawindex+=( "$chna" )
     fi
-    d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
+    d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 file:"$i")
 #     d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
     t=$(echo "$d + ${t:-0}" | bc)  ## changed 2025-05-15
     ((chno++))
@@ -649,6 +649,21 @@ mvopus(){
 
     mvopus
 
+ elif [[ "${opusarray[0]}" =~ (.+)\ ([[:digit:]]{2,3})\ of\ [[:digit:]]{2,3}\.opus ]]; then
+    echo "Using rename pattern 5.9"
+    regex="(.+)\ ([[:digit:]]{2,3})\ of\ [[:digit:]]{2,3}\.opus"
+      for i in "${opusarray[@]}"; do
+        if [[ "$i" =~ $regex ]]; then
+          t="${BASH_REMATCH[1]}"
+          n="${BASH_REMATCH[2]}"
+          newname="$t -- Part $n: Part $n.opus"
+          confirm_rename["$i"]="$newname"
+        else
+          exit 1
+        fi
+      done
+    mvopus
+
   elif [[ "${opusarray[@]}" =~ ([[:digit:]]{1,3})\ (.+).opus ]]; then
 
 ## this pattern matches: `001 Author Name - Book Title - Part Name.opus`
@@ -1048,7 +1063,18 @@ dirsize="$((dirsize/1024))"  #convert bytes to KiB  ## changed to 1024 2025-05-1
 
 #[[ "$overwrite" != false ]] && ffout="$(ffmpeg -nostdin -hide_banner -v error -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
 #[[ "$overwrite" != false ]] &&
-ffout="$(ffmpeg -nostdin -hide_banner -v info -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
+ffout="$(ffmpeg -n \
+           -nostdin \
+           -hide_banner \
+           -v info \
+           -stats \
+           -f concat \
+           -safe 0 \
+           -thread_queue_size 1024 \
+           -i file:"$tmp/opusfiles" \
+           -acodec copy \
+           file:"$tmp/$output" \
+         |& tail -n1 )"
 
 #ffout="$(printf %s|tail -n2|head -n1)"
 #ffout="$(printf %s|tail -n2|head -n1)"
@@ -1132,7 +1158,7 @@ if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null; then
   echo "$tput0 $white"
 elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null; then
   printf 'Checking the output from ffprobe...\n\n'
-  ffprobe "$output"
+  ffprobe file:"$output"
   printf 'Original duration... %s' "$duration"
 else
   echo "Indexed opus file not found! Exit 1"

@@ -28,14 +28,21 @@ yn(){
 
 [[ "$1" = @(edit|e|-e) ]] && editscript
 
-if ! command -v mediainfo &> /dev/null; then
-  mi=false
-  if ! command -v ffprobe &> /dev/null; then
-    echo "mediainfo and ffprobe could not be found. Please install one to continue."
-    exit 1
-  fi
-else
-    mi=true
+#if ! command -v mediainfo &> /dev/null; then
+#  unset mi
+#  if ! command -v ffprobe &> /dev/null; then
+#    echo "mediainfo and ffprobe could not be found. Please install one to continue."
+#    exit 1
+#  fi
+#else
+#    mi=1
+#fi
+
+if command -v mediainfo &> /dev/null; then
+  mi=1
+elif ! command -v ffprobe &> /dev/null; then
+  echo "mediainfo and ffprobe could not be found. Please install one to continue."
+  exit 1
 fi
 
 # check for flacs first
@@ -98,13 +105,39 @@ done
 #  fi
 
 for i in *flac; do
-  if "$mi"; then
-    bits=$(mediainfo --Output='Audio;%BitDepth%' "$i")
-    Hz=$(mediainfo --Output='Audio;%SamplingRate%' "$i")
+  if (( "$mi" )); then
+#    bits=$(mediainfo --Output='Audio;%BitDepth%' "$i")
+#    Hz=$(mediainfo --Output='Audio;%SamplingRate%' "$i")
+
+    readarray -t bitsHz < <(mediainfo --Output="Audio;%BitDepth%\n%SamplingRate%" "$i")
+
  else
-    bits=$(ffprobe -v error -select_streams a:0 -show_entries stream=bits_per_raw_sample -of default=noprint_wrappers=1:nokey=1 "$i")
-    Hz=$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate -of default=noprint_wrappers=1:nokey=1 "$i")
+#    bits=$(ffprobe \
+#             -v error \
+#             -select_streams a:0 \
+#             -show_entries stream=bits_per_raw_sample \
+#             -of default=noprint_wrappers=1:nokey=1 \
+#             file:"$i" \
+#          )
+#    Hz=$(ffprobe \
+#           -v error \
+#           -select_streams a:0 \
+#           -show_entries stream=sample_rate \
+#           -of default=noprint_wrappers=1:nokey=1 \
+#           file:"$i" \
+#        )
+
+    readarray -t bitsHz < <(ffprobe \
+                              -v error \
+                              -select_streams a:0 \
+                              -show_entries stream=bits_per_raw_sample \
+                              -show_entries stream=sample_rate \
+                              -of default=noprint_wrappers=1:nokey=1 \
+                              file:"$i")
   fi
+
+  bits="${bitsHz[0]}"
+  Hz="${bitsHz[1]}"
 
 #  if (( bits <= 16 )) || (( Hz < 48000 )); then
   if (( bits <= 16 )) || (( Hz < 44100 )); then
@@ -153,12 +186,24 @@ for i in *flac; do
     then
       flac24="$i"
       flac16="${flac24/.24.flac/.flac}"
-      ffmpeg -hide_banner -nostdin -i "$flac24" -af aresample=osf=s16:dither_method=triangular_hp -n -ar "$Hz" "$flac16"
+      ffmpeg -n \
+        -hide_banner \
+        -nostdin \
+        -i file:"$flac24" \
+        -af aresample=osf=s16:dither_method=triangular_hp \
+        -ar "$Hz" \
+        file:"$flac16"
   else
     flac16="$i"
     flac24="${i/.flac/.24.flac}"
     mv "$i" "$flac24"
-    ffmpeg -hide_banner -nostdin -i "$flac24" -af aresample=osf=s16:dither_method=triangular_hp -n -ar "$Hz" "$flac16"
+    ffmpeg -n \
+      -hide_banner \
+      -nostdin \
+      -i file:"$flac24" \
+      -af aresample=osf=s16:dither_method=triangular_hp \
+      -ar "$Hz" \
+      file:"$flac16"
   fi
 done
 

@@ -47,7 +47,7 @@ mkdir -p "$outputdir"
 
 while [ $# -gt 0 ]; do
 
-ffmpeg -i "$1" 2> ".tmp$stamp"
+ffprobe file:"$1" 2> ".tmp$stamp"
 n="$START"
 while read -r first _ _ start _ end; do
   if [[ $first = Chapter ]]; then
@@ -63,7 +63,16 @@ while read -r first _ _ start _ end; do
 
 
 #    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "/dev/shm/cache/convert/$title -- Part $partnum: $chapter.$outext" </dev/null
-    ffmpeg -n -nostdin -hide_banner -stats -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "/dev/shm/cache/convert/$title -- Part $partnum: $chapter.$outext" </dev/null
+    ffmpeg -n \
+      -nostdin \
+      -hide_banner \
+      -stats \
+      -ss "${start%?}" \
+      -to "$end" \
+      -i file:"$1" \
+      -vn \
+      -codec copy \
+      file:"/dev/shm/cache/convert/$title -- Part $partnum: $chapter.$outext" </dev/null
 #
 #1. Audio Files:
 #For audio-only files (e.g., MP3, AAC, WAV), the concept of frames per second (FPS) doesn't apply because audio is continuous and not frame-based like video.

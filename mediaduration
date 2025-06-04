@@ -56,7 +56,7 @@ else
 
  [[ "${exts[@]}" =~ wav ]] && printf "Duration of .wav files: " && find -type f -iname "*.wav" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
 
- [[ "${exts[@]}" =~ wav ]] && printf "Duration of .wav files: " && find -type f -iname "*.wav" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
+ [[ "${exts[@]}" =~ wav ]] && printf "Duration of .wav files: " && find -type f -iname "*.wav" -print0 | while IFS= read -r -d '' file; do ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 file:"$file" 2>/dev/null; done | awk '{s+=$1} END {printf "%02d:%02d:%02d\n",s/3600,s%3600/60,s%60}'
 
 #opus
  [[ "${exts[@]}" =~ opus ]] && finddur opus

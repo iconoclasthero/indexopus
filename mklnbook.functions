@@ -204,6 +204,8 @@ mklnbook(){
   getcoverurl(){
     local jsondir asin
     jsondir="$1"
+    ! [[ -d "$jsondir" ]] && jsondir="$(realpath "$jsondir")"
+    ! [[ -d "$jsondir" ]] && { printf '%s is not a valid path to a metadata.json file!\n.Investigage. (return 1)\n\n'; return 1; }
 ## from vito: Book ASINs are either just numbers or A-Z0-9, but start with B0.
     asin="$(jq -r .asin "$jsondir/metadata.json")"
 (( verbose )) && read -rp "$asin"
@@ -218,7 +220,7 @@ mklnbook(){
     fi
 
     [[ "$asin" ]] && coverurl=$(curl -s -H 'accept: application/json' \
-                   "https://audimeta.de/book/$asin" | jq -r '.imageUrl')
+                   "https://audimeta.de/book/$asin?cache=false" | jq -r '.imageUrl')
     [[ "$coverurl" = https*jpg ]] && { (( verbose )) && printf 'Cover url:\n\n'; printf %s\\n "$coverurl"; return 0; }
 
     return 1
@@ -488,7 +490,7 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
 #  ffprobe "$1/$t -- Audiobook.opus" 2>&1 | \grep --color=always Cover
 #  ffprobe "$1/$t -- Audiobook.opus" 2>&1 | { \grep --color=always 'Stream #0:1' -A2 || \grep --color=always Cover; }
 
-  ffprobe "$1/$t -- Audiobook.opus" 2>&1| \grep -E --color=always -A 2 Stream\ #0\:1\|Cover\ 
+  ffprobe file:"$1/$t -- Audiobook.opus" 2>&1| \grep -E --color=always -A 2 Stream\ #0\:1\|Cover\ 
   ec2="$?"
   if (( ec1 && ec2 )); then
     printf '%sNo cover information from mediainfo and ffprobe!\n%s' "$yellow" "$white"
@@ -639,7 +641,7 @@ fi
     mediainfo "$1/$t -- Audiobook-2.opus" | \grep --color=always -A10 Image
 #    ffprobe "$1/$t -- Audiobook-2.opus" 2>&1| \grep --color=always Cover
     printf '\nffprobe output:\n'
-    ffprobe "$1/$t -- Audiobook-2.opus" 2>&1| \grep -E --color=always -A 2 Stream\ #0\:1\|Cover
+    ffprobe file:"$1/$t -- Audiobook-2.opus" 2>&1| \grep -E --color=always -A 2 Stream\ #0\:1\|Cover
     ec2="$?"
     (( verbose )) && printf 'yes= %s\nec1= %s\nec2= %s\n' "$yes" "$ec1" "$ec2"
     { (( yes && ! ec1 && ! ec2 )) || confirm -y "\n${boldred}mv '$t -- Audiobook-2.opus' '$t -- Audiobook.opus'?$white"; } && mv "$1/$t -- Audiobook-2.opus" "$1/$t -- Audiobook.opus"
@@ -738,7 +740,7 @@ fi
   printf '17 kb/s opus transcode | embedded chapter index and cover\n\n'
 
 ## not sure I want to use "$swd" here, but it should suffice, at least to start.
-  coverurl=$(getcoverurl "$swd") && printf %s\\n "${"$coverurl":-'Unable to retrieve cover url!'}"
+  coverurl="$(getcoverurl "$swd")" && printf %s\\n "${coverurl:-'Unable to retrieve cover url\!'}"
 
   printline "\n Returning to starting working directory "
   printf '\nLeaving: \n%s\n' "$(pwd)"

@@ -20,17 +20,6 @@ shopt -s extglob
 
 title="${1%.*}"
 
-#for i in {000..104}; do
-#for f in *$i.ts; do printf %s\n file '%s\n' "$PWD"/"$f";done;
-#ffmpeg -f concat -safe 0 -i <(for f in ./*.$1; do echo "file '$PWD/$f'"; done) -acodec libopus -b:a 17k "$2"
-#ffmpeg -f concat -safe 0 -i <(for f in ./*.$1; do echo "file '$PWD/$f'"; done) -acodec libopus -b:a 24k "$2"
-#ffmpeg -hide_banner -stats -f concat -safe 0 -i <(for f in *.mp3; do echo "file '$PWD/$f'"; done) -acodec copy "/dev/shm/cache/1.mp3"
-#done
-#for i in {00..18}; do cd $i; 
-#for d in */; do
-#cd "$d"
-
-
 escapepath(){
   for f in ./*."$ext"*; do
     if [[ "$PWD/$f" == *\'* ]]; then
@@ -44,26 +33,16 @@ escapepath(){
   done
 }
 
-#if [[ "$ext" == "flac" ]]; then
-#ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) "$title.$ext"
-#elif [[ "$2" == "-y" ]]; then
-#ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -y -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) -acodec copy "$title.$ext"
-#else
-#ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(for f in ./*."$ext"*; do echo "file '$PWD/$f'"; done) -acodec copy "$title.$ext"
-#fi
 
 [[ "$title" =~ \."$ext"$ ]] && title="${title%.$ext}"
 
+## Process substitution (<(escapepath)) creates a named pipe like /dev/fd/63, which ffmpeg treats as a normal input — no file: needed or allowed there.
+
 if [[ "$ext" == "flac" ]]; then
-  ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(escapepath) "$title.$ext"
+  ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(escapepath) file:"$title.$ext"
 elif [[ "$2" == "-y" ]]; then
-  ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -y -i <(escapepath) -acodec copy "$title.$ext"
+  ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -y -i <(escapepath) -acodec copy file:"$title.$ext"
 else
-  ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(escapepath) -acodec copy "$title.$ext"
+  ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(escapepath) -acodec copy file:"$title.$ext"
 fi
-
-#cd -
-#done
-
-#for i in {01..11} ; do for f in "$i.mp3"; do printf "file '%s\n'*Rabbit\ Remembered\ *$i*"; ffmpeg -n -f concat -safe 0 -i <(for f in *Remembered\ *$i*.mp3; do printf "file '%s$PWD/$f'\\n"; done) -acodec libopus -b:a 17k "Rabbit Remembered -- Chapter 0$i.opus"; done
 

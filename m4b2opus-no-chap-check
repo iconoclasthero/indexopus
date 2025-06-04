@@ -59,7 +59,7 @@ mkdir -p "$outputdir"
 
 while [ "$#" -gt 0 ]; do
 
-ffmpeg -i "$1" 2> ".tmp$stamp"
+ffmpeg -i file:"$1" 2> ".tmp$stamp"
 n="$START"
 while read -r first _ _ start _ end; do
   if [[ "$first" = Chapter ]]; then
@@ -67,7 +67,17 @@ while read -r first _ _ start _ end; do
     read _ _ chapter
 
     if [[ "$n" -lt 10 ]]; then partnum="0$n"; else partnum="$n"; fi
-    ffmpeg -n -nostdin -hide_banner -stats -vsync 2 -ss "${start%?}" -to "$end" -i "$1" -vn -codec copy "/dev/shm/cache/convert/$title -- Part $partnum: $chapter.$outext" </dev/null
+    ffmpeg -n \
+      -nostdin \
+      -hide_banner \
+      -stats \
+      -vsync 2 \
+      -ss "${start%?}" \
+      -to "$end" \
+      -i file:"$1" \
+      -vn \
+      -codec copy \
+      file:"/dev/shm/cache/convert/$title -- Part $partnum: $chapter.$outext" </dev/null
     (( n=n+1 ))
   fi
 done <".tmp$stamp"
@@ -216,7 +226,7 @@ for i in "$title -- Part "*.opus
       printf "CHAPTER%03d=%s\n" "${chno#0}" "$ts"|tee -a ./tmp/opusindex
       printf "CHAPTER%03dNAME=%s\n" "${chno#0}" "$chna"|tee -a ./tmp/opusindex
    fi
-      d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$i")
+      d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 file:"$i")
 
 #      d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
       t=$(echo "$d + $t" | bc)
@@ -298,7 +308,16 @@ done
 # then
 #  if ! confirm "Skip overwrite?"
 #   then
-     ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i "./tmp/opusfiles" -n -acodec copy "./tmp/$output"
+     ffmpeg -n \
+       -nostdin \
+       -hide_banner \
+       -stats \
+       -f concat \
+       -safe 0 \
+       -thread_queue_size 1024 \
+       -i file:"./tmp/opusfiles" \
+       -acodec copy \
+       file:"./tmp/$output"
 #   else
 #     mv "$output" ./tmp
 #  fi
@@ -323,7 +342,7 @@ if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null;
  elif [[ -f "$output" ]] && eval command -v ffprobe &> /dev/null ;
   then
     printf 'Checking the output from ffprobe...\n\n'
-    ffprobe "$output"
+    ffprobe file:"$output"
 fi
 
 printf 'The duration if the %s -- Part *opus is %s\n\n' "$ititle" "$duration"

@@ -54,12 +54,13 @@ ffmpegs(){
           -nostdin \
           -hide_banner \
           -loglevel error \
-          -stats -i "$1" \
+          -stats \
+          -i file:"$1" \
           -filter_complex "$filtercomplex" \
           -c:a libopus \
           -b:a 17k \
           -frame_duration:a 60 \
-          "${1%.*}.opus" ; }
+          file:"${1%.*}.opus" ; }
 
 #         -ar 24k \
 # removing this because opus internal
@@ -79,12 +80,12 @@ ffmpeg2(){
                                        -hide_banner \
                                        -loglevel error \
                                        -stats \
-                                       -i "$startfile" \
+                                       -i file:"$startfile" \
                                        -c:a libopus \
                                        -b:a 17k \
                                        -filter_complex "$filtercomplex" \
                                        -frame_duration:a 60 \
-                                       "$opusfile" 2>&1 >/dev/null)
+                                       file:"$opusfile" 2>&1 >/dev/null)
 #                                      -ar 24k \
 # removing this because opus internal
 # sample rate is 48 kHz; 24 kHz here is probably wasteful
@@ -125,10 +126,10 @@ stats(){
     printf 'mediaduration %s\n %s' "$opusfile" "$(mediaduration "$opusfile")"
   else
     startbitrate="${mediafiles[0]}"
-    startbitrate="$(ffprobe -v error -i "$startbitrate" -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1)"
+    startbitrate="$(ffprobe -v error -i file:"$startbitrate" -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1)"
     startbitrate="$(( startbitrate / 1000 )) kB/s"
     opusbitrate="${mediafiles[0]%.*}.opus"
-    opusbitrate="$(ffprobe -v error -i "$opusbitrate" -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1)"
+    opusbitrate="$(ffprobe -v error -i file:"$opusbitrate" -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1)"
     opusbitrate="$(( opusbitrate / 1000 )) kB/s"
     printf '\n\nConverstion statistics:\n'
     printf 'Bit rate for %s: %s\n' "${mediafiles[0]}" "$startbitrate"
@@ -326,13 +327,13 @@ fi
 
 while (( $# > 0 )); do
   [[ "$1" = @(edit|e|-e) ]] && editscript
-  [[ "$1" = @(-s|--stats) ]] && shift && statson=true
-  [[ "$1" = "-d" ]] && inputdur="$2" && shift 2
-  [[ "$1" = @(-h|--help) ]]  && shift && help=true
-  [[ "$1" = @(-f|--force) ]] && shift && overwrite=true   #this doesn't actually change what ffmpeg does yet!
-  [[ "$1" = @(-b|--break) ]] && shift && break-m4b2opus=true && trap '{ breakout -B -b m4b2opus; exit 1; }' INT
-  startfile="$1" && file="$startfile" && opusfile="${file%.*}.opus"	 #it's just letting me into the program atm
-  shift
+  [[ "$1" = @(-s|--stats) ]] && shift && statson=true && continue
+  [[ "$1" = "-d" ]] && inputdur="$2" && shift 2 && continue
+  [[ "$1" = @(-h|--help) ]]  && shift && help=true && continue
+  [[ "$1" = @(-f|--force) ]] && shift && overwrite=true && continue  #this doesn't actually change what ffmpeg does yet!
+  [[ "$1" = @(-b|--break) ]] && shift && break-m4b2opus=true && trap '{ breakout -B -b m4b2opus; exit 1; }' INT && continue
+  [[ -f "$1" ]] && startfile="$1" && file="$startfile" && opusfile="${file%.*}.opus" && continue	 #it's just letting me into the program atm
+  { printf '%s is not a recognized cli option.\nContinue with %s?' "$1" "$0"; confirm -Y && shift && continue || exit 1; }
 done
 
 if [[ "$startfile" && ! -f "$startfile" && "$startfile" != $mediaext ]] || (( "${#mediafiles[@]}" == 0 ))  #Do not quote $mediaext as it contains a wildcard
@@ -354,19 +355,19 @@ if  [[ "$startfile" ]] && [[ -f "$opusfile" ]] && [[ "$overwrite" != true ]]; th
   echo "$line"
   exit 1
 elif [[ "$startfile" ]]; then
-  printf '\n%sConverting: %s.\n     Duration: %s%s%s%s\n\n' "$relipsis" "$file" "$tput0" "$bold" "$(ffprobe -i "$file" -show_entries format=duration -v quiet -of csv="p=0" -sexagesimal |
+  printf '\n%sConverting: %s.\n     Duration: %s%s%s%s\n\n' "$relipsis" "$file" "$tput0" "$bold" "$(ffprobe -i file:"$file" -show_entries format=duration -v quiet -of csv="p=0" -sexagesimal |
     awk -F: '{printf "%02d:%02d:%02.2f\n", $1, $2, $3}')" "$tput0"
   ffmpeg -y \
          -nostdin \
          -hide_banner \
          -loglevel error \
          -stats \
-         -i "$file" \
+         -i file:"$file" \
          -filter_complex "$filtercomplex" \
          -c:a libopus \
          -b:a 17k \
          -frame_duration:a 60 \
-         "${file%.*}.opus"
+         file:"${file%.*}.opus"
 #        -ar 24k \
 # removing this because opus internal
 # sample rate is 48 kHz; 24 kHz here is probably wasteful
