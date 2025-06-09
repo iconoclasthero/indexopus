@@ -226,20 +226,21 @@ createindex(){
 ## Need to check chapter.json files for `{"error":"Chapters not found"}`
 ##
 
-itemid_pwd(){
-    local itempwd="${1:-"${PWD}"}}"
-    sqlitepwd="${PWD//\'/\'\'}"
+itemidpwd(){
+    local itempwd="${1:-"$(pwd)"}"
+    sqlitepwd="${itempwd//\'/\'\'}"
    }
+##--> itemidpwd() <--################################################################################
 
 reindex(){
+  local selectedids uuids uuidre selected sel selid descarray libarray titlearray patharray
+  local -A titlearray patharray libarray descarray
   local t chap_title chapstarts reintitle
   t=0
   chno=0
 
-
   if [[ ! -f "chapters.json" ]] && ! (( usemetadata )) &&
     confirm "${bold}No chapters.json; retrieve chapter info from the web?${tput0}"; then
-
       curl -X POST "$absserver/api/items/$(itemid)/scan"   -H "Authorization: Bearer $abstoken" -sSo /dev/null
       curl "$absserver/api/search/chapters?asin=$(jq -r '.asin' metadata.json)"   -H "Authorization: Bearer $abstoken" -sSo chapters.json
       newchapters=1
@@ -268,7 +269,7 @@ reindex(){
   for ((chno=0; chno<"${#chaptitles[@]}"; chno++)); do
     if [[ "${chaptitles[$chno]}" = ..* ]]; then
       printf 'An index title contains prefix "..", possibly indication outline style:\n  "%s"\n' "${chaptitles[$chno]}"
-      confirm 'Use outline style (i.e., convert prefix periods to spaces)?' && outline=1
+      confirm -y 'Use outline style (i.e., convert prefix periods to spaces)?' && outline=1
       break
     fi
   done
@@ -327,8 +328,22 @@ reindex(){
         (( outline )) && [[ "$chna" = '..'* ]]     && chna="${chna/../  }"         && read -rp "Converting .. to '  '"
 ## This could be commented out and removed sometime after 2025-06-08T08:29:39-04:00
 
-        [[ "$chna" =~ ^[⠀\ ]*(Part|Chapter)\ [0-9]($|[.:\ ].*)$ ]] && chna="${chna/ / 0}" && zeropadchna=1
-        [[ "$chna" =~ ^[0-9]($|[.:\ ].*)$ ]] && chna="0$chna" && barenum=1
+#        [[ "$chna" =~ ^[⠀\ ]*(Part|Chapter)\ [0-9]($|[.:\ ].*)$ ]] && chna="${chna/ / 0}" && zeropadchna=1
+#        [[ "$chna" =~ ^[⠀\ ]*[0-9]($|[.:\ ].*)$ ]] && chna="0$chna" && barenum=1
+   # If line starts with zero or more Braille blanks or spaces, followed by "Part" or "Chapter" 
+   # and a single digit, zero-pad that digit *without* removing indentation
+        if [[ "$chna" =~ ^([⠀ ]*(Part|Chapter)\ )([0-9])($|[.: ].*)$ ]]; then
+          chna="${BASH_REMATCH[1]}0${BASH_REMATCH[3]}${BASH_REMATCH[4]}"
+          zeropadchna=1
+        fi
+
+   # If line starts with zero or more Braille blanks or spaces, followed by a single digit,
+   # zero-pad that digit without removing indentation
+        if [[ "$chna" =~ ^([⠀ ]*)([0-9])($|[.: ].*)$ ]]; then
+          chna="${BASH_REMATCH[1]}0${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+          barenum=1
+        fi
+
         chna="${chna%"${chna##*[![:space:]]}"}"
         printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >>  "$tmp/opusindex"
         printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
@@ -351,9 +366,23 @@ reindex(){
         (( outline )) && [[ "$chna" = '..'* ]]     && chna="${chna/../  }"         && read -rp "Converting .. to '  '"
 ## can be removed sometime after 2025-06-08T08:32:31-04:00
 
+#        [[ "$chna" =~ ^[⠀\ ]*(Part|Chapter)\ [0-9]($|[.:\ ].*)$ ]] && chna="${chna/ / 0}" && zeropadchna=1
+#        [[ "$chna" =~ ^[⠀\ ]*[0-9]($|[.:\ ].*)$ ]] && chna="0$chna" && barenum=1
+   # If line starts with zero or more Braille blanks or spaces, followed by "Part" or "Chapter" 
+   # and a single digit, zero-pad that digit *without* removing indentation
+        if [[ "$chna" =~ ^([⠀ ]*(Part|Chapter)\ )([0-9])($|[.: ].*)$ ]]; then
+          chna="${BASH_REMATCH[1]}0${BASH_REMATCH[3]}${BASH_REMATCH[4]}"
+          zeropadchna=1
+        fi
 
-        [[ "$chna" =~ ^[⠀\ ]*(Part|Chapter)\ [0-9]($|[.:\ ].*)$ ]] && chna="${chna/ / 0}" && zeropadchna=1
-        [[ "$chna" =~ ^[0-9]($|[.:\ ].*)$ ]] && chna="0$chna" && barenum=1
+   # If line starts with zero or more Braille blanks or spaces, followed by a single digit,
+   # zero-pad that digit without removing indentation
+        if [[ "$chna" =~ ^([⠀ ]*)([0-9])($|[.: ].*)$ ]]; then
+          chna="${BASH_REMATCH[1]}0${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+          barenum=1
+        fi
+
+
         chna="${chna%"${chna##*[![:space:]]}"}"
         printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> "$tmp/opusindex"
         printf 'CHAPTER%03dNAME=%s\n' "$chno" "$chna" >>  "$tmp/opusindex"
@@ -369,20 +398,23 @@ reindex(){
   printf '%s%sProposed index for %s:%s%s\n' "$red" "$bold" "$reintitle" "${tput0}" "$bold"
   printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
 # printf '%s                             : %s\n' "${rawindex[@]}"
-  itemid_pwd
-  readarray -t itemids < <( sqlite3 "$abs_sqlite" "select id FROM libraryitems WHERE path=='$sqlitepwd';" )
-  if (( ${#itemids[@]} > 1 )); then
-    printf '\n%s%saudiobookself reports more than one matching title; investigate: %s\n' "$red" "$bold" "$tput0"
-    for itemid in "${itemids[@]}"; do
-      printf '%s/item/%s\n\n\n' "$absserver" "$itemid"
-      curl -Ss "$absserver/api/items/$itemid?expanded=0&include=authors" \
-        -H "Authorization: Bearer $abstoken"|jq -r '.media.metadata as $m
-                                                    | .path as $p
-                                                    | "\($m.title): \($m.subtitle)\n\n\($p)"'
-    done
-    printf '$red\n\nThe logic here needs to be fixes so that one or more records can be updated. (exit 1)\n\n'
-    exit 1
-  fi
+  itemidpwd
+  readarray -t itemids < <( sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$sqlitepwd';" )
+
+
+#  if (( ${#itemids[@]} > 1 )); then
+#    printf '\n%s%saudiobookself reports more than one matching title; investigate: %s\n' "$red" "$bold" "$tput0"
+#    for itemid in "${itemids[@]}"; do
+#      printf '%s/item/%s\n\n\n' "$absserver" "$itemid"
+#      curl -Ss "$absserver/api/items/$itemid?expanded=0&include=authors" \
+#        -H "Authorization: Bearer $abstoken"|jq -r '.media.metadata as $m
+#                                                    | .path as $p
+#                                                    | "\($m.title): \($m.subtitle)\n\n\($p)"'
+#    done
+#    printf '$red\n\nThe logic here needs to be fixes so that one or more records can be updated. (exit 1)\n\n'
+#    exit 1
+#  fi
+
 
   if (( "${#itemids[@]}" )); then
     printf '%s\n%sThis index was generated from existing %s;\n' "$tput0" "$relipsis" "$jsonfile"
@@ -393,10 +425,10 @@ reindex(){
 
     if (( barenum )); then
       printf 'Index parts start with a bare number... would you like to prefix bare numbers with:\n'
-      select opt in "Part ##" "Chapter ##" "Proposed changes as above" "No change to index"; do
+      select opt in "Chapter ##" "Part ##" "Proposed changes as above" "No change to index"; do
         case "${opt%% *}" in
-          Part)     prefix="Part"; break ;;
           Chapter)  prefix="Chapter"; break ;;
+          Part)     prefix="Part"; break ;;
           Proposed) prefix="proposed"; break ;;
           No) prefix="exit"; unset barenum; break ;;
           *) echo "Invalid choice";;
@@ -404,8 +436,34 @@ reindex(){
       done
       if [[ "$prefix" =~ ^(Part|Chapter)$ ]]; then
         for (( n=0; n<"${#rawindex[@]}"; n++)); do
-          [[ "${rawindex[$n]}" =~ ^[0-9]+($|[.:\ ].*)$ ]] && rawindex["$n"]="$prefix ${rawindex[$n]}"
+(( verbose )) && printf %s\\n "${rawindex[$n]}"
+#          [[ "${rawindex[$n]}" =~ ^[0-9]+($|[.:\ ].*)$ ]] && rawindex["$n"]="$prefix ${rawindex[$n]}"
+          ! [[ "${rawindex[$n]}" =~ ^[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9] ]] &&
+            [[ "${rawindex[$n]}" =~ ^([⠀\ ]*)([0-9]+)($|[.:\ ].*)$ ]] &&
+            rawindex[$n]="${BASH_REMATCH[1]}$prefix ${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+#            read -rp "${rawindex[$n]}"
         done
+        rawindex=()
+        n=0
+        while read -r indexline; do
+          if [[ "$indexline" =~ ^(CHAPTER[0-9]{3}NAME=[⠀\ ]*)([0-9]+)($|[.:\ ].*)$ ]]; then
+            prefixline="${BASH_REMATCH[1]}$prefix ${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+            printf %s\\n "$prefixline" >> "$tmp/prefixindex"
+            printf '%s\t->\t%s\n' "$indexline" "$prefixline"
+            rawindex[$n]="${prefixline#*=}"
+          else
+            printf %s\\n "$indexline" >> "$tmp/prefixindex"
+#            printf '%s\t->\t%s\n' "$indexline" "$indexline"
+            rawindex[$n]="${indexline#*=}"
+          fi
+          ((n++))
+        done < "$tmp/opusindex"
+        printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
+        read -rp "done reading $tmp/opusindex"
+        cat "$tmp/opusindex"
+        cat "$tmp/prefixindex"
+        read -rp "done"
+        confirm -y "Replace opusindex with prefixindex?" && mv "$tmp/opusindex" "$tmp/opusindex~" && mv "$tmp/prefixindex" "$tmp/opusindex"
       fi
       if [[ "$prefix" =~ ^(Part|Chapter|proposed)$ ]]; then
         printf '%s%sProposed index for %s:%s%s\n' "$red" "$bold" "$reintitle" "${tput0}" "$bold"
@@ -413,15 +471,11 @@ reindex(){
         if confirm -y "${bold}${red}Apply index?${tput0}"; then
           writeindex "$reintitle"
 
-## what is this doing?  1. where does "$newchapters" get set?
-## 2 why am i rescanning here?  this endpoint, i believe, only pushes changes in the metadata.json back to the server
-
-          (( "$newchapters" )) && curl -X POST "$absserver/api/items/$(itemid)/scan" -H "Authorization: Bearer $abstoken"
           rmmatch=true  #at this point, having said yes to apply index, yes the rest of the way.
         else
           mediainfo "$reintitle"
           printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
-          if confirm "Would you like to start over so you can look up chapter information in audiobookshelf?  "; then
+          if confirm "Would you like to start over so you can look up chapter information in audiobookshelf?"; then
             exec indexopus reindex
             exit
           else
@@ -430,6 +484,9 @@ reindex(){
           fi
         fi
       fi
+
+
+
     elif [[ "$rmmatch" = true ]]; then
       writeindex "$reintitle"
       (( "$newchapters" )) && curl -X POST "$absserver/api/items/$(itemid)/scan" -H "Authorization: Bearer $abstoken"
@@ -453,6 +510,62 @@ reindex(){
     exit 1
   fi
   mediainfo *Audiobook.opus
+
+
+  if (( "${#itemids[@]}" > 1 )); then
+    for itemid in "${itemids[@]}"; do
+      absresp="$(curl -Ss "$absserver/api/items/$itemid?expanded=0&include=authors" \
+        -H "Authorization: Bearer $abstoken")"
+
+      titlearray[$itemid]="$(jq -r '.media.metadata as $m
+                                   | "\($m.title): \($m.subtitle)\n"' <<< "$absresp")"
+      patharray[$itemid]="$(jq -r .path <<< "$absresp")"
+      libarray[$itemid]="$(jq -r .libraryId <<< "$absresp")"
+      libarray[$itemid]="$(curl -sS "$absserver/api/libraries/${libarray[$itemid]}" \
+                           -H "Authorization: Bearer $abstoken"|jq -r .name)"
+
+      descarray[$itemid]="itemid : $itemid
+library: ${libarray[$itemid]}
+title  : ${titlearray[$itemid]}
+path   : ${patharray[$itemid]#/library/books/}"
+
+    done
+    for itemid in "${itemids[@]}"; do
+#      printf itemid\ :\ %s\\n "$itemid"
+#      printf library:\ %s\\n "${libarray[$itemid]}"
+#      printf title\ \ :\ %s\\n "${titlearray[$itemid]}"
+#      printf path\ \ \ :\ %s\\n\\n "${patharray[$itemid]#/library/books/}"
+      printf %s\\n\\n "${descarray[$itemid]}"
+    done
+
+    while ! (( "${selectedid[@]}" )) && ! (( uuids )); do
+      readarray -t selected < <(printf '%s\n' "${descarray[@]}" |
+       gum choose --no-limit --header='Choose only itemids!')
+
+
+      for sel in "${selected[@]}"; do
+        selid="${sel#*: }"
+        [[ "$selid" ]] && selectedids+=("$selid")
+      done
+
+      uuidre='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      uuids=1
+
+      for i in "${selectedids[@]}"; do
+        if ! [[ "$i" =~ $uuidre ]]; then
+          uuids=0
+          selectedids=()
+          ! (( ALL )) && printf 'ALL SELECTIONS MUST BE ITEMIDS ONLY!\n\n' && ALL=1
+          printf 'Invalid selection: %s%s%s\n' "$red" "$i" "$tput0"
+        fi
+      done
+      printf \\n
+
+    done
+    printf '\nSelected itemids:\n'
+    printf '%s\n' "${selectedids[@]}"
+  fi
+
 
   if (( outline )) || (( barenum )) || (( zeropadchnna )) || [[ -f "reindex.$jsonfile" ]]; then
     printf 'The chapter index written to the audiobook file now differs from %s.\n' "$jsonfile"
@@ -480,19 +593,76 @@ printf %s\\n "${newtitles[@]}"
 
     printf \\n
 
-#    confirm -y "Replace $jsonfile with $outjson?" && mv "$outjson" "$jsonfile" && chown "$absuser":"$absgroup" "$jsonfile"
+#    if confirm -y "Update $jsonfile from $outjson?"; then
+#      install -g "$absgroup" -m 664 "$outjson" "$jsonfile" && rm "$outjson"
+#      sudo chown "$absuser":"$absgroup" "$jsonfile"
+#      sudo -k
+#      confirm -y "${red}Push changes in $jsonfile to abs server via API?$tput0" &&
+#        absresponse="$(curl -sSX POST "$absserver/api/items/$(itemid)/scan" \
+#        -H "Authorization: Bearer  $abstoken"|jq -r .result)" &&
+#        [[ "$absresponse" != @(UPTODATE|UPDATED) ]] &&
+#        printf '%sNB: ABS FAILED TO UPDATE!!%s' "$boldred" "$tput0"
+#      [[ "$absresponse" = UPDATED ]] && printf 'ABS database updated successfully.\n\n'
+#      [[ "$absresponse" = UPTODATE ]] && printf 'ABS database was already up to date.\nInvestigate\n.'
+#    fi
+
     if confirm -y "Update $jsonfile from $outjson?"; then
       install -g "$absgroup" -m 664 "$outjson" "$jsonfile" && rm "$outjson"
       sudo chown "$absuser":"$absgroup" "$jsonfile"
       sudo -k
-      confirm -y "${red}Push changes in $jsonfile to abs server via API?$tput0" &&
-        absresponse="$(curl -sSX POST "$absserver/api/items/$(itemid)/scan" \
-        -H "Authorization: Bearer  $abstoken"|jq -r .result)" &&
-        [[ "$absresponse" != @(UPTODATE|UPDATED) ]] &&
-        printf '%sNB: ABS FAILED TO UPDATE!!%s' "$boldred" "$tput0"
-      [[ "$absresponse" = UPDATED ]] && printf 'ABS database updated successfully.\n\n'
-      [[ "$absresponse" = UPTODATE ]] && printf 'ABS database was already up to date.\nInvestigate\n.'
+      if confirm -y "${red}Push changes in $jsonfile to abs server via API?$tput0"; then
+        for itemid in "${selectedids[@]}"; do
+          printf 'Pushing updated index to %s/item/%s...\n' "$absserver" "$itemid"
+          absresponse="$(curl -sSX POST "$absserver/api/items/$(itemid)/scan" \
+            -H "Authorization: Bearer  $abstoken"|jq -r .result)"
+          case "$absresponse" in
+            UPDATED)
+              echo "✔ $itemid updated."
+              ;;
+            UPTODATE)
+              echo "⚠ $itemid already up to date."
+              ;;
+            *)
+              printf '%sNB: ABS FAILED TO UPDATE!!%s\n' "$boldred" "$tput0"
+              printf '✘ %s response: %s' "$itemid" "$resp"
+              ;;
+          esac
+        done
+      fi
     fi
+
+
+
+
+
+
+
+
+
+
+for itemid in "${selectedids[@]}"; do
+  printf 'Pushing updated index to %s/item/%s...\n' "$absserver" "$itemid"
+  resp=$(curl -sSX POST "$absserver/api/items/$itemid/scan" \
+    -H "Authorization: Bearer $abstoken" | jq -r .result)
+
+  case "$resp" in
+    UPDATED)   echo "✔ $itemid updated." ;;
+    UPTODATE)  echo "⚠ $itemid already up to date." ;;
+    *)         echo "✘ Failed to update $itemid (response: $resp)" ;;
+  esac
+done
+
+
+
+
+
+
+
+
+
+
+
+
 
   fi
 
@@ -1053,7 +1223,7 @@ opusarray=( *.opus )
 # abs doesn't support json files with other names, nor is there anything in the json identifying it
 # as an abs file.  It does check the .json for the chapter index, so there's at least that...
 if ! "${quiet:=false}" && [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].title' metadata.json)" ]]; then
-  reindex=true; itemid_pwd
+  reindex=true; itemidpwd
   [[ "$(jq -r '.chapters[0] | .title' metadata.json)".opus = "${opusarray[0]}" ]] ||
      [[ "$(jq -r '.chapters[0] | .title' metadata.json)" = "001" ]] && reindex=false
 

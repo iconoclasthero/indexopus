@@ -9,6 +9,7 @@
 # Invokes breakout function upon INT/^C
 trap '{ breakout -B; exit 1; }' INT
 pidfile="/tmp/.opus.book.pids"
+cache="${cache:-"/cache/"}"
 
 # global shopt settings.  nullglob causes unwanted things with ls, so it needs to be reconsidered
 shopt -s extglob nullglob   # as a global option
@@ -49,22 +50,23 @@ editscript(){
 
 pause(){ read -rp "$*" ; }
 
-ffmpegs(){
-   ffmpeg -n \
-          -nostdin \
-          -hide_banner \
-          -loglevel error \
-          -stats \
-          -i file:"$1" \
-          -filter_complex "$filtercomplex" \
-          -c:a libopus \
-          -b:a 17k \
-          -frame_duration:a 60 \
-          file:"${1%.*}.opus" ; }
-
-#         -ar 24k \
-# removing this because opus internal
-# sample rate is 48 kHz; 24 kHz here is probably wasteful
+## ffmpegs() is no longer used and can eventually be removed.omnibus
+#ffmpegs(){
+#   ffmpeg -n \
+#          -nostdin \
+#          -hide_banner \
+#          -loglevel error \
+#          -stats \
+#          -i file:"$1" \
+#          -filter_complex "$filtercomplex" \
+#          -c:a libopus \
+#          -b:a 17k \
+#          -frame_duration:a 60 \
+#          file:"${1%.*}.opus" ; }
+#
+##         -ar 24k \
+## removing this because opus internal
+## sample rate is 48 kHz; 24 kHz here is probably wasteful
 
 ffmpeg2(){
  local startfile
@@ -72,20 +74,21 @@ ffmpeg2(){
   for startfile in ${mediaext}; do #do not quote; contains wildcard!
       file="${startfile%.*}"
       opusfile="$file.opus"
+      (( usecache )) && opusfile="$cachedir/$opusfile"
       [[ "${outputarray[@]}" != *"$file"* ]] && outputarray+=("$file") #&& echo "$file"
       outputfiles="$(<"$tmp")"
       [[ "$outputfiles" != *"$file"* ]] && echo "${relipsis}Converting $file$tput0" >> "$tmp"
       readarray -d $'\r' -t ffoutput < <(ffmpeg -n \
-                                       -nostdin \
-                                       -hide_banner \
-                                       -loglevel error \
-                                       -stats \
-                                       -i file:"$startfile" \
-                                       -c:a libopus \
-                                       -b:a 17k \
-                                       -filter_complex "$filtercomplex" \
-                                       -frame_duration:a 60 \
-                                       file:"$opusfile" 2>&1 >/dev/null)
+                                         -nostdin \
+                                         -hide_banner \
+                                         -loglevel error \
+                                         -stats \
+                                         -i file:"$startfile" \
+                                         -c:a libopus \
+                                         -b:a 17k \
+                                         -filter_complex "$filtercomplex" \
+                                         -frame_duration:a 60 \
+                                         file:"$opusfile" 2>&1 >/dev/null)
 #                                      -ar 24k \
 # removing this because opus internal
 # sample rate is 48 kHz; 24 kHz here is probably wasteful
@@ -183,11 +186,15 @@ breakout(){
 progress() {
   local opusdur="00:00:00" indur="$1"
   local opuspresent ck4files
+  (( usecache )) && cd "$cachedir"
   opuspresent=( *.opus )  #this is used for just run of the mill conversions and there's no
                           #filename check before it gets here so using the *\ --\ Part\ ???.opus
                           #glob will fail for random mp3s that haven't been run through indexopus
 
-  [[ "$opuspresent" ]] && opusdur="$(checkdur opus)"
+## I think this should change from [[ "$opuspresent" ]] to (( "${#opuspresent[@]}" ))
+
+#  [[ "$opuspresent" ]] && opusdur="$(checkdur opus)"
+  (( "${#opuspresent[@]}" )) && opusdur="$(checkdur opus)"
   [[ ! "$bfreq" =~ [[:digit:]]+ ]] && bfreq=12 # flashing frequency (( $(date +%s) % bfreq == 0 )) && .
   [[ ! "$rfreq" =~ [[:digit:]]+ ]] && bfreq=6 # flashing frequency (( $(date +%s) % bfreq == 0 )) && .
 
@@ -243,7 +250,11 @@ progress() {
       [[ "$lines" != "$(tput lines)" ]] && lines="$(tput lines)" && tput reset
       clear -x
   done
+
+  (( usecache )) && cd "$swd"
+
 }
+##--> progress() <--###########################################################################
 
 
 #while [[ "${indur%:*}" != "${opusdur%:*}" ]] &&
@@ -282,6 +293,7 @@ progress() {
 ###--> opus.book.4 <--#########################################################################
 
 [[ "$1" = @(-ys|-yes) ]] && shift && rmmatch=true && screened=true
+
 
 #[[ "$1" ]] && clifile "$1"
 
@@ -327,6 +339,7 @@ fi
 
 while (( $# > 0 )); do
   [[ "$1" = @(edit|e|-e) ]] && editscript
+  [[ "$1" = --cache ]] && usecache=1 && shift && continue
   [[ "$1" = @(-s|--stats) ]] && shift && statson=true && continue
   [[ "$1" = "-d" ]] && inputdur="$2" && shift 2 && continue
   [[ "$1" = @(-h|--help) ]]  && shift && help=true && continue
@@ -375,6 +388,7 @@ elif [[ "$startfile" ]]; then
   printf '\n%sDurations:\n%s' "$bold" "$tput0"
   checkdur "$startfile"
   checkdur "$opusfile"
+
 elif (( filenum > 0 )); then
 #need to add a formal confirm here at some point, but really, who's going to be doing this?
 #ffmpeg cannot overwrite here so probably have to exit if the files aren't deleted... further, we could actully compare the opus files that exist to the ones that are going to be converted...but since im not using find here, that probably donesnt matter.
@@ -387,7 +401,7 @@ elif (( filenum > 0 )); then
     if confirm "rm *opus? (y/n) "; then
       rm *opus 2>/dev/null || exit 1
     else
-      printf 'FWIW, ffmpeg cannot be invoked with -y here because of the way multipe instances race.\n%s will exit now' "$script"
+      printf 'FWIW, ffmpeg cannot be invoked with -y here because of the way multipe instances race.\n%s will exit now. (exit 1)' "$script"
       exit 1
     fi
   fi
@@ -418,6 +432,13 @@ elif (( filenum > 0 )); then
     sudo chown -R "$USER:media" .
   fi
 
+  if (( usecache )); then
+    swd="$(pwd)"
+    cachedir="$cache/ob4-${swd##*/}"
+    mkdir "$cachedir"
+    read -rp "$cachedir"
+  fi
+
   for ((i=0; i<"$threads"; i++)); do
     ffmpeg2&    # call function to background to convert media files to opus, counter
     sleep 0.5s
@@ -428,7 +449,7 @@ elif (( filenum > 0 )); then
   progress "$inputdur"
   wait  #for the bacground operations to finish up
   clear -x
-###  printf '%s\n' "${bannerarray[@]}"
+
   printf %s\\n "$updatebanner"
   outputfiles="$(<"$tmp")"
   printf '%s\n\n%s' "$outputfiles"

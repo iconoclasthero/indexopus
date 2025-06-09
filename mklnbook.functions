@@ -167,11 +167,13 @@ delugecreds(){
 ##--> delugecreds() <--################################################################
 
 mklnbook(){
+## need to make a config file with e.g., the linked dir and delugecreds location in it
   iton="$(tput sitm)"
   itoff="$(tput ritm)"
   tput0="$(tput sgr0)"
   boldred="$(tput setaf 9 bold)"
   bold="$(tput bold)"
+  blink="$(tput blink)"
   red="$(tput setaf 9)" #red fg
   green="$(tput setaf 2)" #green fg
   white="$(tput setaf 15)" #white fg
@@ -231,6 +233,7 @@ mklnbook(){
 
 
   local a sd f t i d abscover linked hostlistconf delugehost delugeport delugeuser delugepass swd verbose cktorrent yes asin
+  linked='/library/torrent/seeds/mam/linked'
   clear -x
   printline "\n Starting ${FUNCNAME[0]} \n"
 
@@ -243,11 +246,45 @@ mklnbook(){
 
 #  hostlistconf="$HOME/.config/deluge/hostlist.conf"
   delugecreds -h gigabyte -t mam
-  linked='/library/torrent/seeds/mam/linked'
   printf 'Directory/symlink link destination:\n%s%s%s\n' "$teal" "$linked" "$white"
   [[ ! "$1" ]] && set -- .
+(( verbose )) && read -rp "\$1: $1"
   set -- "$(realpath "$1")"
+(( verbose )) && read -rp "\$1: $1"
   [[ "$1" = *꞉* ]] && mv "$1" "${1//꞉/:}" && set -- "$(realpath "${1//꞉/:}")" && swd="$1"
+
+  ! [[ -f "$swd/metadata.json" ]] && nometadata=1
+
+  if (( nometadata )); then
+    swddirs=( "$1"/*/ )
+(( verbose )) && read -rp "$(printf %s\\n "${swddirs[@]}")"
+    (( "${#swddirs[@]}" == 1 )) && seldir="${swddirs[0]}"
+    (( "${#swddirs[@]}" > 1 )) && seldir="$(printf %s\\n "${swddirs[@]}"|gum choose --header="Select a starting audiobook directory:")"
+(( verbose )) && read -rp "$(printf \$seldir\:\ %s\\n "$seldir")"
+    [[ -f "$seldir/metadata.json" ]] && unset nometadata && cd "$seldir" && set -- "$(pwd)" && swd="$1"
+(( verbose )) && read -rp "$(printf '$1: %s\n$swd: %s\n$nometadata: %s\n' "$1" "$swd" "$nometadata")"
+    if (( nometadata )); then
+      ogg=( *\ --\ Audiobook.ogg )
+      if (( "${#ogg[@]}" == 1 )) && [[ -L "$ogg" ]]; then
+        ogg="${ogg[0]}"
+        oggsrc="$(realpath "${ogg[0]}")"
+        oggsrcdir="${oggsrc%/*}"
+        printf '\n\nNo metadata.json was found in the starting directory!\nThis appears to be a directory for linked .ogg files:\n\n%s\n' "$oggsrcdir"
+        eza -la --no-user
+        printf '\n\n...checking for source dir...\n\n'
+        [[ -f "$oggsrcdir/metadata.json" ]] && unset nometadata &&
+           cd "$oggsrcdir" && set -- "$(pwd)" && swd="$1"
+        printf 'Changed pwd to the source dir:\n\n%s\n' "$(pwd)"
+        eza -la --no-user
+        printf \\n\\n
+        confirm -y "Start the script from here?" && confirm -y "This will overwrite the starting directory!\n\nConfirm:" || { printf 'Investigate. (return 1)\n\n' && return 1; }
+      else
+        { printf 'There is no metadata.json file to use. Investigate. (return 1)\n\n' && return 1; }
+      fi
+    fi
+  fi
+
+
 (( verbose )) &&  read -rp "$1"
   sd="$(realpath "$1")"
   t="${sd##*\/}"     #this title comes from the directory name and won't necessarily be consistent with the <title> -- Audiobook.opus
@@ -285,7 +322,7 @@ mklnbook(){
 (( verbose )) && read -rp "$(shopt nullglob)"
 
 ##  unset cktorrent ## might not be necessary if this is defined as a local...
-
+(( verbose )) && read -rp "\$linked: $linked"
   if [[ ! -d "$linked/$d" ]]; then # [[ ! -d "$linked/$d" ]] && mkdir "$linked/$d"
     mkdir "$linked/$d"
     printf '\nDirectory should exist: \n'
@@ -296,7 +333,7 @@ mklnbook(){
 (( verbose )) && printf %s\\n "${files[@]}"
     if [[ "$files" ]]; then
       printf '\n%sContents of %s/%s:%s\n' "$boldred" "$linked" "$d" "$tput0"
-      eza -glbaa "$linked/$d"
+      eza --no-user -glbaa "$linked/$d"
       printf \\n
       cktorrent="$(eza --color=always /library/torrent/"$d.torrent" 2>/dev/null)"
       [[ "$cktorrent" ]] && printf '\n%sTorrent exists:%s\n%s\n\n' "$boldred" "$tput0" "$cktorrent" &&
@@ -306,7 +343,7 @@ mklnbook(){
       printf '\nDirectory should exist: \n'
       eza -dla --no-user "$linked/$d" || { printf '\nError, the linked directory does not exist!\nInvestigate. (return 1)'; return 1; }
       printf '\nAnd be empty:\n'
-      eza -glbaa "$linked/$d"
+      eza --no-user -glbaa "$linked/$d"
     fi
   fi
   (( nullglob )) && shopt -u nullglob  # if nullglob was off before this block, turn it back off
@@ -406,6 +443,7 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
 #    startPWD="$PWD"
 #    cd "$1"
 #    middlePWD="$PWD"
+#    /home/bvargo/bin/gits/indexopus/indexopus-2 --reindex=metadata.json -y
     indexopus --reindex=metadata.json -y
 #    cd - >/dev/null
 #    endPWD="$PWD"
@@ -422,7 +460,7 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
   abscover="cover.jpg"
   printf 'Directory listing of \n%s/*jpg: \n' "$1"
 #  eza -la --no-user -sold -r "$1"/*jpg
-  eza -glB --color=always *jpg
+  eza --no-user -glB --color=always *jpg
   printf \\n
   unset mvcover
   ## Check to see if cover.jpg and <title> -- Cover 01.jpg exist
@@ -665,7 +703,7 @@ fi
   ln -sf "$1/$t"* "$linked/$d"
   cd "$linked/$d"
   printf '\npwd:\n%s\n\ncontents:\n' "$(pwd)"
-  eza -la -sold -r
+  eza --no-user -la -sold -r
   printf \\nMoving\ opus\ to\ ogg...\\n
 #  read -p "Move opus to ogg? "
 #  printf \\n
@@ -717,7 +755,7 @@ fi
     torrentfile="${torrentfile//\;/_}" && { (( yes )) || read -rp "torrent file copied to $torrentfile as deluge-console cannot accpet semicolons in file names!"; }
   deluge-console "connect $delugehost:$delugeport $delugeuser $delugepass; add -p ${linked@Q} ${torrentfile@Q}"
   printf \\n
-  printline "MediaInfo of $t -- Audiobook.ogg and Genres & Tags"
+  printline "MediaInfo of $t -- Audiobook.ogg"
   printf \\n
 #  hr2 "mediainfo of $t -- Audiobook.ogg"
   mediainfo "$t -- Audiobook.ogg"
@@ -747,7 +785,7 @@ fi
   printf '\nReturning to %s\n' "$swd"
   cd - > /dev/null
 
-  confirm -y "Run updatetracker function?" && updatetracker || return 0
+  confirm -y "$red${blink}Run updatetracker function?$tput0" && updatetracker || return 0
 
   printline "\n ${FUNCNAME[0]} finished \n\n"
   return "$?"

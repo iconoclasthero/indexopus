@@ -6,7 +6,7 @@
 
 #trap pause DEBUG
 shopt -s nullglob
-
+shopt -s extglob
 
 ## definitions #################################################################################
 [[ "$TERM" = screen ]] && TERM=screen.xterm-256color
@@ -104,13 +104,6 @@ for path in "$@"
 done
 }
 ##--> fnrmr() <--###################################################################################
-
-#editscript(){
-#  local script path; script="${scriptname##*/}"; path="${scriptname%/*}"; swp="$path/.$script.swp"
-#     if [[ ! -e "$swp" ]]; then printf "\n\n%s\n\n" "$swp"; (/usr/bin/nano "$scriptname"); exit
-#     else printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptname" "$swp"; exit;
-#  fi; }
-##--> editscript() <--##############################################################################
 
 filecheck(){
 (( verbose )) && printf '[verbose] Entering filecheck().\n'
