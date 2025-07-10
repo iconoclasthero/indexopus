@@ -264,12 +264,16 @@ reindex(){
     readarray -t chapstarts < <(jq -r '.chapters[] | .start' "$jsonfile" 2>/dev/null)
   fi
 
+  chcount=0
+  for i in "${chaptitles[@]}"; do [[ "$i" = *Chapter* ]] && ((chcount++)); done
+  (( chcount > 99 )) && triple=1
+
 ## This is to allow for outline style because ABS won't allow for *ANY* whitespaces before or after chapter names
 
   for ((chno=0; chno<"${#chaptitles[@]}"; chno++)); do
     if [[ "${chaptitles[$chno]}" = ..* ]]; then
-      printf 'An index title contains prefix "..", possibly indication outline style:\n  "%s"\n' "${chaptitles[$chno]}"
-      confirm -y 'Use outline style (i.e., convert prefix periods to spaces)?' && outline=1
+      printf '%sAn index title contains prefix "..", possibly indication outline style%s:\n  "%s"\n\n' "$red" "$tput0" "${chaptitles[$chno]}"
+      confirm -y "${red}Use outline style (i.e., convert prefix periods to spaces)?$tput0" && outline=1
       break
     fi
   done
@@ -337,11 +341,22 @@ reindex(){
           zeropadchna=1
         fi
 
+        if (( triple )) && [[ "$chna" =~ ^([⠀ ]*(Part|Chapter)\ )([0-9]{2})($|[.: ].*)$ ]]; then
+          chna="${BASH_REMATCH[1]}0${BASH_REMATCH[3]}${BASH_REMATCH[4]}"
+          zeropadchna=1
+        fi
+
    # If line starts with zero or more Braille blanks or spaces, followed by a single digit,
    # zero-pad that digit without removing indentation
         if [[ "$chna" =~ ^([⠀ ]*)([0-9])($|[.: ].*)$ ]]; then
           chna="${BASH_REMATCH[1]}0${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
           barenum=1
+        elif [[ "$chna" =~ ^([⠀ ]*)([0-9]+)($|[.: ].*)$ ]]; then
+          barenum=1
+        fi
+
+        if (( triple )) && [[ "$chna" =~ ^([⠀ ]*)([0-9]{2})($|[.: ].*)$ ]]; then
+          chna="${BASH_REMATCH[1]}0${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
         fi
 
         chna="${chna%"${chna##*[![:space:]]}"}"
@@ -375,6 +390,10 @@ reindex(){
           zeropadchna=1
         fi
 
+        if (( triple )) && [[ "$chna" =~ ^([⠀ ]*(Part|Chapter)\ )([0-9]{2})($|[.: ].*)$ ]]; then
+          chna="${BASH_REMATCH[1]}0${BASH_REMATCH[3]}${BASH_REMATCH[4]}"
+          zeropadchna=1
+        fi
    # If line starts with zero or more Braille blanks or spaces, followed by a single digit,
    # zero-pad that digit without removing indentation
         if [[ "$chna" =~ ^([⠀ ]*)([0-9])($|[.: ].*)$ ]]; then
@@ -382,6 +401,9 @@ reindex(){
           barenum=1
         fi
 
+        if (( triple )) && [[ "$chna" =~ ^([⠀ ]*)([0-9]{2})($|[.: ].*)$ ]]; then
+          chna="${BASH_REMATCH[1]}0${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+        fi
 
         chna="${chna%"${chna##*[![:space:]]}"}"
         printf 'CHAPTER%03d=%s\n' "$chno" "$ts" >> "$tmp/opusindex"
@@ -417,34 +439,61 @@ reindex(){
 
 
   if (( "${#itemids[@]}" )); then
-    printf '%s\n%sThis index was generated from existing %s;\n' "$tput0" "$relipsis" "$jsonfile"
-    [[ "$itemids" ]] && printf '...look up new chapter information at\ngoogle-chrome %s/audiobook/%s/chapters\n\n\n' "$absserver" "$itemids"
-
-## this can't possibly do anthing because of the initial if here:
-##    [[ ! "$itemids" ]] && printf '%s%s not found in absdatabase.sqlite!%s\n%sCheck path and metadata.json file\n\n\n' "$bold" "$PWD" "$tput0" "$red"
+    printf '\n%sThis index was generated from existing %s;\n' "$relipsis" "$jsonfile"
+    printf '...look up new chapter information at\n%sgoogle-chrome %s/audiobook/%s/chapters\n\n\n' "$tput0" "$absserver" "$itemids"
 
     if (( barenum )); then
-      printf 'Index parts start with a bare number... would you like to prefix bare numbers with:\n'
-      select opt in "Chapter ##" "Part ##" "Proposed changes as above" "No change to index"; do
-        case "${opt%% *}" in
-          Chapter)  prefix="Chapter"; break ;;
-          Part)     prefix="Part"; break ;;
-          Proposed) prefix="proposed"; break ;;
-          No) prefix="exit"; unset barenum; break ;;
+      printf '%sIndex entries start with a bare number; would you like to prefix bare numbers with:\n%s' "$red" "$tput0"
+
+##switched from this menu to the one below:
+#      select opt in "Chapter ##" "Part ##" "Keep proposed changes above" "No change to index"; do
+#        case "${opt%% *}" in
+#          Chapter)  prefix="Chapter"; break ;;
+#          Part)     prefix="Part"; break ;;
+#          Proposed) prefix="proposed"; break ;;
+#          No) prefix="exit"; unset barenum; break ;;
+#          *) echo "Invalid choice";;
+#        esac
+#      done
+## delete after Mon Jun  9 09:33:24 AM EDT 2025
+
+      opts=("Chapter ##" "Part ##" "Keep proposed changes above" "No change to index")
+
+      while :; do
+        echo "Choose an option:"
+        for i in "${!opts[@]}"; do
+          printf '  %d) %s\n' $((i+1)) "${opts[i]}"
+        done
+        printf \\n
+        read -rp "${red}[default=1] #?${tput0} " choice
+        [[ -z "$choice" ]] && choice=1
+
+        case "$choice" in
+          1) prefix="Chapter"; break ;;
+          2) prefix="Part"; break ;;
+          3) prefix="proposed"; break ;;
+          4) prefix="exit"; unset barenum; break ;;
           *) echo "Invalid choice";;
         esac
       done
+
+
+      printf \\n
+
       if [[ "$prefix" =~ ^(Part|Chapter)$ ]]; then
-        for (( n=0; n<"${#rawindex[@]}"; n++)); do
-(( verbose )) && printf %s\\n "${rawindex[$n]}"
-#          [[ "${rawindex[$n]}" =~ ^[0-9]+($|[.:\ ].*)$ ]] && rawindex["$n"]="$prefix ${rawindex[$n]}"
-          ! [[ "${rawindex[$n]}" =~ ^[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9] ]] &&
-            [[ "${rawindex[$n]}" =~ ^([⠀\ ]*)([0-9]+)($|[.:\ ].*)$ ]] &&
-            rawindex[$n]="${BASH_REMATCH[1]}$prefix ${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
-#            read -rp "${rawindex[$n]}"
-        done
+##  I don't think this is needed anymore because "${rawindex[@]}" is regenerated from
+##  $tmp/opusindex further below and explicitly reset immediately below
+##        for (( n=0; n<"${#rawindex[@]}"; n++)); do
+##(( verbose )) && printf '${rawindex[@]:\n' && printf %s\\n "${rawindex[@]}"
+##          ! [[ "${rawindex[$n]}" =~ ^[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9] ]] &&
+##            [[ "${rawindex[$n]}" =~ ^([⠀\ ]*)([0-9]+)($|[.:\ ].*)$ ]] &&
+##            rawindex[$n]="${BASH_REMATCH[1]}$prefix ${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+##        done
+## remove after 2025-06-09T08:45:28-04:00
+
         rawindex=()
         n=0
+       printf '\n%sChanges to chapter names from %s/opusindex:\n%s' "$red" "$tmp" "$tput0"
         while read -r indexline; do
           if [[ "$indexline" =~ ^(CHAPTER[0-9]{3}NAME=[⠀\ ]*)([0-9]+)($|[.:\ ].*)$ ]]; then
             prefixline="${BASH_REMATCH[1]}$prefix ${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
@@ -453,22 +502,26 @@ reindex(){
             rawindex[$n]="${prefixline#*=}"
           else
             printf %s\\n "$indexline" >> "$tmp/prefixindex"
-#            printf '%s\t->\t%s\n' "$indexline" "$indexline"
             rawindex[$n]="${indexline#*=}"
           fi
           ((n++))
         done < "$tmp/opusindex"
+#        printf '\n%s"${rawindex[@]}"%s:\n' "$red" "$tput0"
         printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
-        read -rp "done reading $tmp/opusindex"
-        cat "$tmp/opusindex"
-        cat "$tmp/prefixindex"
-        read -rp "done"
-        confirm -y "Replace opusindex with prefixindex?" && mv "$tmp/opusindex" "$tmp/opusindex~" && mv "$tmp/prefixindex" "$tmp/opusindex"
+        confirm -y "\n${red}Continue?$tput0" || { printf 'Exiting. (exit 2)\n'; exit 2; }
+#        cat "$tmp/opusindex"
+(( verbose )) && cat "$tmp/prefixindex"
+        if confirm -y "${red}Replace opusindex with prefixindex?${tput0}"; then
+          mv "$tmp/opusindex" "$tmp/opusindex~" && mv "$tmp/prefixindex" "$tmp/opusindex" ||
+            { printf '%s[ERROR]%s Error replacing %s/opusindex with %s/prefixindex. Exiting. (exit 1)\n' "$boldred" "$tput0" "$tmp" "$tmp"; exit 1; }
+        else
+          confirm -n "Not updating index.\nContinue?" || { printf 'Exiting. (exit 2)\n'; exit 2; }
+        fi
       fi
       if [[ "$prefix" =~ ^(Part|Chapter|proposed)$ ]]; then
         printf '%s%sProposed index for %s:%s%s\n' "$red" "$bold" "$reintitle" "${tput0}" "$bold"
         printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
-        if confirm -y "${bold}${red}Apply index?${tput0}"; then
+        if confirm -y "\n${boldred}Apply index?${tput0}"; then
           writeindex "$reintitle"
 
           rmmatch=true  #at this point, having said yes to apply index, yes the rest of the way.
@@ -569,7 +622,7 @@ path   : ${patharray[$itemid]#/library/books/}"
 
   if (( outline )) || (( barenum )) || (( zeropadchnna )) || [[ -f "reindex.$jsonfile" ]]; then
     printf 'The chapter index written to the audiobook file now differs from %s.\n' "$jsonfile"
-    confirm -y "Do you want to write these changes to $jsonfile?" && updatejson=1
+    confirm -y "${boldred}Do you want to write these changes to $jsonfile?$tput0" && updatejson=1
 
 
 #    [[ -f "reindex.$jsonfile" ]] && injson="reindex.$jsonfile" || injson="$jsonfile"
@@ -606,14 +659,14 @@ printf %s\\n "${newtitles[@]}"
 #      [[ "$absresponse" = UPTODATE ]] && printf 'ABS database was already up to date.\nInvestigate\n.'
 #    fi
 
-    if confirm -y "Update $jsonfile from $outjson?"; then
+    if confirm -y "${boldred}Update $jsonfile from $outjson?$tput0"; then
       install -g "$absgroup" -m 664 "$outjson" "$jsonfile" && rm "$outjson"
       sudo chown "$absuser":"$absgroup" "$jsonfile"
       sudo -k
       if confirm -y "${red}Push changes in $jsonfile to abs server via API?$tput0"; then
         for itemid in "${selectedids[@]}"; do
           printf 'Pushing updated index to %s/item/%s...\n' "$absserver" "$itemid"
-          absresponse="$(curl -sSX POST "$absserver/api/items/$(itemid)/scan" \
+          absresponse="$(curl -sSX POST "$absserver/api/items/$itemid/scan" \
             -H "Authorization: Bearer  $abstoken"|jq -r .result)"
           case "$absresponse" in
             UPDATED)
@@ -624,7 +677,7 @@ printf %s\\n "${newtitles[@]}"
               ;;
             *)
               printf '%sNB: ABS FAILED TO UPDATE!!%s\n' "$boldred" "$tput0"
-              printf '✘ %s response: %s' "$itemid" "$resp"
+              printf '✘ %s response: %s' "$itemid" "$absresponse"
               ;;
           esac
         done

@@ -1,12 +1,13 @@
 #!/bin/bash
 # nb: the swp file that editscript relies on is provided by nano
 
-. /usr/local/editscript
+. /usr/local/bin/editscript
 
 ext="opus"
-#ext="m4b"
+ext="m4b"
+ext="m4a"
 #ext="flac"
-ext="mp3"
+#ext="mp3"
 #ext="${1##*.}"
 scriptname="$(realpath $0)"
 

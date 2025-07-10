@@ -210,9 +210,9 @@ mklnbook(){
     ! [[ -d "$jsondir" ]] && { printf '%s is not a valid path to a metadata.json file!\n.Investigage. (return 1)\n\n'; return 1; }
 ## from vito: Book ASINs are either just numbers or A-Z0-9, but start with B0.
     asin="$(jq -r .asin "$jsondir/metadata.json")"
-(( verbose )) && read -rp "$asin"
+(( verbose )) && read -rp "[verbose] \$asin: $asin"
     if [[ "$asin" =~ ^(B[0-9A-Z]{9}|[0-9]{10})$ ]]; then
-      (( verbose )) && printf 'ASIN in metadata.json appears to be valid: %s\n' "$asin"
+      (( verbose )) && printf '[verbose] ASIN in metadata.json appears to be valid: %s\n' "$asin"
     elif [[ "$asin" != "null" ]]; then
       printf 'ASIN in metadata.json does not match the regex: %s\n' "$asin"
       confirm "Use this ASIN to look for a cover url?" || unset asin
@@ -223,16 +223,48 @@ mklnbook(){
 
     [[ "$asin" ]] && coverurl=$(curl -s -H 'accept: application/json' \
                    "https://audimeta.de/book/$asin?cache=false" | jq -r '.imageUrl')
-    [[ "$coverurl" = https*jpg ]] && { (( verbose )) && printf 'Cover url:\n\n'; printf %s\\n "$coverurl"; return 0; }
+    [[ "$coverurl" = https*jpg ]] && { (( verbose )) && printf '[verbose] Cover url:\n\n'; printf %s\\n "$coverurl"; return 0; }
 
     return 1
 
   }
 ##--> getcoverurl() <--################################################################
 
+printdescrip(){
+  local allogg
+  shopt -s nullglob
+  allogg=( *ogg )
+  ! (( "${#allogg[@]}" )) && { printf 'No .ogg file found; not launched from a linked directory? Exiting. (return 1)\n'; return 1; }
+  (( verbose )) && printf '%s\n' "${allogg[@]}"
+  (( description )) && t="${allogg[0]% -- *}"
+  printline "MediaInfo of $t -- Audiobook.ogg"
+  printf \\n
+  mediainfo "$t -- Audiobook.ogg"
+  mediainfo "$t -- Audiobook.ogg"|xclip 2>/dev/null
+  pubdate="$(mediainfo "$t -- Audiobook.ogg" |\grep -E ^Recorded\ date\ +\:)"
+  pubdate="${pubdate#* : }"
+  readarray -t duration < <(mediainfo "$t -- Audiobook.ogg" |\grep -E ^Duration\ +\:|sort -u)
+  duration="${duration[0]#* : }"
+  hh="${duration% h*}"; (( "${#hh}" < 3 )) && hh="$(printf '%02d' "$hh")"
+  mm="${duration#* h }"; mm="${mm% min}"; mm="$(printf '%02d' "$mm")"
+  (( "${#hh}" > 3 )) && { printf 'Error: Book appears to have a duration over 1000 hours!  Investigate.\nExiting (return 1)\n\n'; return 1; }
+  (( "${#hh}" == 3 )) && hhmm="$hh:$mm hhh:mm" || hhmm="$hh:$mm hh:mm"
+  readarray -t genretags < <({ mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Genre[[:space:]]\+: //p'; mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Tags[[:space:]]\+: //p'; } | tr '/' '\n'|sed 's/^[[:space:]]*//;s/[[:space:]]*$//'|sort -u )
+  printf \\n
+
+  printf %s\ \|\ %s\ \|\  "$pubdate" "$hhmm"
+  printf %s\ \|\   "${genretags[@]}"
+  printf '17 kb/s opus transcode | embedded chapter index and cover\n\n'
+  (( description )) && swd="$(readlink "${allogg[0]}")" && swd="${swd%\/*}" && read -rp "$swd"
+## not sure I want to use "$swd" here, but it should suffice, at least to start.
+   coverurl="$(getcoverurl "$swd")"
+   printf %s\\n "${coverurl:-'Unable to retrieve cover url\!'}"
+}
+##--> printdescrip() <--################################################################
 
 
-  local a sd f t i d abscover linked hostlistconf delugehost delugeport delugeuser delugepass swd verbose cktorrent yes asin
+
+  local a sd f t i d abscover linked linkedd hostlistconf delugehost delugeport delugeuser delugepass swd verbose cktorrent yes asin nowrite nometadata description
   linked='/library/torrent/seeds/mam/linked'
   clear -x
   printline "\n Starting ${FUNCNAME[0]} \n"
@@ -242,27 +274,28 @@ mklnbook(){
   [[ "$1" = @(-v|--verbose) ]] && shift && verbose=1
   [[ "$1" = -y ]] && shift && yes=1
   [[ "$1" = -Y ]] && shift && YES=1 && yes=1
-  [[ "$1" = @(-c|--cover) ]] && shift && coveronly=1 && { getcoverurl "$swd"; printf \\n; return "$?"; }
+  [[ "$1" = @(-c|--cover) ]] && shift && coveronly=1 && { getcoverurl "$swd"; ec="$?"; printf \\n; return "$ec"; }
+  [[ "$1" = @(-d|--description) ]] && printf '\n\nPrinting description\n' && shift && description=1 && { printdescrip; ec="$?"; printf \\n; return "$ec"; }
 
 #  hostlistconf="$HOME/.config/deluge/hostlist.conf"
   delugecreds -h gigabyte -t mam
   printf 'Directory/symlink link destination:\n%s%s%s\n' "$teal" "$linked" "$white"
   [[ ! "$1" ]] && set -- .
-(( verbose )) && read -rp "\$1: $1"
+(( verbose )) && printf '[verbose] $1: %s\n' "$1"
   set -- "$(realpath "$1")"
-(( verbose )) && read -rp "\$1: $1"
+(( verbose )) && printf '[verbose] $1: %s\n' "$1"
   [[ "$1" = *꞉* ]] && mv "$1" "${1//꞉/:}" && set -- "$(realpath "${1//꞉/:}")" && swd="$1"
 
   ! [[ -f "$swd/metadata.json" ]] && nometadata=1
 
   if (( nometadata )); then
     swddirs=( "$1"/*/ )
-(( verbose )) && read -rp "$(printf %s\\n "${swddirs[@]}")"
+(( verbose )) && printf '[verbose] ${swddirs[@]}: %s\n' "${swddirs[@]}"
     (( "${#swddirs[@]}" == 1 )) && seldir="${swddirs[0]}"
     (( "${#swddirs[@]}" > 1 )) && seldir="$(printf %s\\n "${swddirs[@]}"|gum choose --header="Select a starting audiobook directory:")"
-(( verbose )) && read -rp "$(printf \$seldir\:\ %s\\n "$seldir")"
+(( verbose )) && read -rp "[verbose] $(printf \$seldir\:\ %s\\n "$seldir")"
     [[ -f "$seldir/metadata.json" ]] && unset nometadata && cd "$seldir" && set -- "$(pwd)" && swd="$1"
-(( verbose )) && read -rp "$(printf '$1: %s\n$swd: %s\n$nometadata: %s\n' "$1" "$swd" "$nometadata")"
+(( verbose )) && read -rp "$(printf '[verbose] $1: %s\n$swd: %s\n$nometadata: %s\n' "$1" "$swd" "$nometadata")"
     if (( nometadata )); then
       ogg=( *\ --\ Audiobook.ogg )
       if (( "${#ogg[@]}" == 1 )) && [[ -L "$ogg" ]]; then
@@ -285,7 +318,7 @@ mklnbook(){
   fi
 
 
-(( verbose )) &&  read -rp "$1"
+(( verbose )) &&  printf '[verbose] $1: %s\n' "$1"
   sd="$(realpath "$1")"
   t="${sd##*\/}"     #this title comes from the directory name and won't necessarily be consistent with the <title> -- Audiobook.opus
   sd="${sd%\/"$t"}"
@@ -298,50 +331,52 @@ mklnbook(){
   torrentfile="/library/torrent/$d.torrent"
 
 
-## This section was supplanted by the block below on Tue May 13 10:36:02 AM EDT 2025
-## remove after Tue May 20 10:37:37 AM EDT 2025
-#
-#  [[ ! -d "$linked/$d" ]] && mkdir "$linked/$d"
-#  printf '\nDirectory should exist: \n'
-#  eza -la -sold --no-user -r "$linked/$d" -d
-#((verbose )) && read -rp "$(shopt nullglob)"
-#  files=("$linked/$d/"*)
-#  if [[ "$files" ]]; then
-#    printf '\n%sContents of %s/%s:%s\n' "$boldred" "$linked" "$d" "$tput0"
-#    eza -glbaa "$linked/$d"
-#    torrentcheck="$(eza --color=always /library/torrent/"$d"*)"
-#    [[ "$torrentcheck" ]] && printf '\n%sTorrent exists:%s\n%s\n\n' "$boldred" "$tput0" "$torrentcheck" && (( verbose )) && read -rp "$torrentcheck"
-#    confirm -Y "${boldred}Overwrite existing files in linked directory?$tput0" || { printf '\nNot overwriting existing files.\nExiting. (return 1)\n\n'; return 1; }
-#  fi
-
 # check to see if the symlink destination directory exists, is empty, creates it on empty
 # and checks to see it the .torrent file is there.  Asks for confirmation to overwrite the dest. dir.
 # should be able to reuse "$cktorrent" before creating the torrent with transmission-create
   shopt -q nullglob; nullglob="$?"     # checks to see if nullglob is off
   (( nullglob )) && shopt -s nullglob  # if nullglob was off, turn it on
-(( verbose )) && read -rp "$(shopt nullglob)"
+(( verbose )) && printf '[verbose] %s\n' "$(shopt nullglob)"
 
 ##  unset cktorrent ## might not be necessary if this is defined as a local...
-(( verbose )) && read -rp "\$linked: $linked"
-  if [[ ! -d "$linked/$d" ]]; then # [[ ! -d "$linked/$d" ]] && mkdir "$linked/$d"
-    mkdir "$linked/$d"
+(( verbose )) && printf '[verbose] $linked: %s\n' "$linked"
+  linkedd="$linked/$d"
+  if [[ ! -d "$linkedd" ]]; then # [[ ! -d "$linked/$d" ]] && mkdir "$linked/$d"
+    mkdir "$linkedd"
     printf '\nDirectory should exist: \n'
 #    eza -la -sold --no-user -r "$linked/$d" -d
       eza -dla --no-user "$linked/$d" || { printf '\nError, the linked directory does not exist!\nInvestigate. (return 1)'; return 1; }
   else
     files=( "$linked/$d/"* )
-(( verbose )) && printf %s\\n "${files[@]}"
+(( verbose )) && { printf '[verbose] Array ${files[@]}:\n'; read -rp "$(printf '[verbose]  %s\n' "${files[@]}")"; }
     if [[ "$files" ]]; then
       printf '\n%sContents of %s/%s:%s\n' "$boldred" "$linked" "$d" "$tput0"
       eza --no-user -glbaa "$linked/$d"
+      for file in "${files[@]}"; do
+        if ! [[ -w "$file" ]]; then
+           nowrite=1
+           (( verbose )) && printf '[verbose] Unwritable: %s\n' "$(eza -la "$file")"
+        else
+           (( verbose )) && printf '[verbose] Writeable: %s\n' "$(eza -la "$file")"
+        fi
+      done
       printf \\n
       cktorrent="$(eza --color=always /library/torrent/"$d.torrent" 2>/dev/null)"
-      [[ "$cktorrent" ]] && printf '\n%sTorrent exists:%s\n%s\n\n' "$boldred" "$tput0" "$cktorrent" &&
-(( verbose )) && read -rp "${cktorrent[@]}"
+      [[ "$cktorrent" ]] && printf '\n%sTorrent exists:%s\n%s\n\n' "$boldred" "$tput0" "$cktorrent"
       confirm -Y "${boldred}Overwrite existing files in linked directory?$tput0" || { printf '\nNot overwriting existing files.\nExiting. (return 1)\n\n'; return 1; }
+(( verbose )) && { printf '[verbose] $linkedd: %s\n' "$linkedd"; read -rp "[verbose] $(eza --color=always -glad "$linkedd")"; }
+      if (( nowrite )) && { (( yes)) || confirm -Y "\n\n${boldred}Files in linked directory (\$linkedd) unwriteable! \n Change permissions?${tput0}"; }; then
+        { sudo chown -R $USER:media "$linkedd" && sudo chmod -R g+w "$linkedd" &&
+          { eza --color=always -glad "$linkedd"; (( verbose )) && read -rp "[verbose] $(printf '\nPermissions changed successfully! \n\n')" ||
+            printf '\nPermissions changed successfully! \n\n';
+          } ||
+          { printf 'Unable to get write access to %s.  Investigate. (return 1)\n\n' "$linkedd"; return 1;
+          };
+        }
+      fi
     else
       printf '\nDirectory should exist: \n'
-      eza -dla --no-user "$linked/$d" || { printf '\nError, the linked directory does not exist!\nInvestigate. (return 1)'; return 1; }
+      eza -glad --no-user "$linked/$d" || { printf '\nError, the linked directory does not exist!\nInvestigate. (return 1)'; return 1; }
       printf '\nAnd be empty:\n'
       eza --no-user -glbaa "$linked/$d"
     fi
@@ -360,8 +395,8 @@ mklnbook(){
   [[ "$audiobookopus" ]] && mediainfo "$1"/*\ --\ Audiobook.opus|head -n$(($(mediainfo "$1"/*\ --\ Audiobook.opus |\grep -En Menu|cut -f1 -d:) - 1 ))
 
   if { (( yes )) || confirm -Y "${boldred}Set book metadata from ABS metadata.json?$tput0"; }; then
-    (( verbose )) && { bookmetadata --verbose "$1"||return 1; } ||
-      { bookmetadata "$1"||return 1; }
+    (( verbose )) && { printline "\n Calling bookmetadata --verbose \n"; bookmetadata --verbose "$1"||return 1; } ||
+      { printline "\n Calling bookmetadata \n"; bookmetadata "$1"||return 1; }
   fi
   mediainfo "$1"/*\ --\ Audiobook.opus #|head -n$(($(mi "$1"/*\ --\ Audiobook.opus |\grep -En Menu|cut -f1 -d:) - 1 ))
 
@@ -695,7 +730,7 @@ fi
   fi
 
   printf '\nCheck cover, etc., before symlinking:\n'
-  eza -la -sold -r --no-user "$1"
+  eza -lag -sold -r --no-user "$1"
 #  read -p "..."
   { (( yes )) || confirm -Y "$boldred...continue?$tput0"; } || return 1
   printf \\n
@@ -732,6 +767,14 @@ fi
    confirm -y "Remove *.opf? "; then
     rm *.opf
   fi
+
+  parts=("$PWD"/*.part)
+  if [[ -L "${parts[0]}" ]] && printf '\nFound .part files!\n%s\n' "$(eza -la --no-user *.part)" &&       { (( yes )) || confirm -y "\n${boldred}Remove .part files?$tput0"; };  then
+
+    rm *.part && printf '\nThe .part files removed.\n'
+  fi
+
+
   [[ -L wget-log ]] && rm wget-log
 
 ## this is not actually needed since the torrent's being generated automatically.
@@ -755,35 +798,19 @@ fi
     torrentfile="${torrentfile//\;/_}" && { (( yes )) || read -rp "torrent file copied to $torrentfile as deluge-console cannot accpet semicolons in file names!"; }
   deluge-console "connect $delugehost:$delugeport $delugeuser $delugepass; add -p ${linked@Q} ${torrentfile@Q}"
   printf \\n
-  printline "MediaInfo of $t -- Audiobook.ogg"
-  printf \\n
-#  hr2 "mediainfo of $t -- Audiobook.ogg"
-  mediainfo "$t -- Audiobook.ogg"
-  mediainfo "$t -- Audiobook.ogg"|xclip 2>/dev/null
-  pubdate="$(mediainfo "$t -- Audiobook.ogg" |\grep -E ^Recorded\ date\ +\:)"
-  pubdate="${pubdate#* : }"
-  readarray -t duration < <(mediainfo "$t -- Audiobook.ogg" |\grep -E ^Duration\ +\:|sort -u)
-  duration="${duration[0]#* : }"
-  hh="${duration% h*}"; (( "${#hh}" < 3 )) && hh="$(printf '%02d' "$hh")"
-  mm="${duration#* h }"; mm="${mm% min}"; mm="$(printf '%02d' "$mm")"
-  (( "${#hh}" > 3 )) && { printf 'Error: Book appears to have a duration over 1000 hours!  Investigate.\nExiting (return 1)\n\n'; return 1; }
-  (( "${#hh}" == 3 )) && hhmm="$hh:$mm hhh:mm" || hhmm="$hh:$mm hh:mm"
-  readarray -t genretags < <({ mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Genre[[:space:]]\+: //p'; mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Tags[[:space:]]\+: //p'; } | tr '/' '\n'|sed 's/^[[:space:]]*//;s/[[:space:]]*$//'|sort -u )
-  printf \\n
 
-#  printline "Tags and genres"
-#  hr2 "Tags and genres"
-  printf %s\ \|\ %s\ \|\  "$pubdate" "$hhmm"
-  printf %s\ \|\   "${genretags[@]}"
-  printf '17 kb/s opus transcode | embedded chapter index and cover\n\n'
 
-## not sure I want to use "$swd" here, but it should suffice, at least to start.
-  coverurl="$(getcoverurl "$swd")" && printf %s\\n "${coverurl:-'Unable to retrieve cover url\!'}"
+  printdescrip
 
   printline "\n Returning to starting working directory "
   printf '\nLeaving: \n%s\n' "$(pwd)"
   printf '\nReturning to %s\n' "$swd"
   cd - > /dev/null
+
+  parts=( *.part )
+  [[ -f "${parts[0]}" ]] && \rm *.part
+  readarray -t partnames < <(jq -r '.chapters[].title' metadata.json)
+  for i in "${partnames[@]}"; do [[ "$i" = *\/* ]] && i="${i//\//\\}"; touch "$i.part"; done
 
   confirm -y "$red${blink}Run updatetracker function?$tput0" && updatetracker || return 0
 

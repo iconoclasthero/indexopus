@@ -21,7 +21,7 @@ START=1
 edit=0
 scriptname="$(realpath $0)"
 basename "$PWD"
-title="FDR"
+title="Tree of Smoke"
 inext="mp3"
 outext="mp3"
 inext="opus"

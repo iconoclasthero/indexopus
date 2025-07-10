@@ -97,7 +97,7 @@ if [[ "$title" =~ ^\[.+\] ]]; then
 #  printf '\nWARN: Title from directory begins with "%s" which will be stripped!\n\n' "${title%%\]*}]"
   printf '\nWARN: Title from directory begins with "%s"!\n\n' "${title%%\]*}]"
 #  pause "Press any key to continue or ^C to exit"
-  confirm "${boldred}Strip ${title%%\]*}] from linked directory title?$tput0" && title="${title#*\] }"
+  confirm "${boldred}Strip ${title%%\]*}] from linked directory title?$tput0" && title="${title#*\] }" || keepseries=1
 fi
 
 (( verbose )) && pause "title: $title"
@@ -153,7 +153,7 @@ if [[ "$title" != "$opustitle" ]]; then
   exit 1; }
 fi
 
-(( verbose )) && pause "Reveiew titles:"
+(( verbose )) && pause "Review titles:"
 printf '\n$title [from directory name]: %s\n$opustitle [from .opus file name]: %s\n\n' "$title" "$opustitle"
 
 metadata="$bookdir/metadata.json"

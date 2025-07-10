@@ -88,7 +88,8 @@ ffmpeg2(){
                                          -b:a 17k \
                                          -filter_complex "$filtercomplex" \
                                          -frame_duration:a 60 \
-                                         file:"$opusfile" 2>&1 >/dev/null)
+                                         file:"${tmpdir:+$tmpdir/}$opusfile" 2>&1 >/dev/null)
+#                                         file:"$opusfile" 2>&1 >/dev/null)
 #                                      -ar 24k \
 # removing this because opus internal
 # sample rate is 48 kHz; 24 kHz here is probably wasteful
@@ -317,6 +318,7 @@ printf %s\\n\\n "${bannerarray[@]}"
 
 mediafiles=( ${mediaext} )
 
+
 #(( ${#mediafiles[@]} != 1 )) && printf '\n%sThere is no single appropriatly-named media file in %s.  Please check and try again.\nexit 1\n\n%s' "$bold" "$(pwd)" "$tput0" && exit 1
 
 #test for more than one accptable media extension and fail if it finds more than one.
@@ -337,8 +339,10 @@ if (( ${#extensions[@]} > 1 )); then
   fi
 fi
 
+
 while (( $# > 0 )); do
   [[ "$1" = @(edit|e|-e) ]] && editscript
+  [[ "$1" = --tmp ]] && shift && tmpdir="$1" && shift && continue
   [[ "$1" = --cache ]] && usecache=1 && shift && continue
   [[ "$1" = @(-s|--stats) ]] && shift && statson=true && continue
   [[ "$1" = "-d" ]] && inputdur="$2" && shift 2 && continue
@@ -348,6 +352,7 @@ while (( $# > 0 )); do
   [[ -f "$1" ]] && startfile="$1" && file="$startfile" && opusfile="${file%.*}.opus" && continue	 #it's just letting me into the program atm
   { printf '%s is not a recognized cli option.\nContinue with %s?' "$1" "$0"; confirm -Y && shift && continue || exit 1; }
 done
+
 
 if [[ "$startfile" && ! -f "$startfile" && "$startfile" != $mediaext ]] || (( "${#mediafiles[@]}" == 0 ))  #Do not quote $mediaext as it contains a wildcard
   then
@@ -360,6 +365,10 @@ rm /tmp/mytmpfile .opus.book.pids "$pidfile" 2>/dev/null  	# clean any old files
 startext=( ${mediaext} ); startext="${startext##*.}"		# define what the starting extension is in dir
 #mediafiles=                                                 # why the fuck is this here?  there should be no reason to unset mediafiles AND this isn't the way to do it anyway...
 filenum="$(ls ${mediaext}|wc -l)"							# how many of those files are there?
+
+if [[ "$tmpdir" ]]; then
+  mkdir -p "$tmpdir" || exit 1
+fi
 
 (( filenum < threads )) && threads="$filenum"
 
