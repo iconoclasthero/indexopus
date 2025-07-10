@@ -1,0 +1,175 @@
+#!/bin/bash
+
+## definitions #################################################################################
+shopt -s nullglob extglob
+[[ "$TERM" = screen ]] && TERM=screen.xterm-256color
+[[ "$TERM" = dummy ]] && TERM=xterm-256color
+export TERM
+
+tput0="$(tput sgr0)"
+white="$(tput setaf 15)"
+boldred="$(tput bold setaf 9)"
+red="$(tput setaf 1)"
+relipsis="${red}..."
+tmpdir=/cache
+#rmmatch=1
+
+## source functions #################################################################################
+. /usr/local/bin/editscript
+sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec -f printline -f confirm
+
+args=(mp32opus)
+
+while (( $# > 0 )); do
+  [[ "$1" = "--edit"        ]] && editscript && exit
+  [[ "$1" = @(--screen|-s)  ]] && { screened=1; shift; continue; }
+  [[ "$1" = "-y"            ]] && { args+=("$1"); rmmatch=1; shift; continue; }
+  [[ "$1" = "-n"            ]] && { args+=("$1"); no=1; unset rmmatch; shift; continue; }
+  [[ "$1" = "--stats"       ]] && { args+=("$1"); stats=true; shift; continue; }
+  [[ "$1" = @(-ys|-yes)     ]] && { args+=("-y"); (( screened=rmmatch=1 )); shift; continue; }
+  [[ "$1" = "--save"        ]] && { args+=("$1"); save=1; shift; continue; }
+  [[ "$1" = @(-D|--discord) ]] && { args+=("$1"); discord=1; . ~/.config/apprise.conf; shift; continue; }
+  [[ -d "$1" ]] && { args+=("$1"); clipath="$1"; clidir="$1"; shift; continue; }
+  [[ -f "$1" ]] && { args+=("$1"); clipath="$1"; clifile="$1"; shift; continue; }
+  { printf '%s is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script?' || exit 1; }
+done
+
+printline "$bold  Welcome to ${0##*\/}  $tput0"
+printf \\n
+
+if (( screened )); then
+  printline "$bold Calling ${args[*]} in GNU screen $tput0"
+  printf \\n\\n
+## this needs to be fixed:
+  screenname="mp32opus-${PWD##*/}"
+  ! (( no )) && args+=(-y)
+  printf '%s ' "${args[@]}"
+  printf \\n
+  screen -dmS "${screenname:0:16}" "${args[@]}"
+  screen -ls                                     #could probably add some logic to not delete shit
+  printf \\n\\n                                  #leaving that for later, but screen implies -y as
+  exit                                           #it doesn't really work otherwise?
+fi
+
+allm4s=(*.m4[ab])
+allmp3s=(*.mp3)
+allfiles=(*.@(mp3|m4@(a|b)))
+## this should work for "." as well as set the script up for the screen call below.
+## this shouldn't need to be before screen...it can happen after screen is invoked.
+
+[[ "$clidir" ]] && clidir="$(realpath clidir)" && [[ "$(pwd)" != "$clidir" ]] && cd "$clidir"
+
+[[ "$rmmatch" ]] && args=("-y") || unset args  #this resets args from "$@"
+
+if [[ "$clifile" ]] || (( "${#allfiles[@]}" == 1 )); then
+  args+=("$clifile")
+(( verbose )) &&  pause "$(printf quartero4\ %s\\n "${args[@]}")"
+  printline "${bold}  Calling ${white}quartero4 ${args[@]}  ${tput0}"
+  quartero4 "${args[@]}"
+else
+  printline "$bold  $(pwd):  $tput0"
+  eza -l --no-user
+  printf \\n
+  printline "${bold}  Calling ${white}opus.book.4 ${args[@]}  ${tput0}"
+  clear -x
+  readarray -t initdurations < <(mediaduration)
+  printf %s\\n "${initdurations[@]}"
+
+## this check is a false sense of security as there's no way at present to check if there's not more than
+## one book in the same format
+
+  (( "${#initdurations[@]}" != 1 )) && { printf 'There are more than two different formates reported by mediaduration and automatic deletion cannot proceed. Investigate.\n'; confirm "Continue?"; rmmatch=0; }
+
+  tmpdir="$tmpdir/mp32opus-${PWD##*/}"
+
+  opus.book.4 --tmp "$tmpdir" || { ec="$?"; printf 'An error was returned by opus.book.4; exit code %s. Investigate. (exit %s)\n' "$ec" "$ec"; exit "$?"; }
+  printline "${bold}  Calling ${white}indexopus ${args[*]} ${tput0}"
+
+
+##  This is yet to be implemented in opus.book.4...
+##  i.e., it needs to send the transcoded files to "$tmp" before cd there.
+  swd="$(pwd)"
+
+  { mkdir -p "$tmpdir" && cd "$tmpdir"; } || { printf 'Failure of `mkdir/cd %s` occurred! Investigate. (exit 1)\n' "$tmpdir"; exit 1; }
+
+  eza -gla --no-user
+(( verbose)) &&  pause "pwd=$PWD"
+  indexopus "${args[@]}"
+#readarray -t durations < <(mediaduration|sed 's/^[^:]*: //')
+
+  [[ "$tmpdir" ]] && mv *\ --\ Audiobook.opus "$swd"
+
+  printf \\n
+
+  tmpdirfiles=(*)
+  ## the tmpdir should have been emptied already...try to remove it now if so...
+  ! (( "${#tmpdirfiles[@]}" )) && { pause "Removing $tmpdir; this confirmation needs to be removed eventually."; rmdir "$tmpdir"; }
+
+
+## This is yet to be implemented in opus.book.4 as above...
+  cd "$swd" >/dev/null || { printf 'Failure to return to SWD after indexopus! Investigate. (exit 1)\n'; exit 1; }
+
+
+  printline "${bold}  ${white}Checking durations  ${tput0}"
+  printf \\n
+  readarray -t durations < <(mediaduration)
+  printf %s\\n "${durations[@]}"
+
+(( "${#durations[@]}" != 2 )) && { printf 'There are more than two different formates reported by mediaduration and automatic deletion cannot proceed. Investigate.\n'; confirm "Continue?"; rmmatch=0; }
+
+  [[ "${durations[-1]}" != Duration\ of\ .opus\ files* ]] && noopus=1
+
+  if (( noopus )); then
+    for ((i=0; i<"${#durations[@]}"; i++)); do
+      [[ "${durations[$i]}" = Duration\ of\ .opus\ files* ]] && opuskey="$i" && noopus=0 &&
+      break
+    done
+    (( noopus )) &&
+      { printf 'There was no opus duration found by mediaduration. Investigate. (exit 1)';
+        exit 1; }
+  fi
+
+  sourceext="${durations[0]% files*}"; sourceext="${sourceext#*of }"
+  sourcedur="${durations[0]#*: }"
+  opusdur="${durations[${opuskey:--1}]#*: }"
+
+  opusdursec="$(sex2sec "$opusdur")"
+  sourcedursec="$(sex2sec "$sourcedur")"
+
+  title=(*\ --\ Audiobook.opus)
+  (( "${#title[@]}" == 1 )) && title="${title% -- Audiobook.opus}"
+  ioutput="$(tput sitm)$title$(tput ritm) -- Audiobook.opus"
+
+  if (( opusdursec > 0 )); then
+    verifydur=$(( (1000 * (sourcedursec - opusdursec)) / opusdursec ))
+    verifydur=$(( verifydur < 0 ? -verifydur:verifydur ))
+
+    printf \\n
+
+    if (( verifydur <= 1 )); then  #this is 0.1% difference
+      { (( rmmatch )) || confirm -y "Durations are within 0.1%.\n  $(ls *mp3) \n\nRemove starting mp3 files?"; } && { rm *.mp3; rmdir "$tmpdir"; }
+      [[ "$sourcedursec" != "$opusdursec" ]] &&
+         printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tput sitm)" "$(tput ritm)" "$tput0" ||
+         printf '%sDurations match!%s\n' "$relipsis" "$tput0"
+      printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$(pwd)" "$ioutput" "$tput0"
+      (( discord )) && apprise "$apprisediscord" -t "$(basename "$0") completed:" -b "${title:-title unavailable}"
+      exit
+    elif (( rmmatch )) && (( verifydur )); then
+      printf '%s%sThe source and opus audiobook durations do not match!\n' "$bold" "$red"
+      printf '%s%s%s will not automatically delete starting and temporary files!\n' "$white" "$tput0" "$0"
+      printf '\n\n'
+      printf '%s-y/-f specified, but the durations do not match!\nThe files have been left for later deletion.\n%s' "$boldred" "$tput0"
+    elif (( verifydur > 1 )); then
+      pctdif="$(printf '%d.%d\n' $((verifydur / 10)) $((verifydur % 10)))"
+      printf '%sThe difference between the source %s files and the .opus files of %s%% is greater than 0.1%%!\n%s' "$red" "$sourceext" "$pctdif" "$tput0"
+      confirm "Would you like to delete the starting $sourceext files?" && { rm *"$sourceext"; rmdir "$tmpdir"; }
+    fi
+
+  elif (( opusdursec = 0 )); then
+    printf 'The duration of the opus files [in seconds] is zero and would present a divide by zero error. Investigate.\n(exit 1)\n.'
+    exit 1
+  fi
+fi
+
+
+(( discord )) && apprise "$apprisediscord" -t "$(basename "$0") completed:" -b "${title:-title unavailable}"

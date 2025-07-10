@@ -1,0 +1,364 @@
+#!/bin/bash
+#set -x
+
+. /usr/local/bin/editscript
+. ~/.config/indexopus.conf
+
+tmp=/cache
+mp=tmp
+scriptname=$(realpath "$0")
+ulon=$(tput smul)         # underline on
+uloff=$(tput rmul)        # underline off
+bold="$(tput bold)"       # bold on
+tput0="$(tput sgr0)"      # clear tput
+red="$(tput setaf 9)"     # red fg
+white="$(tput setaf 15)"  # white fg
+relipsis="${red}..."
+shopt -s nullglob extglob dotglob
+[[ ! "$threads" ]] && threads=4
+#rmmatch=false
+#screened=false
+
+sourcefn -l "$HOME/bin/gits/indexopus/indexopus.lib" -f printline -f confirm
+
+
+
+cd-(){ cd - >/dev/null ; }
+
+rmyn(){
+  while true; do
+  read -rp "$1"$'\n ' rmyn
+     case "$rmyn" in
+       [yY] ) "${@:3}"; break;;
+       [nN] ) printf '%s\n' "$2"; break;;
+          * ) printf "Invalid response...\n";;
+     esac
+   done
+}
+
+calculatetime(){
+  local findtitle
+  findtitle="$1"
+  [[ "$findtitle" = *\[* || "$findtitle" = *\]* ]] && findtitle="${findtitle//\[/\\[}" && findtitle="${findtitle//\]/\\]}"
+
+(( verbose )) && pause "findtitle=$findtitle"
+
+duration=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+hours=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' | tail -n 1)
+minutes=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' | tail -n 1)
+seconds=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' | tail -n 1)
+
+[[ "$hours"   =~ "0*(.*)" ]] &&   hours=${BASH_REMATCH[1]}
+[[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
+[[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
+
+printf "Duration: %s\n" "$duration"
+
+hours="${hours#0}"
+hourmin=$(( hours*60 ))
+minutes="${minutes#0}"
+secmin=$((hourmin+minutes))
+secmin=$((secmin*60))
+seconds="${seconds#0}"
+totalsec=$(( "$seconds" + "$secmin" ))
+divsec=$(python3 -c "print($totalsec/$threads)")
+(( verbose )) && printf 'hours: %s\nminutes: %s\nseconds: %s\ntotalsec: %s\ndivsec: %s\n' "$hours" "$minutes" "$seconds" "$totalsec" "$divsec"
+
+}  #calculatetime()
+
+rmyn(){
+  while true
+  read -rp "$1"$'\n ' rmyn
+   do
+     case "$rmyn" in
+       [yY] ) "${@:3}"; break;;
+       [nN] ) printf '%s\n' "$2"; break;;
+          * ) printf "Invalid response...\n";;
+     esac
+   done
+}
+##--> rmyn() <--######################################################################################
+
+#confirm(){
+# local ans IFS=
+# while
+#  printf '%s' "$1"
+#  read -rp " " -n1 ans
+#   do
+#     printf '\n'
+#     case "$ans" in [Yy]) return 0;; [Nn]) return 1;;
+#     esac
+#   done
+#}
+##--> confirm() <--###################################################################################
+
+checkdur(){
+  local m4a m4b opus mp3 wav
+  m4a=(*m4a)
+  m4b=(*m4b)
+  opus=(*opus)
+  mp3=(*mp3)
+  wav=(*wav)
+
+if [[ "$1" ]]
+  then
+      find -type f -iname "*.$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+  else
+    printf '\n%sDuration(s):%s\n' "$bold" "$tput0"
+    [[ "${#m4a[@]}" -gt 0 ]] &&
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white"  "${m4a[@]}" "$tput0"
+    [[ "${#m4b[@]}" -gt 0 ]] &&
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${m4b[@]}" "$tput0"
+    [[ "${#mp3[@]}" -gt 0 ]] &&
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.mp3" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${mp3[@]}" "$tput0"
+    [[ "${#opus[@]}" -gt 0 ]] &&
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
+    [[ "${#wav[@]}" -gt 0 ]] &&
+      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
+ fi
+}
+##--> checkdur() <--##################################################################################
+
+
+#####################################################
+# Main                                              #
+#####################################################
+
+while (( $# > 0 )); do
+  [[ "$1" = @(edit|e|nano) ]] && editscript && exit
+  [[ "$1" = @(-v|--verbose) ]] && verbose=1 && shift && continue
+  [[ "$1" = --force ]] && force=1 && shift && continue
+  [[ "$1" = @(|-)@(-ys|-yes) ]] && shift && rmmatch=1 && screened=1 && continue
+  [[ "$1" = -y ]] && shift && rmmatch=1 && continue
+  [[ "$1" = --save ]] && shift && save=1 && continue
+  { printf '%s is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script' || exit 1; }
+done
+
+if (( screened )); then
+  allfiles=( *.mp3 )
+  [[ ! "$allfiles" ]] && allfiles=( *.m4[ab] )
+  . indexopus.lib
+  printline "$bold Calling quartero4 in GNU screen $tput0"
+  printf \\n\\n
+#  allm4s=(*.m4[ab])
+  screenname="q.o.4-${allfiles[0]}"
+  screen -dmS "${screenname:0:16}" quartero4 -y "$@"
+  screen -ls
+  printf \\n\\n
+  exit
+fi
+
+SWD="$(pwd)"
+
+if [[ -n "$1" ]] && [[ -f "$1" ]]; then
+    path="$1"
+else
+  ckbook=( *@(mp3|m4@(a|b)|wav) )
+  if (( ${#ckbook[@]} == 1 )); then
+    path="$ckbook"
+  else    # i.e., elif (( ${#ckbook[@]} != 1 )); then
+    printf '\n%s%sE: No single .mp3 or .m4b/.m4a file found!%s\nListing of %s:\n' "$red" "$bold" "$tput0" "$SWD"
+    ls
+    printf '\n\nexit 1\n'
+    exit 1
+  fi
+fi
+
+if [[ "$path" != *\ --\ Audiobook.@(mp3|m4@(a|b)|wav) ]]
+  then
+    path="$ckbook"
+    printf '\n%s%sFile is not in the format of <title> -- Audiobook.@(mp3|m4a|m4b)!\n%s\n' "$red" "$bold" "$tput0"
+      ckbookfile="${ckbook%.*}"; ckbookext="${ckbook##*.}"
+#      [[ "$ckbookfile" =~ \. ]] && n_ckbookfile="${ckbookfile//./_}"
+#      if (( rmmatch )) || confirm "Rename $path to ${ckbook%.*} -- Audiobook.${ckbook##*.}? (y/n) "
+#      n_ckbook="${n_ckbookfile:-$ckbookfile} -- Audiobook.$ckbookext"
+      n_ckbook="$ckbookfile -- Audiobook.$ckbookext"
+      if (( rmmatch )) || { printf 'Rename\n %s \nto\n %s\n' \
+                                "$path" \
+                                "$n_ckbook";
+                          confirm -y; }
+        then
+          mv "$ckbook" "$n_ckbook"
+        else
+          printf "No file name given or filename invalid...\n"
+          printf "File must be in the format of \"* -- Audiobook.@(mp3|m4?|wav)\n"
+          exit
+      fi
+fi
+
+! (( force )) && [[ "$(mediainfo "$path"|grep Menu)" =~ ^Menu ]] && printf '%s has an index!\nexit 1\n' "$path" && exit 1
+
+inext="${path##*.}"
+title="${path%.*}"
+title="${title%% -- *}"
+ititle="${ulon}$title${uloff}"
+
+
+if [[ "$inext" = m4b ]]; then
+   ext="$inext"
+   outext="m4a"
+pause "$outext"
+elif [[ "$inext" = @(mp3|opus|m4a|flac|wav) ]]; then
+  ext="$inext"; outext="$inext"
+ else
+  printf "%s is not equal to a compatible file format of .mp3, .opus, .m4a, m4b.  Please correct the error and try again."
+  exit 0
+fi
+
+#printf ' inext=%s\noutext=%s\n   ext=%s' "$inext" "$outext" "$ext"
+
+count=1 #cannot change.
+
+tmp="$tmp/quartero4-$title"
+
+[[ ! -d "$tmp" ]] && mkdir "$tmp"
+
+if [[ ! -w . || ! -w "$wholefile" ]]; then
+  sudo chown -R "$USER:media" .
+fi
+
+
+for i in *"$ext"; do
+  wholefile="$i"
+(( verbose )) && pause "wholefile=$wholefile"
+  printf '\nFile to split: %s\n' "$wholefile"
+  calculatetime "$wholefile"
+  printf '\n\n%sSplitting file into %s pieces:\n%s' "$relipsis" "$threads" "$tput0"
+  while (( $count < $((1+$threads)) )); do
+    #echo '>>>>>       ffmpeg -i "$wholefile" -ss $(python3 -c "print(($count-1)*$divsec)") -to $(python3 -c "print($count*$divsec)") -acodec copy "${wholefile%.*} -- Part 0$count.$ext" '
+    #ffmpeg -ss $(python -c "print(($count-1)*$divsec)") -to $(python -c "print($count*$divsec)") -i "$whilefile" -acodec copy "${wholefile%.*} -- Part 0$count.$ext"
+#pause "$(python -c "print(($count-1)*$divsec)")"
+    ffmpeg -n \
+      -nostdin \
+      -hide_banner \
+      -stats \
+      -v error \
+      -ss $(python3 -c "print(($count-1)*$divsec)") \
+      -to $(python3 -c "print($count*$divsec)") \
+      -i file:"$wholefile" \
+      -vn \
+     -acodec copy \
+     file:"$tmp/${wholefile%% -- *} -- Part 0$count.$outext"
+    ((count++))
+  done
+done
+
+cd "$tmp"
+
+#for i in First Second Third Fourth; do
+#  ((n++))
+#  for f in *\ --\ Part\ 0"$n".*; do
+#    mv "$f" "${f/./: $i Quarter.}"
+#  done
+#done
+
+#printf '#####################################################\nentering opus.book.4\n#####################################################\n\n'
+
+printline "  Entering opus.book.4  "
+
+threads="$threads" opus.book.4
+
+#printf '#####################################################\nleaving opus.book.4\n#####################################################\n\n'
+
+printline "  Leaving opus.book.4  "
+
+mediaduration
+
+#printf '#####################################################\nentering indexopus\n#####################################################\n\n'
+
+printline "  Entering indexopus  "
+
+
+indexopus -y -t "$title" || { echo "indexopus failed, exit 1" ; exit 1; }
+
+#indexopus -y -t "$title"
+#ioexit="$?"
+#(( ioexit==1 )) && echo "indexopus failed, exit 1" && exit 1
+
+
+#printf '#####################################################\nleaving indexopus\n#####################################################\n\n'
+
+printline "  Leaving indexopus  "
+
+#printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
+
+#printf '%s\n%s\n' "$(ls *\ Audiobook.opus)" "$(mediainfo *\ Audiobook.opus|grep ^Duration\ |uniq)"
+
+
+printf '\n%smoving %s/%s -- Audiobook.opus to %s%s\n\n' "$relipsis" "$tmp" "$ititle" "$SWD" "$tput0"
+
+
+mv *\ Audiobook.opus "$SWD"
+
+lsopus=( *opus )
+(( "${#lsopus[@]}" )) &&
+  printf '%sopus files still remain in %s!\nls *opus:\n%s' "$relipsis" "$tmp" "$tput0" &&
+  printf '%s\n' "${lsopus[@]}" &&
+  printf \\n
+
+ckparts=( "$title -- Part "*.opus )
+(( "${#ckparts[@]}" )) &&
+    printf -- '--> %sThe duration of the %s -- Part *opus is %s\n\n%s' "$relipsis" "$ititle" "$duration" "$tput0" &&
+#    rmyn "Remove $ititle -- Part *.opus files? " "...Leaving $ititle -- Part *.opus files..." rm "$title"\ --\ Part\ *.opus
+    confirm -Y "Remove $ititle -- Part *.opus files?" && rm "$title -- Part "*.opus || printf '...Leaving %s -- Part *.opus files...\n' "$ititle"
+
+cd "$SWD"
+
+# for now i need to just remove the temp files....  at the end of the day, if indexopus sent them back without error, they can just be removed.
+#rm -r "$tmp"
+
+if (( rmmatch )); then
+  rm -r "$tmp"
+else
+  confirm "Remove $tmp?" && rm -r "$tmp" || printf '...Leaving %s\n' "$tmp"
+fi
+
+checkdur
+printf \\n
+(( verbose )) && pause "..."
+
+
+#printf '%s\n%s\n' "$(ls *\ Audiobook.m4?)" "$(mediainfo *\ Audiobook.m4?|grep ^Duration\ |uniq)"
+
+opusdursec=$(mediainfo --Inform="General;%Duration%" *\ --\ Audiobook.opus)
+
+## not sure what all of this is doing, but shouls be using $n_ckbook (for new $ckbook) and renaming
+## back to $ckbook if --save
+
+
+[[ ! "$allfiles" ]] && allfiles=( *.mp3 )
+
+[[ ! "$allfiles" ]] && allfiles=( *.m4[ab] )
+
+for i in "${allfiles[@]}"; do allfilesdur=$(( allfilesdur + $(mediainfo --Inform="General;%Duration%" "$i") )); done
+
+if (( rmmatch )); then # && (( opusdursec > 0 )); then
+  verifydur=$(bc <<< "scale=4; ($allfilesdur - $opusdursec) / $opusdursec " )
+  verifydur="${verifydur/#-}"
+  if [[ $(bc <<< "scale=4; $verifydur < 0.001") ]]; then
+    ! (( save )) && rm -r "${allfiles[@]}"
+    [[ "$m4bindursec" != "$opusdursec" ]] &&
+       printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' \
+              "$relipsis" \
+              "$(tput sitm)" \
+              "$(tput ritm)" \
+              "$tput0" ||
+       printf '%sDurations match!%s\n' "$relipsis" "$tput0"
+    printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
+#  elif (( allfilesdur != opusdursec )) #[[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
+  else
+    printf '%s%sThe m4b and opus audiobook durations do not match!\n' "$bold" "$red"
+    printf '%s%sm4b2opus will not automatically delete starting and temporary files!\n' "$white" "$tput0"
+    printf '\n\n'
+    printf '%s-y/-f specified, but the durations do not match!\n%s' "$bold" "$tput0"
+  fi
+else
+(( verbose )) && pause "rm -i *.@(mp3|m4@(a|b)):"
+  rm -i *.@(mp3|m4@(a|b))
+fi
+
+exit
+
+#https://www.reddit.com/r/ffmpeg/comments/107p3mh/remove_all_apart_from_audio/
+#Mon Dec 11 10:52:50 AM EST 2023
+
