@@ -12,27 +12,174 @@ boldred="$(tput bold setaf 9)"
 red="$(tput setaf 1)"
 relipsis="${red}..."
 tmpdir=/cache
+discord=1
 #rmmatch=1
 
 ## source functions #################################################################################
 . /usr/local/bin/editscript
 sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec -f printline -f confirm
 
+
+## functions ########################################################################################
+
+filecheck(){
+(( verbose )) && printf '[verbose] Entering filecheck().\n'
+  local clifilename clipath startm4a mvoutput mvec  ## not sure what to do here.  need to see the scope of these variables.
+  [[ -e "$1" ]] && clifilename="$(realpath "$1")"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
+(( verbose )) && read -rp "[verbose] \$clifilename: ${clifilename:-null}"
+  [[ -d "$clifilename" ]] && clipath="${clifilename%/}" && cd "$clipath" && unset clifilename
+  [[ -f "$clifilename" ]] && clipath="${clifilename%/*}" && cd "$clipath" && clifilename="${clifilename##*/}" ## add an || unset clifilename here?
+(( verbose )) && read -rp "[verbose] \$clifilename: ${clifilename:-null}"
+(( verbose )) && read -rp "[verbose] \$clipath: ${clipath:-null}"
+
+#  if [[ "$clipath" ]]; then
+#    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
+
+  if ! [[ -w . ]]; then
+    printf '\n[WARN] The pwd (%s) is not writable;\n  attempting to take ownership.\n\n' "$(pwd)"
+    (( verbose )) && pause "$(type own) $(which own)"
+    own .
+    if ! [[ -w . ]]; then
+      (( verbose )) && printf '\n[WARN] The `own .` command failed\n\nTrying `sudo chown $USER .`\n\n' &&
+      eza -glaa .
+      if ! sudo -n chown -R "$USER":"${group:-$USER}" .; then
+        (( verbose )) && printf '[WARN] The `sudo -n chown -R "%s":"%s" .` command failed!\n' "$USER" "${group:-$USER}"
+        (( discord )) && discorddm "m4b2opus: Attention required! confirm \`sudo chown \"$USER\" .\`"
+#       apprise "$apprisediscord" -t "Attention required m4b2opus!" -b "confirm \`sudo chown \"$USER\" .\`"
+        sudo chown -R "$USER":"${group:-$USER}" . || { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; }
+      fi
+    fi
+    ! [[ -w . ]] && { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; } || printf '\nOwnership of pwd granted to %s.\n' "$USER"
+  fi
+
+##  [[ "$clifilename" = *\ --\ Audiobook.m4b ]] && [[ -f "$1" ]] && m4bin="$1" && return 0
+#  [[ "$clifilename" = *\ --\ Audiobook.m4b ]] && [[ -f "$clifilename" ]] && { m4bin="$clifilename"; return 0; }
+#
+### at this point the pwd should either be the swd or it should be the local "$clipath" from the cd "$clipath" above.
+#(( verbose )) && read -rp "[verbose] \$(pwd): $(pwd)"
+#
+#  [[ "$clifilename" ]] && files=("$clifilename") || files=(*.m4[ba])
+#
+#(( verbose )) && read -rp "[verbose] \${files[@]}: $(printf %s\\n "${files[@]}")"
+#
+#    if (( "${#files[@]}" == 1 )); then
+#
+#      # to handle the case where there's an unindexed m4a or a misnamed m4b,
+#      # for simplicity sake, just rename to m4b
+#      # probably want to change it back at the end, but it is going to get deleted anyway
+#      if [[ "${files[0]}" = *.m4a ]]; then
+#        startm4a="${files[0]}"
+#        startfile="$startm4a"
+#        files[0]="${files[0]%.m4a}.m4b"
+#        mv "$startm4a" "${files[0]}"
+#        (( "$?" )) && { printf 'The starting file was an m4a which could not be renamed to m4b:\n mv %s %s\nInvestigate. (return 1)' "${startm4a@Q}" "${files[0]@Q}"; return 1; }
+#      fi
+#
+#      if [[ "${files[0]}" = *\ --\ Audiobook.m4b ]]; then
+#        m4bin="${files[0]}"
+#      elif [[ "${files[0]}" = *.m4b ]]; then
+#        m4bin="${files[0]}"
+###        startfile="${files[0]}"
+###   is there any reason I need to do this?
+###   could I make this conditional on ! (( save ))?
+###        m4bin="${files[0]/.m4b/ -- Audiobook.m4b}"
+###        mvoutput="$(mv "${files[0]}" "$m4bin" 2>&1)"
+#        mvec="$?"
+#        if (( mvec > 0 )); then
+#          if [[ "$mvoutput" = "mv: cannot move "*": Permission denied" ]]; then
+#            own && mv "${files[0]}" "$m4bin" || { printf 'Unable to gain write permission for %s. exit 1\n\n' "${files[@]}"; exit 1; }
+#          else
+#            printf 'Unknown error renaming %s. exit 1\n\n' "${files[@]}"
+#            exit 1
+#          fi
+#        fi
+#      else
+#        printf 'The file passed to the script was not an *m4[a|b]:\n %s\n.  This cannot be allowed to stand!\n\nInvestigate. (return 1)\n' "$1"
+#        return 1
+#      fi
+#    else
+#      printf 'No single m4b/m4a input file found or specified, please check and retry...\n\n'
+#      eza -laa --no-user
+#      printf '\n(exit 1)\n\n'
+#      exit 1
+#    fi
+
+(( verbose )) && { printf '[verbose] Leaving filecheck():\n'; pause "          \$m4bin: $m4bin"; }
+#  fi
+return 0
+}
+##--> filecheck() <--#################################################################################
+
+extractcover(){
+  local file="$1"
+  if mediainfo "$1"|grep -A1 '^Image'|grep -qE '^Type\s+:\s+Cover';  then
+    coverfile="${file%.*} -- Cover.jpg"
+    (( verbose )) &&
+     { printf 'Source file = %s\n' "$file"
+       printf ' Cover file = %s\n' "$coverfile"
+       printf '\nMediaInfo of source file:\n'
+       readarray -t miout < <(mediainfo "$file")
+       printf '     %s\n' "${miout[@]}"; }
+    (( verbose )) && read -rp "$file $coverfile"
+    ffmpegcmd=( ffmpeg -i "$file" -an -update 1 -frames:v 1 "file:$coverfile" -y )
+    if [[ -f "$coverfile" ]]; then
+      if (( rmmatch )) || [[ "$STY" ]]; then
+        mv "$coverfile" "$coverfile~"
+        ffmpegcmd+=(-y)  ## probably unnecessary, but do not want to hold up screened process
+        printf 'File %1$s exists. Moving to %1$s~ and extracting cover.\n' "$coverfile"
+      else
+        (( verbose )) &&
+         { printf 'MediaInfo of existing cover file:\n' "$coverfile"; readarray -t miout < <(mediainfo "$coverfile"); printf '     %s\n' "${miout[@]}"; }
+        confirm "$(printf 'Overwrite existing cover file?' "$coverfile")" && ffmpegcmd+=(-y) ||
+          printf 'Not overwriting existing cover file. (return 1)'
+      fi
+    fi
+
+    (( verbose )) && printf 'ffmpeg call: %s\n' "${ffmpegcmd[*]}"
+
+    if (( verbose )); then "${ffmpegcmd[@]}"
+    else "${ffmpegcmd[@]}" &> /dev/null; fi
+
+    ec="$?"
+
+    (( verbose )) && { readarray -t miout < <(mediainfo "$coverfile"); printf '     %s\n' "${miout[@]}"; }
+    printf %s\\n "$coverfile"
+  else
+    printf 'No embedded cover found in: %s\n' "$file" >&2
+    return 1
+  fi
+}
+
+##--> extractcover() <--#############################################################################
+
+## flag processing ###################################################################################
+
 args=(mp32opus)
 
 while (( $# > 0 )); do
-  [[ "$1" = "--edit"        ]] && editscript && exit
-  [[ "$1" = @(--screen|-s)  ]] && { screened=1; shift; continue; }
-  [[ "$1" = "-y"            ]] && { args+=("$1"); rmmatch=1; shift; continue; }
-  [[ "$1" = "-n"            ]] && { args+=("$1"); no=1; unset rmmatch; shift; continue; }
-  [[ "$1" = "--stats"       ]] && { args+=("$1"); stats=true; shift; continue; }
-  [[ "$1" = @(-ys|-yes)     ]] && { args+=("-y"); (( screened=rmmatch=1 )); shift; continue; }
-  [[ "$1" = "--save"        ]] && { args+=("$1"); save=1; shift; continue; }
-  [[ "$1" = @(-D|--discord) ]] && { args+=("$1"); discord=1; . ~/.config/apprise.conf; shift; continue; }
+  [[ "$1" =         "--edit" ]] && editscript && exit
+  [[ "$1" =             "-y" ]] && { args+=("$1"); args+=(--save); (( save=rmmatch=1 )); shift; continue; }
+  [[ "$1" =             "-Y" ]] && { args+=("$1"); rmmatch=1; shift; continue; }
+  [[ "$1" =             "-n" ]] && { args+=("$1"); no=1; unset rmmatch; shift; continue; }
+  [[ "$1" =         "--save" ]] && { args+=("$1"); save=1; shift; continue; }
+  [[ "$1" =        "--stats" ]] && { args+=("$1"); stats=1; shift; continue; }
+  [[ "$1" =   @(--screen|-s) ]] && { screened=1; shift; continue; }
+  [[ "$1" = @(-|--)@(ys|yes) ]] && { args+=("-y"); (( screened=rmmatch=1 )); args+=(--save); shift; continue; }
+  [[ "$1" = @(-|--)@(Ys|Yes) ]] && { args+=("-Y"); (( screened=rmmatch=1 )); shift; continue; }
+  [[ "$1" =  @(-v|--verbose) ]] && { args+=("$1"); verbose=1; shift; continue; }
+  [[ "$1" =  @(-D|--discord) ]] && { args+=("$1"); unset discord; . ~/.config/apprise.conf; shift; continue; }
   [[ -d "$1" ]] && { args+=("$1"); clipath="$1"; clidir="$1"; shift; continue; }
   [[ -f "$1" ]] && { args+=("$1"); clipath="$1"; clifile="$1"; shift; continue; }
-  { printf '%s is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script?' || exit 1; }
+  { printf '"%s" is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script?' || exit 1; }
 done
+
+[[ ! "$clifile" ]] && { allm4s=(*.m4[ab])
+                        printf '\n%s/*.m4[ab]: \n%s' "$(pwd)" "$red"
+                        printf ' %s\n' "${allm4s[@]}"
+                        printf '%s' "$white"; }
+
+filecheck "${clifile:-""}"
+(( "$?" )) && { printf 'The files failed filecheck()!\nInvestigate (exit 1)\n.'; exit 1; }  # this function returns "$m4bin"
 
 printline "$bold  Welcome to ${0##*\/}  $tput0"
 printf \\n
@@ -40,12 +187,23 @@ printf \\n
 if (( screened )); then
   printline "$bold Calling ${args[*]} in GNU screen $tput0"
   printf \\n\\n
-## this needs to be fixed:
-  screenname="mp32opus-${PWD##*/}"
-  ! (( no )) && args+=(-y)
+
+  if (( verbose )) && { confirm -y "$0 was called to screen with verbose on.\nThis may result in stops in the script while in screen.\nTurn verbose off?"; printf \\n\\n; }; then
+     for i in "${!args[@]}"; do
+       [[ "${args[i]}" = '-v' ]] && unset 'args[i]'
+     done
+     args=("${args[@]}")       ## compact array
+  fi
+
+## this needs to be checked:
+  [[ "$clipath" ]] && screenname="mp32opus-$(basename "$clipath")" ||
+    screenname="mp32opus-${PWD##*/}"
+  ! (( no )) && [[ " ${args[*]} " != *\ -Y\ * ]] && args+=("-y")
   printf '%s ' "${args[@]}"
   printf \\n
-  screen -dmS "${screenname:0:16}" "${args[@]}"
+#  screen -dmS "${screenname:0:16}" "${args[@]}"
+#  screen -dmS "${screenname:0:16}" bash -i -c "$(printf '%q ' "${args[@]}")"
+  screen -dmS "${screenname:0:16}" bash -i "${args[@]}"
   screen -ls                                     #could probably add some logic to not delete shit
   printf \\n\\n                                  #leaving that for later, but screen implies -y as
   exit                                           #it doesn't really work otherwise?
@@ -62,10 +220,18 @@ allfiles=(*.@(mp3|m4@(a|b)))
 [[ "$rmmatch" ]] && args=("-y") || unset args  #this resets args from "$@"
 
 if [[ "$clifile" ]] || (( "${#allfiles[@]}" == 1 )); then
-  args+=("$clifile")
-(( verbose )) &&  pause "$(printf quartero4\ %s\\n "${args[@]}")"
+  (( save )) && args+=(--save)
+  (( verbose )) && args+=(-v)
+  args+=(-D) ## unset the discord flag since this should be doing the notification.
+  [[ "$clifile" ]] && args+=("$clifile")
+  (( verbose )) &&  pause "$(printf quartero4\ %s\\n "${args[*]}")"
   printline "${bold}  Calling ${white}quartero4 ${args[@]}  ${tput0}"
+#  args=(quartero4 "${args[@]}")
+#  printline "${bold}  Calling ${white}${args[*]}${tput0} "
   quartero4 "${args[@]}"
+#  "${args[@]}"
+  ec="$?"
+  (( ec )) && { printf '[ERROR] quartero4 %s did not exit cleanly. Investigate. (exit %s)\n' "${args[*]}" "$ec"; exit "$ec"; }
 else
   printline "$bold  $(pwd):  $tput0"
   eza -l --no-user
@@ -78,7 +244,11 @@ else
 ## this check is a false sense of security as there's no way at present to check if there's not more than
 ## one book in the same format
 
-  (( "${#initdurations[@]}" != 1 )) && { printf 'There are more than two different formates reported by mediaduration and automatic deletion cannot proceed. Investigate.\n'; confirm "Continue?"; rmmatch=0; }
+  (( "${#initdurations[@]}" != 1 )) &&
+   { printf 'There are more than two different formates reported by mediaduration and automatic deletion cannot proceed. Investigate.\n';
+     confirm "Continue?" || exit 130; rmmatch=0; }
+
+  (( "${#initdurations[@]}" == 1 )) && ext="${initdurations[0]#*.}" && ext="${ext%% *}"
 
   tmpdir="$tmpdir/mp32opus-${PWD##*/}"
 
@@ -93,8 +263,14 @@ else
   { mkdir -p "$tmpdir" && cd "$tmpdir"; } || { printf 'Failure of `mkdir/cd %s` occurred! Investigate. (exit 1)\n' "$tmpdir"; exit 1; }
 
   eza -gla --no-user
-(( verbose)) &&  pause "pwd=$PWD"
+  (( verbose )) && args+=('-v')
+  (( verbose )) && pause "\$args=$(printf %s\\n "${args[@]}")"
+  (( verbose )) && pause "pwd=$PWD"
   indexopus "${args[@]}"
+  ec="$?"
+  (( ec )) && (( ec == 1 )) && { printf '\nThe indexopus script did not exit cleanly. Investigate. (exit %s)\n\n' "$ec"; exit "$ec"; } # i don't know for sure that the ec from indexopus can\'t be other than 0, 1, 2.
+  (( ec == 2 )) && iorm=true # this is something that is part of the m4b2opus integration with indexopus.  iorm *probably* means "indexopus rm" such that the user's said yes to a prompt to remove shit.
+
 #readarray -t durations < <(mediaduration|sed 's/^[^:]*: //')
 
   [[ "$tmpdir" ]] && mv *\ --\ Audiobook.opus "$swd"
@@ -103,7 +279,13 @@ else
 
   tmpdirfiles=(*)
   ## the tmpdir should have been emptied already...try to remove it now if so...
-  ! (( "${#tmpdirfiles[@]}" )) && { pause "Removing $tmpdir; this confirmation needs to be removed eventually."; rmdir "$tmpdir"; }
+  if (( "${#tmpdirfiles[@]}" )); then
+    eza -gla --no-user --color=always "$tmpdir"
+    printf \\n
+    confirm "The temp directory ($tmpdir) is not empty! Remove anyway?" && rmdir "$tmpdir"
+  else
+    rmdir "$tmpdir"
+  fi
 
 
 ## This is yet to be implemented in opus.book.4 as above...
@@ -115,7 +297,7 @@ else
   readarray -t durations < <(mediaduration)
   printf %s\\n "${durations[@]}"
 
-(( "${#durations[@]}" != 2 )) && { printf 'There are more than two different formates reported by mediaduration and automatic deletion cannot proceed. Investigate.\n'; confirm "Continue?"; rmmatch=0; }
+  (( "${#durations[@]}" != 2 )) && { printf 'There are not exactly two different formats reported by mediaduration and automatic deletion cannot proceed. Investigate.\n'; confirm "Continue?"; rmmatch=0; }
 
   [[ "${durations[-1]}" != Duration\ of\ .opus\ files* ]] && noopus=1
 
@@ -125,7 +307,7 @@ else
       break
     done
     (( noopus )) &&
-      { printf 'There was no opus duration found by mediaduration. Investigate. (exit 1)';
+      { printf 'There was no opus duration found by mediaduration. Investigate. (exit 1)\n\n';
         exit 1; }
   fi
 
@@ -136,9 +318,11 @@ else
   opusdursec="$(sex2sec "$opusdur")"
   sourcedursec="$(sex2sec "$sourcedur")"
 
+
   title=(*\ --\ Audiobook.opus)
   (( "${#title[@]}" == 1 )) && title="${title% -- Audiobook.opus}"
   ioutput="$(tput sitm)$title$(tput ritm) -- Audiobook.opus"
+  read -rp "$(printf '[verbose] title: %s\n' "$title")"
 
   if (( opusdursec > 0 )); then
     verifydur=$(( (1000 * (sourcedursec - opusdursec)) / opusdursec ))
@@ -147,13 +331,14 @@ else
     printf \\n
 
     if (( verifydur <= 1 )); then  #this is 0.1% difference
-      { (( rmmatch )) || confirm -y "Durations are within 0.1%.\n  $(ls *mp3) \n\nRemove starting mp3 files?"; } && { rm *.mp3; rmdir "$tmpdir"; }
+      { (( rmmatch )) || confirm -y "Durations are within 0.1%.\n$(ls *$ext) \n\nRemove starting $ext files?"; } && ! (( save )) && { rm -vf *."$ext"; rmdir "$tmpdir"; }
       [[ "$sourcedursec" != "$opusdursec" ]] &&
          printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tput sitm)" "$(tput ritm)" "$tput0" ||
          printf '%sDurations match!%s\n' "$relipsis" "$tput0"
       printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$(pwd)" "$ioutput" "$tput0"
-      (( discord )) && apprise "$apprisediscord" -t "$(basename "$0") completed:" -b "${title:-title unavailable}"
-      exit
+#      (( discord )) && apprise "$apprisediscord" -t "$(basename "$0") completed:" -b "${title:-title unavailable}"
+     (( discord )) && discorddm "mp32opus completed: ${title:-title unavailable}"
+     exit
     elif (( rmmatch )) && (( verifydur )); then
       printf '%s%sThe source and opus audiobook durations do not match!\n' "$bold" "$red"
       printf '%s%s%s will not automatically delete starting and temporary files!\n' "$white" "$tput0" "$0"
@@ -172,4 +357,6 @@ else
 fi
 
 
-(( discord )) && apprise "$apprisediscord" -t "$(basename "$0") completed:" -b "${title:-title unavailable}"
+#(( discord )) && apprise "$apprisediscord" -t "$(basename "$0") completed:" -b "${title:-title unavailable}"
+
+(( discord )) && discorddm "mp32opus completed: ${title:-${allfiles[0]:-title unavailable}}"

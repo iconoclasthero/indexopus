@@ -1,0 +1,785 @@
+#!/bin/bash
+#depends opustags, ffmpeg, indexopus, opus.book.4, mplayer, mediaduration
+#need to address existing m4a files in the convert directory prior to the m4b to m4a split.
+
+. /usr/local/bin/editscript.sh
+
+#trap pause DEBUG
+shopt -s nullglob
+shopt -s extglob
+
+## definitions #################################################################################
+[[ "$TERM" = screen ]] && TERM=screen.xterm-256color
+[[ "$TERM" = dummy ]] && TERM=xterm-256color
+export TERM
+
+threads=4                #this should be assigned when ~/.config/indexopus.conf is sourced
+scriptpath="$(realpath "$0")"
+scriptname="${scriptpath##*\/}"
+ulon="$(tput smul)"
+uloff="$(tput rmul)"
+iton="$(tput sitm)" #italics on
+itoff="$(tput ritm)" #italics off
+bold="$(tput bold)"
+tput0="$(tput sgr0)"
+red="$(tput setaf 9)"
+white="$(tput setaf 15)"
+yellow="$(tput setaf 11)"
+relipsis="$red..."
+stamp="$(date +%s)"
+
+## load functions ##############################################################################
+## printline()
+## pause()
+## checkdur() ## reviewed and refactored Tue Jan 14 08:15:13 AM EST 2025
+
+. "$HOME/bin/gits/indexopus/indexopus.lib"
+
+## load defaults ###############################################################################
+. "$HOME/.config/indexopus.conf"
+
+
+fnrmr(){
+  local red relipsis="${red}..."
+  [[ "$1" = "-r" ]] && red="${tput setaf 7}"
+
+  fn_rmfile(){
+    printf '%s\n%s is a file:\n%s' "$relipsis" "$bold" "$1" "$white"
+    ls -ltr "$1"
+    printf '%s\nrmr: remove this file? (y/n) %s' "$red" "$tput0"
+    old_stty_cfg=$(stty -g) # https://stackoverflow.com/questions/226703/how-do-i-prompt-for-yes-no-cancel-input-in-a-linux-shell-script
+    stty raw -echo
+    answer=$(head -c 1)
+    stty "$old_stty_cfg"  # Careful playing with stty
+
+    if [ "$answer" != "${answer#[Yy]}" ]
+      then
+      rm "$1"
+      printf "\n\n"
+      if [ ! -e "$1" ]
+        then
+        printf '\n%sDone! File \"%s\" removed.\n\n%s' "$relipsis" "$1" "$tput0"
+      else
+        printf "\n\n%s%s%s not removed, check permissions:\n\n%s" "$relipsis" "$bold" "$1" "$tput0"
+        ls -ltr "$1"
+      fi
+    else
+      printf '\n\n%sFiles remain:\n%s \n%s\n' "$relipsis" "$(ls -ltr "$1")" "$tput0"
+    fi
+
+#	There isn't really anything wrong with this code, but the above method removes the CR
+#	There're other ways to do this https://stackoverflow.com/questions/226703/how-do-i-prompt-for-yes-no-cancel-input-in-a-linux-shell-script
+
+   }
+  ##--> fn_rmfile() <--###############################################################################
+
+
+for path in "$@"
+  do
+    if [[ -d "$path" ]]; then
+	printf '%s%s\n' "$red" "$bold"
+	if rmdir "$path" 2>/dev/null; then
+	   printf 'Removing %s... \n\n$ ls %s/ \n\n' "$path" "$path"
+	else
+	   printf '\n%s' "$tput0"
+	   find "$path"
+ 	   printf '%s' "$bold"
+	   rm -rI "$path"
+	   printf '%s' "$tput0"
+	fi
+
+	if [ ! -e "$path" ]; then
+      	   printf '%s\nDone!\n' "$relipsis"
+      	else
+      	   printf '\n\n%s%sRemoval Failed!%s\n\n%s is still present check ownership and permissions:\n' "$relipsis" "$bold" "$tput0" "$path"
+      	   ls -lad --color=always "$path"
+	fi
+  elif [[ -f "$path" ]]; then
+    fn_rmfile "$path"
+
+  else
+    printf '\n\n No such directory or file found!\n\n'
+
+  fi
+
+done
+}
+##--> fnrmr() <--###################################################################################
+
+filecheck(){
+(( verbose )) && printf '[verbose] Entering filecheck().\n'
+  local clifilename clipath startm4a mvoutput mvec  ## not sure what to do here.  need to see the scope of these variables.
+  [[ -e "$1" ]] && clifilename="$(realpath "$1")"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
+(( verbose )) && printf '[verbose] $clifilename: %s\n' "${clifilename:-null}"
+  [[ -d "$clifilename" ]] && clipath="${clifilename%/}" && cd "$clipath" && unset clifilename
+  [[ -f "$clifilename" ]] && clipath="${clifilename%/*}" && cd "$clipath" && clifilename="${clifilename##*/}" ## add an || unset clifilename here?
+(( verbose )) && printf '[verbose] $clifilename: %s\n' "${clifilename:-null}"
+(( verbose )) && printf '[verbose] $clipath: %s\n' "${clipath:-null}"
+
+#  if [[ "$clipath" ]]; then
+#    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
+
+  if ! [[ -w . ]]; then
+    printf '\n[WARN] The pwd (%s) is not writable;\n  attempting to take ownership.\n\n' "$(pwd)"
+    (( verbose )) && pause "$(type own) $(which own)"
+    own .
+    if ! [[ -w . ]]; then
+      (( verbose )) && printf '\n[WARN] The `own .` command failed\n\nTrying `sudo chown $USER .`\n\n' &&
+      eza -glaa .
+      if ! sudo -n chown -R "$USER":"${group:-$USER}" .; then
+        (( verbose )) && printf '[WARN] The `sudo -n chown -R "%s":"%s" .` command failed!\n' "$USER" "${group:-$USER}"
+        (( discord )) && discorddm "m4b2opus: Attention required! confirm \`sudo chown \"$USER\" .\`"
+#       apprise "$apprisediscord" -t "Attention required m4b2opus!" -b "confirm \`sudo chown \"$USER\" .\`"
+        sudo chown -R "$USER":"${group:-$USER}" . || { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; }
+      fi
+    fi
+    ! [[ -w . ]] && { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; } || printf '\nOwnership of pwd granted to %s.\n' "$USER"
+  fi
+
+#  [[ "$clifilename" = *\ --\ Audiobook.m4b ]] && [[ -f "$1" ]] && m4bin="$1" && return 0
+  [[ "$clifilename" = *\ --\ Audiobook.m4b ]] && [[ -f "$clifilename" ]] && { m4bin="$clifilename"; return 0; }
+
+## at this point the pwd should either be the swd or it should be the local "$clipath" from the cd "$clipath" above.
+(( verbose )) && printf '[verbose] $(pwd): %s\n' "$(pwd)"
+
+  [[ "$clifilename" ]] && files=("$clifilename") || files=(*.m4[ba])
+
+(( verbose )) && read -rp "[verbose] \${files[@]}: $(printf %s\\n "${files[@]}")"
+
+    if (( "${#files[@]}" == 1 )); then
+
+      # to handle the case where there's an unindexed m4a or a misnamed m4b,
+      # for simplicity sake, just rename to m4b
+      # probably want to change it back at the end, but it is going to get deleted anyway
+      if [[ "${files[0]}" = *.m4a ]]; then
+        startm4a="${files[0]}"
+        startfile="$startm4a"
+        files[0]="${files[0]%.m4a}.m4b"
+        mv "$startm4a" "${files[0]}"
+        (( "$?" )) && { printf 'The starting file was an m4a which could not be renamed to m4b:\n mv %s %s\nInvestigate. (return 1)' "${startm4a@Q}" "${files[0]@Q}"; return 1; }
+      fi
+
+      if [[ "${files[0]}" = *\ --\ Audiobook.m4b ]]; then
+        m4bin="${files[0]}"
+      elif [[ "${files[0]}" = *.m4b ]]; then
+        m4bin="${files[0]}"
+##        startfile="${files[0]}"
+##   is there any reason I need to do this?
+##   could I make this conditional on ! (( save ))?
+##        m4bin="${files[0]/.m4b/ -- Audiobook.m4b}"
+##        mvoutput="$(mv "${files[0]}" "$m4bin" 2>&1)"
+        mvec="$?"
+        if (( mvec > 0 )); then
+          if [[ "$mvoutput" = "mv: cannot move "*": Permission denied" ]]; then
+            own && mv "${files[0]}" "$m4bin" || { printf 'Unable to gain write permission for %s. exit 1\n\n' "${files[@]}"; exit 1; }
+          else
+            printf 'Unknown error renaming %s. exit 1\n\n' "${files[@]}"
+            exit 1
+          fi
+        fi
+      else
+        printf 'The file passed to the script was not an *m4[a|b]:\n %s\n.  This cannot be allowed to stand!\n\nInvestigate. (return 1)\n' "$1"
+        return 1
+      fi
+    else
+      printf 'No single m4b/m4a input file found or specified, please check and retry...\n\n'
+      eza -laa --no-user
+      printf '\n(exit 1)\n\n'
+      exit 1
+    fi
+
+(( verbose )) && { printf '[verbose] Leaving filecheck():\n'; printf '          pwd: %s\n' "$(pwd)"; pause "          \$m4bin: $m4bin"; }
+#  fi
+return 0
+}
+##--> filecheck() <--#################################################################################
+
+calctime(){
+  duration=$(find -type f -name "$1" -print0 |
+			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
+			tail -n 1)
+  hours=$(find -type f -name "$1" -print0 |
+			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' |
+			tail -n 1)
+  minutes=$(find -type f -name "$1" -print0 |
+			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' |
+			tail -n 1)
+  seconds=$(find -type f -name "*$1" -print0 |
+			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' |
+			tail -n 1)
+
+  [[ "$hours" =~ "0*(.*)" ]] && hours=${BASH_REMATCH[1]}
+  [[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
+  [[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
+
+#BASH_REMATCH is an array variable in Bash that contains the results of the most recent pattern match operation performed using the =~ operator with the [[ ... ]] conditional expression.
+#
+#When you use =~ to match a pattern against a string, Bash populates the BASH_REMATCH array with the text that matches the pattern. The first element (BASH_REMATCH[0]) contains the portion of the string that matches the entire regular expression, while subsequent elements (BASH_REMATCH[1], BASH_REMATCH[2], etc.) contain the portions of the string that match the corresponding capture groups in the regular expression.
+#
+#Here's a breakdown of how BASH_REMATCH is populated:
+#
+#BASH_REMATCH[0]: Contains the portion of the string that matches the entire regular expression.
+#BASH_REMATCH[1]: Contains the portion of the string that matches the first capture group ( ... ).
+#BASH_REMATCH[2]: Contains the portion of the string that matches the second capture group ( ... ), if present.
+#and so on...
+#In the script provided earlier, we used BASH_REMATCH[1] to extract the content inside double quotes. If the pattern \"(.*)\" matches successfully, the content inside the double quotes is captured and stored in BASH_REMATCH[1].
+
+# printf "Duration %s\n" "$duration"
+
+ hours="${hours#0}"
+ hourmin=$(( hours*60 ))
+ ##echo "hourmin $hourmin"
+ minutes="${minutes#0}"
+ secmin=$((hourmin+minutes))
+ secmin=$((secmin*60))
+ seconds="${seconds#0}"
+ ##echo "secmin  $secmin"
+ ##echo "seconds $seconds"
+ totalsec=$(( "$seconds" + "$secmin" ))
+ ##echo "totalsec $totalsec"
+ divsec=$(python3 -c "print($totalsec/4)")
+ ##echo "divsec $divsec"
+}
+##--> calctime{} <--#############################################################################
+
+
+m4bsplit(){
+## Original code from: http://crunchbang.org/forums/viewtopic.php?id=38748#p414992
+## m4bronto
+  local bpath outputdir START first start end partnum n chapter max_digits
+  outputdir="$2"
+  START=1
+  bpath="$(basename "$(pwd)")"
+#  ffmpeg -i file:"$1" 2> "/tmp/.tmp$stamp"
+  ffprobe -i file:"$1" 2> "/tmp/.tmp$stamp"
+
+  chapters=$(grep -cE 'Chapter #[[:digit:]]:[[:digit:]]{1,3}: start' "/tmp/.tmp$stamp")
+
+  (( chapters < 100 )) && max_digits=2 || max_digits=3
+
+  n="$START"
+  while read -r first _ _ start _ end; do
+    if [[ "$first" == "Chapter" ]]; then
+      read  # discard the Metadata line
+      read _ _ chapter
+
+      chapter="${chapter//\//\\}"  # Escape slashes in chapter titles
+      partnum=$(printf "%0${max_digits}d" "$n")
+
+      if (( ${#chapter} > 200 )); then
+        chapter="${chapter:0:200}…"  # Truncate chapter title to 100 characters
+      fi
+
+      local outfile="$outputdir/$title -- Part $partnum: $chapter.m4a"
+      printf '%sCreating %s\n' "$relipsis" "$outfile"
+
+      ffmpeg -n \
+             -nostdin \
+             -hide_banner \
+             -stats \
+             -v error \
+             -ss "${start%?}" \
+             -to "$end" \
+             -i file:"$1" \
+             -vn \
+             -codec copy \
+             file:"$outfile"
+
+      ((n++))
+    fi
+  done < "/tmp/.tmp$stamp"
+
+  rm "/tmp/.tmp$stamp"
+}
+
+##--> m4bsplit() <--##################################################################################
+
+rmyn(){
+ local quiet
+ [[ "$1" = '-q' ]] && quiet=true && shift
+  while true
+  read -rp "$1" rmyn
+   do
+     case "$rmyn" in
+       [yY] ) #"${@:3}"; break;;
+         if [[ $quiet ]]; then
+            "${@:3}" >/dev/null
+          else
+            "${@:3}"
+          fi
+          break;;
+       [nN] ) printf '%s\n' "$2"; break;;
+          * ) printf "Invalid response...\n";;
+     esac
+   done
+}
+##--> rmyn() <--######################################################################################
+
+
+noindexsplit(){
+#  local m4bin="$1"
+## it appears that the ffmpeg call chokes on there being colons in the input file name
+## it will either need to be renamed locally and reneamed back after processing
+## or it will require a global change and thus m4bin must be global or otherwise exported back
+
+  local i n partno convertdir="$2"
+(( verbose )) && { printf '[verbose] entering %s()\n[verbose] local $m4bin: %s\n' "${FUNCNAME[0]}" "$m4bin"; pause "[verbose] local \$convertdir: $convertdir"; }
+
+  printf '%s%sNo index found in %s!\n...%s%sThe item will be spiit into %s parts for efficient ffmpeg conversion.\n...Reindex later with chapter information pulled from the web.\n\n' "$relipsis" "$bold" "$m4bin" "$tput0" "$red" "$partno"
+    partno=1
+    calctime "$m4bin"  #why?  i think this is the only call to calctime?  there's no need for it here...
+                       #oh contrare! this is what provides $divsec and the script fails without that line!
+(( verbose )) && pause "[verbose] \$divsec: $divsec"
+
+## will need to determine if this is enough checking:
+
+  [[ "$m4bin" = *\ --\ Audiobook.m4? ]] && partna="${m4bin%% -- *}" || partna="${m4bin}"
+  [[ "$partna" = *.m4[ab] ]] && partna="${partna%.m4*}"
+
+    for ((partno=1; partno <= $(( threads)); partno++ )); do
+       printf '%s%s: %s' "$relipsis" "$partno" "$tput0"
+
+(( verbose )) && { printf '\n[verbose] -ss $(python3 -c "print(($partno-1)*$divsec)"): $(python3 -c "print(%s*%s)"): %s\n\n[verbose] -to $(python3 -c "print($partno*$divsec)"): -to $(python3 -c "print(%s*%s)"): %s\n\n' "$partno" "$divsec" "$(python3 -c "print(($partno-1)*$divsec)")" "$partno" "$divsec" "$(python3 -c "print($partno*$divsec)")";
+printf '[verbose] $(pwd): %s\n' "$(pwd)";
+
+pause "[verbose] \$convertdir/\$partna -- Part 0\$partno.m4a: $convertdir/$partna -- Part 0$partno.m4a"; }
+
+#[[ "$m4bin" = *:* ]] && { m4bin="${m4bin//:/_}"; mv "$1" "$m4bin"; (( verbose )) && pause "[verbose] \$m4bin: $m4bin"; }
+#[[ "$m4bin" = *:* ]] && { m4bin="${m4bin//:/\\:}"; (( verbose )) && pause "[verbose] \$m4bin: $m4bin"; }
+
+       ffmpeg -n \
+         -nostdin \
+         -hide_banner \
+         -stats \
+         -v error \
+         -ss $(python3 -c "print(($partno-1)*$divsec)") \
+         -to $(python3 -c "print($partno*$divsec)") \
+         -i file:"${m4bin}" \
+         -vn \
+         -acodec copy \
+         file:"$convertdir/$partna -- Part 0$partno.m4a"
+#         file:"$convertdir/${m4bin%% -- *} -- Part 0$partno.m4a"
+       printf '%s' "$tput0"
+    done
+    cd "$convertdir"
+    for ((i=1; i<=parts; i++)); do
+      printf -v i '%02d\n' "$i"
+      ((n++))
+      for f in *\ --\ Part\ 0"$n".*; do
+        mv "$f" "${f/./: Part $i.}"
+      done
+    done
+
+(( verbose )) && pause "Leaving ${FUNCNAME[0]}()"
+
+}
+##--> noindexsplit() <--###########################################################################
+
+##--> Main Code <--################################################################################
+##--> m4b2opus <--#################################################################################
+
+printf \\n
+(( verbose )) && { printf -- %s\  "$@"; printf \\n; read -rp "--"; }
+
+discord=1
+args=(m4b2opus)
+
+while (( $# > 0 )); do
+  [[ "$1" =           --edit ]] && { editscript; exit; }
+  [[ "$1" =             "-y" ]] && { (( rmmatch=save=1 )); args+=(--save); shift; continue; }
+  [[ "$1" =             "-Y" ]] && { args+=("$1"); rmmatch=1; shift; continue; }
+  [[ "$1" =             "-n" ]] && { args+=("$1"); no=1; shift; continue; }
+  [[ "$1" =         "--save" ]] && { args+=("$1"); save=1; shift; continue; }
+  [[ "$1" =        "--stats" ]] && { args+=("$1"); stats=1; shift; continue; }
+  [[ "$1" =      "--checked" ]] && { checked=1; shift; continue; }
+  [[ "$1" =   @(--screen|-s) ]] && { screened=1; shift; continue; }
+  [[ "$1" = @(-|--)@(ys|yes) ]] && { (( rmmatch=screened=1 )); args+=(--save); shift; continue; }
+  [[ "$1" = @(-|--)@(Ys|Yes) ]] && { (( rmmatch=screened=1 )); args+=(-Y); shift; continue; }
+  [[ "$1" =  @(-v|--verbose) ]] && { args+=("$1"); verbose=1; shift; continue; }
+  [[ "$1" =  @(-D|--discord) ]] && { args+=("$1"); discord=0; shift; continue; }
+#   { args+=("$1"); shift; discord=1; . "$HOME/.config/apprise.conf"; continue; }
+  [[ -f "$1" || -d "$1" ]] && (( checked )) && { clifile="$1"; args+=("$clifile"); shift; continue; }
+  [[ -f "$1" || -d "$1" ]] && { clifile="$(realpath "$1")"; args+=("$clifile"); shift; continue; }
+## maybe the clifle="$1" if --checked is set?  is that even something that can be done? yes, but it requires a lot more processing in the event that checked is after clifile.  maybe that doesn't matter since the user should not be calling --checked.
+## the question becomes, what happens if i'm calling m4bin from a different directory?  i guess filecheck() should be changing directory and providing a valid $m4bin regardless?
+  [[ "$1" = "" ]] && { shift; continue; }
+  { printf '%s is unrecognized.\n' "$1"; shift;
+    { confirm -y 'Proceed with script?' && continue; } || exit 1; }
+done
+
+[[ ! "$clifile" ]] && { allm4s=(*.m4[ab])
+                        printf '\n%s/*.m4[ab]: \n%s' "$(pwd)" "$red"
+                        printf ' %s\n' "${allm4s[@]}"
+                        printf '%s' "$white"; }
+
+(( verbose )) && printf '[verbose] Status of $STY: %s\n' "$STY"
+## a check of $STY here doesn't necessarily work, e.g., if the user calls m4b2opus from a screen to another screen.
+## the question is, does this logic need to be run on every invocation or should it be moved inside if (( screened )) ?
+## why else would it be relevant?  --checked isn't something the user should be calling from the cli.
+
+if (( checked )); then
+  m4bin="$clifile" #this could be handled in the flag parsing block
+else
+  if filecheck "${clifile:-""}"; then  # this function returns "$m4bin"
+    args+=(--checked)
+    checked=1
+    [[ "$clifile" ]] &&
+       for i in "${!args[@]}"; do
+         [[ "${args[i]}" = "$clifile" ]] && unset 'args[i]'
+       done
+    args+=("$m4bin")  ##this is primarily for when it's screened.
+  else
+    printf 'The files failed filecheck()!\nInvestigate (exit 1)\n.'
+    exit 1
+  fi
+fi
+
+(( verbose )) && printf '[verbose] Contents of "${args[*]}": %s\n' "${args[*]}"
+(( verbose )) && printf '[verbose] Status of $rmmatch: %s\n' "$rmmatch"
+(( verbose )) && printf '[verbose] Status of $save: %s\n' "$save"
+(( verbose )) && printf '[verbose] Status of $screened: %s\n' "$screened"
+(( verbose )) && printf '[verbose] Status of $stats: %s\n' "$stats"
+(( verbose )) && printf '[verbose] Status of $no: %s\n' "$no"
+(( verbose )) && printf '[verbose] Status of $m4bin: %s\n' "$m4bin"
+(( verbose )) && printf '[verbose] Result of pwd: %s\n' "$(pwd)"
+(( verbose )) && pause "[verbose] Contents of \$clifile: ${clifile:-null}"
+
+if (( screened )); then
+  printf \\n\\n
+  printline "$bold Calling m4b2opus in GNU screen $tput0"
+  printf \\n\\n
+  (( verbose )) && printf '[verbose] Result of pwd: %s\n' "$(pwd)"
+  if (( verbose )) && confirm -y "$0 was called to screen with verbose on.\nThis may result in stops in the script while in screen.\nTurn verbose off?"; then
+    printf \\n\\n
+    for i in "${!args[@]}"; do
+      [[ "${args[i]}" = '-v' ]] && unset 'args[i]'
+    done
+    args=("${args[@]}")       ## compact array done below
+    printf 'Contents of ${args[@]} after removing -v and compacting: %s\n' "${args[@]}"
+  fi
+
+## this method is probably not ideal...  if m4b2opus is called from screen then using either "$STY" or any of the flags for calling to screen  are not ideal...  what we want is to not call screen recursively (so don't put them in the args) but to not rerun filecheck() unnecessarily
+## using the --checked flag and $checked flag variable seem to accomplish this.
+#  for i in "${!args[@]}"; do
+#    [[ "${args[i]}" = @(@(-s|--screen)|@(-|--)@(ys|yes|Ys|Yes)) ]] && unset 'args[i]'
+#  done
+#  args=("${args[@]}")       ## compact array
+
+#  (( checked )) &&  ## adding an extra layer of protection
+#  [[ "$m4bin" != "$clifile" ]] &&  ##not sure if this is a good idea.
+#  args+=("$m4bin")  ## filecheck already ran and provided a validated value for m4bin
+#                    ## there's no point in running it again so add it as a clifile here
+#                    ## turn filecheck off if "$STY" is defined
+
+  (( verbose )) && read -rp "\${args[*]}: ${args[*]}"
+  screenname="m4b2opus-${m4bin:-allm4s[0]}"
+  ! (( no )) && [[ " ${args[*]} " != *\ -Y\ * ]] && args+=(-y)
+  (( verbose )) &&  pause "$(printf '%s\n\n' "$(printf '%s ' "${args[@]}")")"
+  screen -dmS "${screenname:0:16}" "${args[@]}"
+  ec="$?"
+  screen -ls                                     #could probably add some logic to not delete shit
+  printf \\n\\n                                  #leaving that for later, but screen implies -y as
+  exit "$ec"                                     #it doesn't really work otherwise?
+fi
+
+printline "${bold}  Welcome to ${white}$script  ${tput0}"
+allmp4s=(*.mp4)
+
+(( verbose )) && pause "$(printf '[verbose] Status of $STY: %s\n' "$STY")"
+
+(( verbose )) && (( save )) && read -rp "[verbose] save: $save"
+if (( "${#allmp4s[@]}" == 1 )); then
+  printf 'An .mp4 was found!\nMove\n  %s\nto\n  %s\n' "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"
+  (( rmmatch )) || confirm -d y "Confirm rename?" && mv "${allmp4s[0]}" "${allmp4s[0]%.mp4}.m4b"
+fi
+
+#allm4s=(*.m4[ab])
+#
+#printf '\n%s/*.m4[ab]: \n%s' "$(pwd)" "$red"
+#printf ' %s\n' "${allm4s[@]}"
+#printf '%s' "$white"
+#
+#filecheck "${clifile:-""}" && [[ ! "$?" = 0 ]] && { printf 'The files failed filecheck()!\nInvestigate (exit 1)\n.'; exit 1; }  # this function returns "$m4bin"
+#
+#(( verbose )) && pause "[verbose] \$clifile: ${clifile:-null}"
+
+(( stats )) && mediainfo "$m4bin"
+
+m4bindur="$(checkdur "$m4bin" | sed $'s/\e\\[[0-9;]*m//g')"
+                                 # this function returns the duration of "$m4bin" **by itself!**
+                                 # but in color so that's what the sed is doing.  should fix checkdur()
+                                 # instead of the whole directory, but this returns
+                                 # <hh:mm:ss> <filename> so it needs to be corrected
+m4bindur="${m4bindur%% *}"       # remove file name
+(( verbose )) && pause "[verbose] \$m4bindur: ${m4bindur:-null}"
+
+! [[ "$m4bindur" =~ ^[0-9]{2,3}\:[0-9]{2}\:[0-9]{2}$ ]] && { printf 'The m4b input duration ($m4bindur) is not correct: %s\nInvestigate. (exit 1)\n\n' "$m4bindur"; exit 1; }
+
+printf '\n%sStarting .m4b file: %s%s%s\n' "$bold" "$red" "$m4bin" "$tput0"
+##printf ' %s%s%s\n' "$boldred" "$m4bin" "$tput0"  ## this appears to be redundant
+printf '%sStarting duration :%s' "$bold" "$tput0"
+printf ' %s%s%s\n' "$boldred" "$m4bindur" "$tput0"
+[[ "$m4bin" = *\ --\ Audiobook.m4b ]] && title="${m4bin% -- *}" || title="${m4bin%.m4b}"
+ititle="$iton$title$itoff"
+swd="$(pwd)"
+convertdir="$CACHE/m4b2opus-$title"
+
+[[ "$convertdir" = *\'* ]] && convertdir="${convertdir//\'}"  #check $convertdir for \'s and remove them
+(( verbose )) && pause "[verbose] \$convertidr: $convertdir"
+
+if [[ ! -d "$convertdir" ]]; then
+  mkdir -p "$convertdir" ||
+  { printf '%s[ERROR]%s Could not create "%s"; please investigate.\n(exit 1)\n%s' "$boldred" "$white" "$convertdir" "$tput0"; exit 1; }
+fi
+
+### CODE REVIEW STOPPED Tue Jan 14 08:30:49 AM EST 2025
+
+(( verbose )) && pause "$(printf '[verbose] $(mediainfo "$m4bin"|grep "Menu #"):\n%s\n' "$(mediainfo "$m4bin"|grep "Menu #")")"
+
+if ! [[ $(mediainfo "$m4bin"|grep Menu\ \#) =~ ^Menu ]]; then  #process unindexed m4b files
+(( verbose )) && pause "[verbose] calling \`noindexsplit $m4bin $convertdir\`"
+  noindexsplit "$m4bin" "$convertdir"
+else
+  m4bsplit "$m4bin" "$convertdir"
+  cd "$convertdir"
+  (( $(ls *m4a|wc -l) > 99 )) && for i in *\ --\ Part\ ??\:\ *.m4a; do mv "$i" "${i/Part /Part 0}"; done
+  regexexp='.*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\ |\.]'
+  for m4afile in *m4a; do
+    [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\.\ ] ]] &&
+      mv "$m4afile" "${m4afile/Chapter /Chapter 0}"
+  done
+fi
+
+cd "$convertdir"
+echo
+
+! (( rmmatch )) && pause "${bold}${red}Control-Z to suspend and adjust chapter names in $convertdir? $tput0"
+
+#opus.book.4##################################################################################
+echo
+printline "${bold}  Calling external dependency:${red} opus.book.4  ${tput0}"
+
+ob4flags=(--stats -d "$m4bindur")
+(( verbose )) && { ob4flags=("${ob4flags[@]}" -v); pause "[verbose] calling \`opus.book.4 ${ob4flags[*]}\`"; }
+
+opus.book.4 --stats -d "$m4bindur"  #this is a dependency; needs to be made a function?
+#opus.book.4 --stats -d "${m4bindur#*: }"  #this is a dependency; needs to be made a function?
+                       ## why is this here?  $m4bindur should not have a `: ` to remove
+                       ## it shouldn't matter because i've already checked it to make sure it's right
+                       ## when i call checkdur "$m4bin"
+                       ## presumably it is a hangover from when checkdur reported something else back
+
+if (( "$?" > 0 ));  then
+  printf '%s\n\nopus.book.4 failed; exit 1\n\n%s' "$bold" "$tput0"
+  printline "  Leaving $scriptname: Error!  "
+  exit 1
+fi
+
+printline "${bold}  Returning from external dependency: ${red} opus.book.4  ${tput0}"
+#opus.book.4##################################################################################
+
+clear -x
+#need to renable rmyn below if these are uncommented
+#[[ ! -d "$convertdir/m4a" ]] && mkdir "$convertdir/m4a"
+#mv *.m4a ./m4a
+opuspartdur="$(checkdur opus)"
+## this should be ok and give the .opus parts duration properly because i'm in the convert dir here
+
+##m4bindur="${m4bindur#*: }"
+## why is this here?  $m4bindur should not have a `: ` to remove
+
+printf '%sDuration of the original m4b file: %s%s%s\n' "$bold" "$red" "$m4bindur" "$tput0"
+printf '%sDuration of the  .opus part files: %s%s%s\n' "$bold" "$red" "$opuspartdur" "$tput0"
+
+##indexopus##################################################################################
+
+tmp="/tmp/indexopus-$stamp"  #this probably doesn't exist...
+echo
+printline "${bold}  Calling external dependency:${red} indexopus  ${tput0}"
+
+ioflags=(-t "$title" -m "$convertdir" -s "$stamp" -d "$opuspartdur")
+(( rmmatch )) && ioflags=("${ioflags[@]}" -y)
+
+(( verbose )) && { ioflags=("${ioflags[@]}" -v); printf '[verbose] pwd=%s\n' "$(pwd)"; pause "[verbose] calling \`indexopus ${flags[*]}\`"; }
+
+indexopus "${ioflags[@]}"
+
+   ec4io="$?" 				# error code for indexopus
+   if (( ec4io == 2 )); then
+     iorm=true
+   elif (( ec4io == 1 )); then
+     printline "$bold  Returning from external dependency:$red indexopus$tput0 error code=$ec4io"
+     printf '\nHow the hell did you manage to get here?!\n\n'
+     if ! [[ -f "$convertdir/$title -- Audiobook.opus" ]]; then
+       pause "\$convertdir/\$title -- Audiobook.opus: $convertdir/$title -- Audiobook.opus"
+       exit
+     fi
+   elif (( ec4io == 130 )); then
+     printf '%sindexopus was aborted by user, exit (130). Investigate...\n%s\n%s\n\n' "$bold" "$tput0" "$(printline "  ${bold}Leaving ${scriptname}: ${red}indexopus aborted, exit (1)${tput0}  ")"
+     exit
+   fi
+
+
+printline "${bold}  Returning from external dependency:${red} indexopus  ${tput0}"
+##indexopus##################################################################################
+
+
+titleopus="$title -- Audiobook.opus"
+
+[[ ! -f "$titleopus" ]] &&
+   printf '%s%sError: Where the fuck is %s?! Exiting (1)\n%s' "$bold" "$red" "$titleopus" "$tput0" &&
+     printline "$scriptname" &&
+     exit 1
+
+indent() {
+  local n="$1"
+  local pad="$(printf '%*s' "$n")"
+  fold -s -w $((COLUMNS - n)) | sed "s/^/$pad/"
+}
+
+indent() {
+  local pad="${1:-4}"
+  local spaces="$(printf '%*s' "$pad")"
+  while IFS= read -r line; do
+    printf '%s%s\n' "$spaces" "$line"
+  done
+}
+
+# this is another way to indent: `sed 's/^/    /'`
+
+mvoutput="$(mv "$titleopus" "$swd" 2>&1)"
+ec="$?"
+if (( ec )); then
+  unset rmmatch
+  if [[ "$mvoutput" = "mv: cannot create regular file '"*"': Permission denied" || "$mvoutput" = *Permission\ denied* ]]; then
+    printf '\n\n%sThe converted file:\n  %s%s\n%scannot be moved to the starting m4b directory:\n  %s%s\n%sdue to permissions issues:\n\n%s%s\n\n%s' "$bold$red" "$white" "$titleopus" "$red" "$white" "$swd" "$red" "$yellow" "$mvoutput" "$red"
+#    printf 'Would you like to attempt to change ownership of this directory to %s%s:%s%s?\n\n%s\n%s\nContents:\n%s\n\n' "$white" "$USER" "$USER" "$red" "$(eza -dgl --color=always "$swd"| indent 3)" "$red" "$(eza -glB -a --color=always "$swd"| indent 3)"
+    printf 'Would you like to attempt to change ownership of this directory to %s%s:%s%s?\n\n%s\n%s\n%s' "$white" "$USER" "$USER" "$red" "$(eza -aagl --color=always "$swd"| indent 3)" "$red"
+#    if confirm -y "Would you like to attempt to change ownership to $of $white\n\n $(eza -dglB -all --color=always "$swd")$red \n\nto\n $white$USER:$USER\n${red}"; then
+    if confirm -y; then
+      if sudo -p "Enter sudo password to change ownsership of $swd: " chown "$USER":"$USER" "$swd"; then
+        sudo -k
+        mvoutput=$(mv "$titleopus" "$swd" 2>&1)
+        ec="$?"
+        if (( ec )); then
+          printf 'Still failed to mv %s to %s!\n%s\n' "$titleopus" "$(pwd)" "$mvoutput"
+          eza -dglB -all "$swd"
+          printf '\n%s[WARN]: %s is still in %s!%s\n' "$yellow" "$titleopus" "$(pwd)" "$white"
+          confirm "Continue script with manual confirmations for all deletions?" && warnopus=1 || { printf '\nExiting %s (exit 1)\n\n' "$0"; exit 1; }
+        else
+          printf 'Ownership change successful.\n'
+        fi #to mv failing after sucessfully changing permissions
+      else
+        printf 'chown %s:%s %s failed!\n%s\n\n' "$USER" "$USER" "$swd" "$(eza -glB -all)"
+#       printf 'NB: %s is still in %s!\n' "$titleopus" "$(pwd)"
+        printf '\n%s[WARN]: %s is still in %s!%s\n' "$yellow" "$titleopus" "$(pwd)" "$white"
+        confirm "Continue script with manual confirmations for all deletions?" && warnopus=1 || { printf '\nExiting %s (exit 1)\n\n' "$0"; exit 1; }
+      fi  #to chown USER:USER failing
+    else
+#     printf '\nNB: %s%s%s is still in %s%s%s!%s\n\n' "$white" "$titleopus" "$red" "$white" "$(pwd)" "$red" "$white"
+      printf '\n%s[WARN]: %s is still in %s!%s\n\n' "$yellow" "$titleopus" "$(pwd)" "$white"
+      confirm "Continue script with manual confirmations for all deletions?" && warnopus=1 || { printf '\nExiting %s (exit 1)\n\n' "$0"; exit 1; }
+    fi #to confirm take ownership?
+  else #to if mv error due to permissions
+    printf 'mv %s %s\n failed:\n%s\n\nThis is an unhandled error!\n\n' "$titleopus" "$swd" "$mvoutput"
+    printf 'NB: %s is still in %s!\n' "$titleopus" "$(pwd)"
+    printf '\n%s[WARN]: %s is still in %s!%s\n' "$yellow" "$titleopus" "$(pwd)" "$white"
+    confirm "Continue script with manual confirmations for all deletions?" && warnopus=1 || { printf '\nExiting %s (exit 1)\n\n' "$0"; exit 1; }
+  fi #to if mv error due to permissions
+fi
+
+opusparts=( *Part*.opus )
+cd "$swd"
+
+#wait, wtf is this doing here?  $tmp should be created long ago and it's in the process of being deleted by this point in the script, right?
+#! (( rmmatch )) && pause "Need to check to see if $tmp is being created... when indexopus isn't run with -y"
+## not sure why this is relevant, but it is not being created.  if it is needed further down or needs to be deleted or was deleted is unknown...
+
+## it seems that indexopus normally creates a /tmp/indexopus-$(date +"%s") directory for its working index files but when passed a -m <directory> it uses that instead.  so the working index files are probably being created in "$convertdir" since that is what is getting passed with indexopus -m above.
+
+## OK, it looks like indexopus is, in fact, creating it's index working files in "$convertdir" which is ok.  the question remaining is, should they explicitly be deleted by m4b2opus if they remain?  should it just be left to the removal of "$convertdir" itself and call it a day?  
+## probably the latter.
+## regardless,` ! (( rmmatch )) && pause "Need to check to see if $tmp is being created... when indexopus isn't run with -y"` can be commented out pending removal later since the tmp is never created and i see no strong advantage of creating it in /tmp since the working conversion directory is on /cache anyway.
+
+
+opusdur="$(checkdur "$titleopus" | sed $'s/\e\\[[0-9;]*m//g')"
+opusdur="${opusdur%% *}"
+
+## ititle could be used here, but i'm using the split apart variables becuase that's what the durations are actually calculated from:
+
+if [[ "$m4bin" = *\ --\ Audiobook.* ]]; then
+  printf 'Durations:\n %s%s%s  %s%s%s -- %s\n %s%s%s  %s%s%s -- %s\n\n%s' "$boldred" "$m4bindur" "$white" "$iton" "${m4bin% -- *}" "$itoff" "${m4bin##* -- }" "$boldred" "$opusdur" "$white" "$iton" "${titleopus% -- *}" "$itoff" "${titleopus##* -- }" "$tput0"
+else
+  printf 'Durations:\n %s%s%s  %s%s%s.%s\n %s%s%s  %s%s%s -- %s\n\n%s' "$boldred" "$m4bindur" "$white" "$iton" "${m4bin%.*}" "$itoff" "${m4bin##*.}" "$boldred" "$opusdur" "$white" "$iton" "${titleopus% -- *}" "$itoff" "${titleopus##* -- }" "$tput0"
+fi
+
+(( verbose )) && printf 'opusdur: %s\n\n' "$opusdur"
+! [[ "$opusdur" =~ ^[0-9]{2,3}\:[0-9]{2}\:[0-9]{2}$ ]] && { printf 'The opus duration ($opusdur) is not correct: %s\nInvestigate. (exit 1)\n\n' "$opusdur"; exit 1; }
+
+opusdursec="$(sex2sec "$opusdur")"
+m4bindursec="$(sex2sec "$m4bindur")"
+ioutput="$(tput sitm)$title$(tput ritm) -- Audiobook.opus"
+if (( rmmatch )) && (( opusdursec > 0 )); then
+#  verifydur=$(bc <<< "scale=4; ($m4bindursec - $opusdursec) / $opusdursec " )
+  verifydur=$(( (1000 * (m4bindursec - opusdursec)) / opusdursec ))
+  verifydur="${verifydur/#-}"
+#  if [[ $(bc <<< "scale=4; $verifydur < 0.001") ]]; then
+  if (( verifydur < 1 )); then  #this is 0.1% difference
+    rm -r "$convertdir"
+    if (( save )); then
+      printf 'The --save flag was called at startup: \n %s will not be deleted.\n\n' "$m4bin"
+      [[ "$startfile" ]] && { (( rmmatch )) || confirm -Y "The starting file was probably ${files[0]} and is now $m4bin.\nDo you want to 'mv $m4bin ${files[0]}?'"; } && mv "$m4bin" "$startfile"
+    else
+      rm "$m4bin"
+    fi
+
+    [[ "$m4bindursec" != "$opusdursec" ]] &&
+       printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tput sitm)" "$(tput ritm)" "$tput0" ||
+       printf '%sDurations match!%s\n' "$relipsis" "$tput0"
+    printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$(pwd)" "$ioutput" "$tput0"
+#   (( discord )) && apprise "$apprisediscord" -t "m4b2opus completed:" -b "$titleopus"
+   (( discord )) && discorddm "m4b2opus completed: $titleopus" > /dev/null
+    printline "${bold}  Exiting (0) ${white}m4b2opus  ${tput0}"
+    exit
+  elif (( rmmatch ))  && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
+    printf '%s%sThe m4b and opus audiobook durations do not match!\n' "$bold" "$red"
+    printf '%s%sm4b2opus will not automatically delete starting and temporary files!\n' "$white" "$tput0"
+    printf '\n\n'
+    printf '%s-y/-f specified, but the durations do not match!\n%s' "$bold" "$tput0"
+  fi
+fi
+
+  printf '\n%sCleaning up remaining files:%s\n' "$red" "$tput0"
+
+#  ls "$tmp" "$convertdir" 2>/dev/null
+
+  printf '\n\n'
+# the 2>/dev/null does not work for rmyn -- rewrite!!
+#  rmyn -q "${red}${bold}Remove the conversion ./m4a directory? ${tput0}" "${red}...Leaving ./m4a.${tput0}" rm -r "$convertdir/m4a"
+
+# presumably these shouldn't even be left after indexopus -y so there should be a check for them...  wtf is "$opusparts" ??
+  [[ ! "$iorm" ]] && [[ "$opusparts" ]] && rmyn -q "${red}${bold}Remove $title -- Part *.opus files? ${tput0}" "${red}...Leaving $ititle -- Part *.opus files...${tput0}" rm "$convertdir/$title"\ --\ Part\ ??:*.opus
+    (( save )) && printf 'The "--save" flag was called at startup: \n %s will not be deleted.\n\n' "$m4bin" || rmyn "${boldred}Remove the starting$white $m4bin? $tput0" "${red}Leaving starting ${white}$m4bin${tput0}" rm "$m4bin"
+  (( warnopus )) && printf '\n%sThe converted opus file was not removed from the temporary directory!\n\nINSPECT THE FOLLOWING CAREFULLY BEFORE DELETING!!!%s\n\n' "$bold$yellow" "$tput0" && pause "Continue...$tput0"
+  for i in "$convertdir" .tmp* "$tmp"; do [[ -a "$i" ]] && fnrmr "$i"; done
+
+  if (( warnopus )); then
+    [[ -f "$convertdir/$titleopus" ]] && printf '%s\n\n...Done.\n\nPlease see:%s\n %s/%s\n\n' "$red" "$white" "$convertdir" "$ioutput" || printf '%s\n\n...Done.\n\nThe transcoded opus file was most likely deleted from:%s\n %s\n\n' "$red" "$white" "$convertdir"
+  else
+    printf '\n\n...Done.\n\nPlease see\n%s %s/%s\n\n' "$white" "$(pwd)" "$ioutput"
+  fi
+
+##(( discord )) && apprise "$apprisediscord" -t "m4b2opus completed:" -b "$titleopus"
+(( discord )) && discorddm "m4b2opus completed: $titleopus"
+
+printline "${bold}  Exiting (0) ${white}m4b2opus  ${tput0}"
+
+exit 0
+
+
+
+

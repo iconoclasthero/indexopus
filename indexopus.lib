@@ -91,7 +91,7 @@ confirm(){
   done
 
 #  msg=$1
-  msg="$(printf %b "$1")"
+  msg="$(printf -- %b "$1")"
   shift
 
   case $def in
@@ -102,7 +102,7 @@ confirm(){
 
   (( empty )) && prompt="${prompt# }"
   read -p "$msg$prompt" -n 1 -r reply
-  printf \\n 
+  printf \\n
 
   reply=${reply:-$def}
 

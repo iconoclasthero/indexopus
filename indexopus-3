@@ -253,27 +253,54 @@ reindex(){
 
   if [[ ! -f "chapters.json" ]] && ! (( usemetadata )) &&
     confirm "${bold}No chapters.json; retrieve chapter info from the web?${tput0}"; then
+      (( verbose )) && printf '[verbose] in if branch of first if in %s.\n' "$FUNCNAME"
       curl -X POST "$absserver/api/items/$(itemid)/scan"   -H "Authorization: Bearer $abstoken" -sSo /dev/null
       curl "$absserver/api/search/chapters?asin=$(jq -r '.asin' metadata.json)"   -H "Authorization: Bearer $abstoken" -sSo chapters.json
       newchapters=1
   fi
 
-  if [[ -f "chapters.json" ]] && [[ ! $(grep '{"error":"Chapters not found"}' "chapters.json") ]]; then
+  if [[ -f "chapters.json" ]] && [[ ! $(grep '{"error":"Chapters not found"}' "chapters.json") ]] && ! (( usemetadata )); then
+    (( verbose )) && printf '[verbose] in if branch of second if in %s.\n' "$FUNCNAME"
     readarray -t chaptitles < <(jq -r '.chapters[] | .title' "chapters.json" 2>/dev/null)
-    readarray -t chapstarts < <(jq -r '.chapters[] | .startOffsetMs' "chapters.json" 2>/dev/null)
-
-    for ((i=0; i<"${#chapstarts[@]}"; i++)); do
-      sec=$(( chapstarts[i] / 1000 ))
-      ms=$(( chapstarts[i] % 1000 ))
-      chapstarts[i]="${sec}.${ms}"
-    done
-
+## this replacement should make the handing of fp math and different time formats more robust
+#    readarray -t chapstarts < <(jq -r '.chapters[] | .startOffsetMs' "chapters.json" 2>/dev/null)
+#    if [[ "$chapstarts" = null ]]; then
+#      readarray -t chapstarts < <(jq -r '.chapters[] | .start' "chapters.json" 2>/dev/null)
+#    else
+#      for ((i=0; i<"${#chapstarts[@]}"; i++)); do
+#        sec=$(( chapstarts[i] / 1000 ))
+#        ms=$(( chapstarts[i] % 1000 ))
+#        chapstarts[i]="${sec}.${ms}"
+#      done
+##    readarray -t chapstarts < <(jq -r '.chapters[] | (.startOffsetMs // .start)' chapters.json 2>/dev/null)
+#    fi
+    readarray -t chapstarts < <(jq -r '
+      .chapters[] |
+      if .startOffsetMs != null then
+        (.startOffsetMs / 1000) | tostring
+      else
+        (.start // empty) | tostring
+      end
+    ' chapters.json 2>/dev/null)
   else
+    (( verbose )) && printf '[verbose] in else branch of second if in %s.\n' "$FUNCNAME"
 #   need to strip literal `\n` characters from chapter titles otherwise it fucks things up
-    jsonfile="metadata.json"
+    : "${jsonfile:=metadata.json}"
     readarray -t chaptitles < <(jq -r '.chapters[] | .title | gsub("\\n"; " ")' "$jsonfile")
-    readarray -t chapstarts < <(jq -r '.chapters[] | .start' "$jsonfile" 2>/dev/null)
+## this replacement should make the handing of fp math and different time formats more robust
+#    readarray -t chapstarts < <(jq -r '.chapters[] | .start' "$jsonfile" 2>/dev/null)
+    readarray -t chapstarts < <(jq -r '
+      .chapters[] |
+      if .startOffsetMs != null then
+        (.startOffsetMs / 1000) | tostring
+      else
+        (.start // empty) | tostring
+      end
+    ' "$jsonfile" 2>/dev/null)
   fi
+
+  (( verbose )) && for (( i=0; i<"${#chapstarts[@]}"; i++ )); do printf '[verbose] %s\t%s\n' "${chapstarts[i]}" "${chaptitles[i]}"; done
+#  (( verbose )) && printf '[verbose] %s\n' "${starts
 
   chcount=0
   for i in "${chaptitles[@]}"; do [[ "$i" = *Chapter* ]] && ((chcount++)); done
@@ -795,7 +822,7 @@ mvopus(){
 #  if [[ "${opusarray[0]}" =~ .+\ --\ ((C|c)hapter|(P|p)art|(D|d)isc)|(T|t)rack\ [[:digit:]]{1,3}\.opus ]]; then
   if [[ "${opusarray[0]}" =~ .+\ --\ (([Cc]hapter|[Pp]art|[Dd]isc|[Tt]rack)\ [[:digit:]]{1,3})\.opus ]]; then
     echo "Using rename pattern 1."
-   if "${quiet:=false}"; then rmmatch=true; fi
+    if "${quiet:=false}"; then rmmatch=true; fi
 
     for i in "${opusarray[@]}"; do
       n="${i%.opus}"; n="${n##* }"
@@ -968,26 +995,62 @@ mvopus(){
       done
     mvopus
 
-  elif [[ "${opusarray[0]}" =~ ([[:digit:]]{1,3})(: ?|\ |\. ?)(.+\.opus) ]]; then
+  elif [[ "${opusarray[0]}" =~ ([[:digit:]]{1,3})(: ?|\. ?|\ -\ ?|\ ?)((.+)\.opus) ]]; then
+    renpat="6.0"
+    posstitle="${BASH_REMATCH[4]}"
+    for i in "${opusarray[@]}"; do
+      if [[ "$i" =~ ([[:digit:]]{1,3})(: ?|\. ?|\ -\ ?|\ ?)((.+)\.opus) ]]; then
+        [[ "${BASH_REMATCH[4]}" != "${posstitle}" ]] && { unset posstitle; break; }
+      fi
+    done
+    if [[ "$posstitle" ]]; then
+      renpat="$renpat.1"
+      printf 'Using rename pattern %s\n' "$renpat"
+      t="$posstitle"
+
+      regex="([[:digit:]]{1,3})(: ?|\. ?|\ -\ ?|\ ?)((.+)\.opus)"
+      read -rp "This is only marginally functional.  There's still no check for padded digits yet."
+
+      for i in *.opus; do
+        if [[ "$i" =~ $regex ]]; then
+          n="${BASH_REMATCH[1]}"
+          p="Part $n.opus"
+#          p="${BASH_REMATCH[3]}"
+#          [[ "$p" = *\ -\ *.opus ]] && p="${p##* - }"
+#          [[ "$p" = *Chapter\ ?.opus ]] && p="${p/Chapter /Chpater 0}"
+#
+#        ## if "$t" is set via gum input the this if is unnecessary (and could be removed):
+#          if [[ ! "$t" ]]; then
+#            t="$(pwd)"; t="${t##*\/}"
+#            [[ "$t" = *\:* ]] && t="${t%%:*}"
+#            [[ "$t" =~ .+\ \([[:digit:]]{4}\) ]] && t="${t% \(*}"
+#          fi
+#
+          newname="$t -- Part $n: $p"
+          confirmrename["$i"]="$newname"
+        fi
+      done
+    else
+      renpat="$renpat.2"
+      printf 'Using rename pattern %s\n' "$renpat"
 
 ## this pattern matches: `001 Author Name - Book Title - Part Name.opus`
-
-    renpat="6.0"
-
-    printf 'Using rename pattern %s\n' "$renpat"
     printf '\nNB: Using this rename pattern requires setting a title.\n'
 #    printf 'Use the directory in the format of /path/to/dir/Title[: Subtitle [(Year)]]\nPWD: %s\n\n' "$(pwd)"
     t="$(gum input --width="$(( $(tput cols) - $(tput cols)/10 ))" --value="${PWD##*\/}" --header="Enter title to use for part files:")"
     confirm -y "Use $red$iton$t$tput0 as title for part files?" || { printf '\nFix directory name and return.\nExiting. (exit 1)\n\n'; exit 1; }
 
-    regex="([[:digit:]]{1,3})(: ?|\ |\. ?)(.+\.opus)"
+    regex="([[:digit:]]{1,3})(: ?|\. ?|\ -\ ?|\ ?)?(.+\.opus)"
 
     for i in *.opus; do
+      (( verbose )) && printf '[verbose] $i=%s\n' "$i"
       if [[ "$i" =~ $regex ]]; then
         n="${BASH_REMATCH[1]}"
+        (( verbose )) && printf '[verbose] $n=%s\n' "$n"
         p="${BASH_REMATCH[3]}"
         [[ "$p" = *\ -\ *.opus ]] && p="${p##* - }"
         [[ "$p" = *Chapter\ ?.opus ]] && p="${p/Chapter /Chpater 0}"
+        (( verbose )) && printf '[verbose] $p=%s\n' "$p"
 
       ## if "$t" is set via gum input the this if is unnecessary (and could be removed):
         if [[ ! "$t" ]]; then
@@ -1000,6 +1063,9 @@ mvopus(){
         confirmrename["$i"]="$newname"
       fi
     done
+    (( verbose )) && printf %s\\n "${confirmrename[@]}"
+
+    fi
 
 #    printf %s\\n "${confirmrename[@]}"|sort
     mvopus
@@ -1169,6 +1235,7 @@ n="${i#* @(@(C|c)hapter|@(P|p)art|@(T|t)rack|@(D|d)isc) }"; n="${n%% *}"
     renopus=( *\ --\ Part\ *.opus )
     if ! compgen -G '@(*\ --\ Part\ ???\:\ *.opus|*\ --\ Part\ ??\:\ *.opus)' &> /dev/null; then
         pause "Using naming pattern zulu!"
+        printf \\n
         # If files do not match expected naming pattern, attempt to rename them
         if [[ "${renopus[0]/ -- Part / -- Part 00: Part }" == *\ --\ Part\ ??\:\ *.opus ]]; then
         pause "!! USING NAMING PATTERN ZULU !!"
@@ -1183,14 +1250,33 @@ n="${i#* @(@(C|c)hapter|@(P|p)art|@(T|t)rack|@(D|d)isc) }"; n="${n%% *}"
             done
           mvopus
         else
-            allfiles=(*)
-            # Exit if files do not match expected naming pattern and cannot be renamed
-            [[ "${allfiles[@]}" != *.opus\ * ]] && printf 'This directory does not contain files in the expected format or filename.\n'
-            [[ "${allfiles[@]}"  = *.opus\ * ]] && printf 'The rudimentarly built-in file renaming was unable to put the opus files into the pattern of <Title> -- Part ##: <Chapter Title>.opus\nPlease rename files and retry indexopus.'
-            exit
+          allfiles=(*)
+          # Exit if files do not match expected naming pattern and cannot be renamed
+          if [[ "${allfiles[@]}" != *.opus\ * ]]; then
+            printf 'This directory does not contain files in the expected format or filename.\n'
+            exit 1
+          elif [[ "${allfiles[@]}"  = *.opus\ * ]]; then
+            printf 'The rudimentarly built-in file renaming was unable to put the opus files into the pattern of <Title> -- Part ##: <Chapter Title>.opus\n\n'
+            printf 'You can suspend/detatch the script now to drop to shell, rename, to try again...\n\n'
+            printf '$pwd = %s\n     $$ = %s\n' "$(pwd)" "$$"
+            if [[ "$STY" ]]; then
+              printf '   $STY = %s\n' "$STY"
+              pause 'Inside attached screen, you will need to detatch and then rename files.'
+              confirm -Y "Attempt to detach screen programatically?" && screen -S "$STY" -X detach
+            else
+              ppid="$(ps -o ppid= -p $$)"
+              printf '  $ppid = %s\n\n' "$ppid"
+              confirm -Y "Attempt to suspend with kill -SIGSTP $ppid?" && kill -SIGTSTP "$(ps -o ppid= -p $$)"
+            fi
+            confirm -Y "Attempt to use standard naming pattern?" || exit 130
+            pause "Still need to insert a test of the renamed files!!!"
+          fi
         fi
      fi
+  (( verbose )) && printf 'Leaving rename()\n'
 }
+
+##--> rename <--####################################################################
 
 
 ##--> Main Code<--#####################################################################
@@ -1234,8 +1320,8 @@ while [[ "$#" -gt 0 ]]; do
      fi
   elif [[ "$1" = @(-r|--reindex|reindex) ]]; then
     reindex=true
-  elif [[ "$1" = --reindex=metadata.json ]]; then
-    reindex=true; usemetadata=1
+  elif [[ "$1" = --reindex=*.json ]]; then
+    reindex=true; usemetadata=1; jsonfile="${1/--reindex=}"
   elif [[ "$1" = @(-h|help|--help) ]]; then
     usage
   else

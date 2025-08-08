@@ -29,7 +29,6 @@ sourcefn(){
     (( verbose )) && printf %s\\n "$awkout"
     source <(echo "$awkout")
   done
-
-
 }
 ##--> sourcefn() <--################################################################
+

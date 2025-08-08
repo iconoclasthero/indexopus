@@ -183,9 +183,9 @@ while (( $# > 0 )); do
   [[ "$1" = @(|-)@(-ys|-yes) ]] && shift && rmmatch=1 && screened=1 && continue
   [[ "$1" = -y ]] && shift && rmmatch=1 && continue
   [[ "$1" = --save ]] && args+=("$1") && shift && save=1 && continue
-  [[ "$1" = @(-D|--discord) ]] && { args+=("$1"); shift; . ~/.config/apprise.conf; continue; }
+  [[ "$1" = @(-D|--discord) ]] && { args+=("$1"); unset discord; . ~/.config/apprise.conf; shift; continue; }
   [[ -f "$1" ]] && args+=("$1") && shift && clifile="${args[-1]}" && continue
-  { printf '%s is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script' || exit 1; }
+  { printf '"%s" is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script' || exit 1; }
 done
 
 if (( screened == 1 )); then
@@ -204,7 +204,7 @@ if (( screened == 1 )); then
   exit
 fi
 
-pause "rmmatch=$rmmatch"
+(( verbose )) && pause "rmmatch=$rmmatch"
 
 SWD="$(pwd)"
 
@@ -212,7 +212,7 @@ if [[ "$clifile" ]]; then
   if [[ "$clifile" = *@(.mp3|.m4@(a|b)|wav|.mp4) ]]; then
     path="$clifile"
   fi
-  pause "$path"
+  (( verbose )) && pause "$path"
 else
   ckbook=( *@(mp3|m4@(a|b)|wav) )
   if (( ${#ckbook[@]} == 1 )); then
@@ -279,7 +279,7 @@ fi
 tmp="$tmp/quartero4-$title"
 count=1 #cannot change.
 
-(( verbose )) && printf '    inext=%s\n   outext=%s\n      ext=%s\n      tmp=%s\n    count=%s\n' "$inext" "$outext" "$ext" "$tmp" "$count"
+(( verbose )) && printf '    inext=%s\n   outext=%s\n      ext=%s\n      tmp=%s\n    count=%s\n     save=%s\n' "$inext" "$outext" "$ext" "$tmp" "$count" "$save"
 
 [[ ! -d "$tmp" ]] && mkdir "$tmp"
 
@@ -323,19 +323,13 @@ cd "$tmp"
 #  done
 #done
 
-#printf '#####################################################\nentering opus.book.4\n#####################################################\n\n'
-
 printline "  Entering opus.book.4  "
 
 threads="$threads" opus.book.4
 
-#printf '#####################################################\nleaving opus.book.4\n#####################################################\n\n'
-
 printline "  Leaving opus.book.4  "
 
 mediaduration
-
-#printf '#####################################################\nentering indexopus\n#####################################################\n\n'
 
 printline "  Entering indexopus  "
 
@@ -347,26 +341,19 @@ indexopus -y -t "$title" || { echo "indexopus failed, exit 1" ; exit 1; }
 #(( ioexit==1 )) && echo "indexopus failed, exit 1" && exit 1
 
 
-#printf '#####################################################\nleaving indexopus\n#####################################################\n\n'
-
 printline "  Leaving indexopus  "
-
-#printf '\n\n...Done.\n\nPlease see %s/%s\n\n' "$PWD" "$ioutput"
-
-#printf '%s\n%s\n' "$(ls *\ Audiobook.opus)" "$(mediainfo *\ Audiobook.opus|grep ^Duration\ |uniq)"
-
 
 printf '\n%smoving %s/%s -- Audiobook.opus to %s%s\n\n' "$relipsis" "$tmp" "$ititle" "$SWD" "$tput0"
 
 titleopus="$title -- Audiobook.opus"
-#mv *\ Audiobook.opus "$SWD"
-mv "$titleopus" "$SWD"
+mv "$titleopus" "$SWD" || unset rmmatch
 
 lsopus=( *opus )
 (( "${#lsopus[@]}" )) &&
-  printf '%sopus files still remain in %s!\nls *opus:\n%s' "$relipsis" "$tmp" "$tput0" &&
-  printf '%s\n' "${lsopus[@]}" &&
-  printf \\n
+ { printf '%sopus files still remain in %s!\nls *opus:\n%s' "$relipsis" "$tmp" "$tput0";
+   printf '%s\n' "${lsopus[@]}";
+   printf \\n;
+   unset rmmatch; }
 
 ckparts=( "$title -- Part "*.opus )
 if (( "${#ckparts[@]}" )); then
@@ -382,6 +369,7 @@ cd "$SWD"
 if (( rmmatch )); then
   rm -r "$tmp"
 else
+  eza "$tmp"
   confirm "Remove $tmp?" && rm -r "$tmp" || printf '...Leaving %s\n' "$tmp"
 fi
 
@@ -441,7 +429,7 @@ verifydur=$(( verifydur < 0 ? -verifydur:verifydur ))
 
 if (( verifydur <= 1 )) && ! (( save )) && { (( rmmatch )) || confirm -y "Durations are within 0.1%.\n  $(ls "$path") \n\nRemove starting audio file?"; }; then #this is a 0.1% difference
 #  rm -r "${allfiles[@]}"
-  rm "$path"
+  ! (( save )) && rm "$path"
   [[ "$m4bindursec" != "$opusdursec" ]] &&
      printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' \
             "$relipsis" \
@@ -449,7 +437,7 @@ if (( verifydur <= 1 )) && ! (( save )) && { (( rmmatch )) || confirm -y "Durati
             "$(tput ritm)" \
             "$tput0" ||
      printf '%sDurations match!%s\n' "$relipsis" "$tput0"
-    printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
+  printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$PWD" "$ioutput" "$tput0"
 elif (( save )); then
   printf '%s was launched with --save flag.\nThe starting file, %s, will not be deleted.\n' "$0" "$path"
 elif (( rmmatch )) && (( verifydur > 1 )); then
@@ -471,9 +459,11 @@ fi
 #  rm -i "$path"
 #fi
 
-(( discord )) && apprise "$apprisediscord" -t "$0 completed:" -b "${titleopus:-title unavailable}"
+#(( discord )) && apprise "$apprisediscord" -t "$0 completed:" -b "${titleopus:-title unavailable}"
 
-exit
+(( discord )) && discorddm "mp32opus completed: ${title:-title unavailable}"
+
+exit 0
 
 #https://www.reddit.com/r/ffmpeg/comments/107p3mh/remove_all_apart_from_audio/
 #Mon Dec 11 10:52:50 AM EST 2023
