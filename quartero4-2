@@ -36,12 +36,12 @@ rmyn(){
    done
 }
 
-calculatetime(){
+calctime(){
   local findtitle
   findtitle="$1"
   [[ "$findtitle" = *\[* || "$findtitle" = *\]* ]] && findtitle="${findtitle//\[/\\[}" && findtitle="${findtitle//\]/\\]}"
 
-(( verbose )) && pause "findtitle=$findtitle"
+  (( verbose )) && pause "findtitle=$findtitle"
 
 duration=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
 hours=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' | tail -n 1)
@@ -65,10 +65,10 @@ divsec=$(python3 -c "print($totalsec/$threads)")
 (( verbose )) && printf 'hours: %s\nminutes: %s\nseconds: %s\ntotalsec: %s\ndivsec: %s\n' "$hours" "$minutes" "$seconds" "$totalsec" "$divsec"
 
 }
-##--> calculatetime() <--###################################################################
+##--> calctime() <--###################################################################
 
 
-calculatetime2(){
+calctime2(){
   (( verbose )) && pause "Entering function: ${FUNCNAME[0]}"
   local findtitle path
   findtitle="$1"
@@ -112,7 +112,7 @@ divsec=$(python3 -c "print($totalsec/$threads)")
 
 (( verbose )) && printf 'Leaving function: %s\n' "${FUNCNAME[0]}"
 }
-##--> calculatetime2() <--###################################################################
+##--> calctime2() <--###################################################################
 
 
 rmyn(){
@@ -141,31 +141,31 @@ rmyn(){
 #}
 ##--> confirm() <--###################################################################################
 
-checkdur(){
-  local m4a m4b opus mp3 wav
-  m4a=(*m4a)
-  m4b=(*m4b)
-  opus=(*opus)
-  mp3=(*mp3)
-  wav=(*wav)
-
-if [[ "$1" ]]
-  then
-      find -type f -iname "*.$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
-  else
-    printf '\n%sDuration(s):%s\n' "$bold" "$tput0"
-    [[ "${#m4a[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white"  "${m4a[@]}" "$tput0"
-    [[ "${#m4b[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${m4b[@]}" "$tput0"
-    [[ "${#mp3[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.mp3" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${mp3[@]}" "$tput0"
-    [[ "${#opus[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
-    [[ "${#wav[@]}" -gt 0 ]] &&
-      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
- fi
-}
+#checkdur(){
+#  local m4a m4b opus mp3 wav
+#  m4a=(*m4a)
+#  m4b=(*m4b)
+#  opus=(*opus)
+#  mp3=(*mp3)
+#  wav=(*wav)
+#
+#if [[ "$1" ]]
+#  then
+#      find -type f -iname "*.$1" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+#  else
+#    printf '\n%sDuration(s):%s\n' "$bold" "$tput0"
+#    [[ "${#m4a[@]}" -gt 0 ]] &&
+#      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4a" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white"  "${m4a[@]}" "$tput0"
+#    [[ "${#m4b[@]}" -gt 0 ]] &&
+#      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.m4b" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${m4b[@]}" "$tput0"
+#    [[ "${#mp3[@]}" -gt 0 ]] &&
+#      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.mp3" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${mp3[@]}" "$tput0"
+#    [[ "${#opus[@]}" -gt 0 ]] &&
+#      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
+#    [[ "${#wav[@]}" -gt 0 ]] &&
+#      printf '%s %s%s%s %s%s\n' "$bold" "$red" "$(    find -type f -iname "*.opus" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)" "$white" "${opus[@]}" "$tput0"
+# fi
+#}
 ##--> checkdur() <--##################################################################################
 
 
@@ -295,7 +295,12 @@ count=1 #cannot change.
 # path="$i"
 (( verbose )) && pause "     path=$path"
   printf '\nFile to split: %s\n' "$path"
-  calculatetime2 "$path"
+(( verbose )) && printf 'Not calling calctime2 %s\n' "$path"
+  # calctime2 "$path"
+  totalsec=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$path")
+  divsec=$(echo "$totalsec/4" | bc -l)
+(( verbose )) && printf '[verbose] $totalsec: %s\n' "$totalsec"
+(( verbose )) && pause "[verbose] \$divsec: $divsec"
   printf '\n\n%sSplitting file into %s pieces:\n%s' "$relipsis" "$threads" "$tput0"
   while (( $count < $((1+$threads)) )); do
 #(( verbose )) && pause "$(python -c "print(($count-1)*$divsec)")"

@@ -243,12 +243,17 @@ printdescrip(){
   mediainfo "$t -- Audiobook.ogg"|xclip 2>/dev/null
   pubdate="$(mediainfo "$t -- Audiobook.ogg" |\grep -E ^Recorded\ date\ +\:)"
   pubdate="${pubdate#* : }"
-  readarray -t duration < <(mediainfo "$t -- Audiobook.ogg" |\grep -E ^Duration\ +\:|sort -u)
-  duration="${duration[0]#* : }"
-  hh="${duration% h*}"; (( "${#hh}" < 3 )) && hh="$(printf '%02d' "$hh")"
-  mm="${duration#* h }"; mm="${mm% min}"; mm="$(printf '%02d' "$mm")"
+## switching from mediaduration to ffprobe due to the former being inconsistent and reporting only hours
+## (when over 100 h?)
+#  readarray -t duration < <(mediainfo "$t -- Audiobook.ogg" |\grep -E ^Duration\ +\:|sort -u)
+#  duration="${duration[0]#* : }"
+#  hh="${duration% h*}"; (( "${#hh}" < 3 )) && hh="$(printf '%02d' "$hh")"
+#  mm="${duration#* h }"; mm="${mm% min}"; mm="$(printf '%02d' "$mm")"
+  IFS=: read -r hh mm ss < <(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 -sexagesimal "$t -- Audiobook.ogg")
+#  (( "${#hh}" < 3 )) && hh="$(printf '%02d' "$hh")"
+#  (( "${#hh}" == 3 )) && hhmm="$hh:$mm hhh:mm" || hhmm="$hh:$mm hh:mm"
+  (( "${#hh}" == 3 )) && hhmm="$hh:$mm hhh:mm" || hhmm="$(printf '%02d' "$hh"):$mm hh:mm"
   (( "${#hh}" > 3 )) && { printf 'Error: Book appears to have a duration over 1000 hours!  Investigate.\nExiting (return 1)\n\n'; return 1; }
-  (( "${#hh}" == 3 )) && hhmm="$hh:$mm hhh:mm" || hhmm="$hh:$mm hh:mm"
   readarray -t genretags < <({ mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Genre[[:space:]]\+: //p'; mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Tags[[:space:]]\+: //p'; } | tr '/' '\n'|sed 's/^[[:space:]]*//;s/[[:space:]]*$//'|sort -u )
   printf \\n
 
@@ -394,10 +399,30 @@ printdescrip(){
   audiobookopus=( "$1"/*\ --\ Audiobook.opus )
   [[ "$audiobookopus" ]] && mediainfo "$1"/*\ --\ Audiobook.opus|head -n$(($(mediainfo "$1"/*\ --\ Audiobook.opus |\grep -En Menu|cut -f1 -d:) - 1 ))
 
+#  if { (( yes )) || confirm -Y "${boldred}Set book metadata from ABS metadata.json?$tput0"; }; then
+#    (( verbose )) &&
+#      { printline "\n Calling bookmetadata --verbose \n";
+#        { (( YES )) && YES=1 bookmetadata --verbose "$1" || bookmetadata --verbose "$1"; } ||
+#        return 1; } ||
+#      { printline "\n Calling bookmetadata \n";
+#        { (( YES )) && YES=1 bookmetadata "$1" || bookmetadata "$1"; } || return 1; }
+#  fi
+
   if { (( yes )) || confirm -Y "${boldred}Set book metadata from ABS metadata.json?$tput0"; }; then
-    (( verbose )) && { printline "\n Calling bookmetadata --verbose \n"; bookmetadata --verbose "$1"||return 1; } ||
-      { printline "\n Calling bookmetadata \n"; bookmetadata "$1"||return 1; }
+    bookmetadatacmd=( bookmetadata )
+    (( verbose )) && bookmetadatacmd+=( --verbose )
+    { (( YES )) && bookmetadatacmd=( env YES=1 "${bookmetadatacmd[@]}" ); } ||
+    { (( yes )) && bookmetadatacmd=( env yes=1 "${bookmetadatacmd[@]}" ); }
+    bookmetadatacmd+=( "$1" )
+
+#    printline "\n Calling ${bookmetadatacmd[*]} \n"
+    printline "\n Calling bookmetadata \n"
+    (( verbose )) && printf '${bookmetadatacmd[*]}:\n%s\n\n' "${bookmetadatacmd[*]}"
+    "${bookmetadatacmd[@]}" || return 1
   fi
+
+
+
   mediainfo "$1"/*\ --\ Audiobook.opus #|head -n$(($(mi "$1"/*\ --\ Audiobook.opus |\grep -En Menu|cut -f1 -d:) - 1 ))
 
 # jq -r '.description | gsub("<p>"; ""; "g") | gsub("</p>"; "\n\n"; "g") | gsub("<br>"; "\n"; "g")' metadata.json
@@ -489,6 +514,8 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
   fi
 
   printline "\n Addressing cover files and embedding cover \n"
+  allcovers=( *.jpg )
+  if (( "${#allcovers[@]}" )) && [[ "${allcovers[0]}" != "*.jpg" ]]; then
 ## Moving cover files around as necessary
   cover="$t -- Cover 01.jpg"
   icover="$it -- Cover 01.jpg"
@@ -656,11 +683,11 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
 ##        info=$(mediainfo "$1/$t -- Audiobook-2.opus")
 ##        printf %s\\n "$info"
 ##        grep 'Conformance errors' <<< "$info"
-##        exit $ec
+##        return $ec
 ##      fi
 #    fi
 #    (( scale -= 50 ))
-#    (( scale <= 0 )) && {     echo "image too large even at minimal scale" >&2;     exit 1;   }
+#    (( scale <= 0 )) && {     echo "image too large even at minimal scale" >&2;     return 1;   }
 #  done
 
 
@@ -692,7 +719,7 @@ until (( size < maxcover )); do
   (( scale -= 50 ))
   (( scale <= 0 )) && {
     echo "image too large even at minimal scale" >&2
-    exit 1
+    return 1
   }
 done
 
@@ -728,6 +755,9 @@ fi
       [[ ! -f "$t -- Cover 0$cn.jpg" ]] && { mv "$t -- Cover.jpg" "$t -- Cover 0$cn.jpg"; break; }
     done
   fi
+
+fi ### to checking if .jpg files exist?
+
 
   printf '\nCheck cover, etc., before symlinking:\n'
   eza -lag -sold -r --no-user "$1"
@@ -788,7 +818,7 @@ fi
   { (( yes )) || confirm -d y "$red...continue?$tput0"; } || return 1
 #  torrentfile="/library/torrent/${PWD##*/}.torrent"  #to be removed: the directory should be $d
 #  torrentfile="/library/torrent/$d.torrent"          #this is defined when the directory is defined
-  [[ "$cktorrent" ]] && { confirm -y "${cktorrent[@]} exists.\nContinue to create torrent?" || return 1; }
+  [[ "$cktorrent" ]] && { { (( YES )) || confirm -y "${cktorrent[@]} exists.\nContinue to create torrent?"; } || return 1; }
   transmission-create -p -t "$tracker" -o "$torrentfile" "$(pwd)"
 #  { cd "$linked/$d; mediainfo $t -- Audiobook.ogg"; }
 #  deluge-console "connect $delugehost:$delugeport $delugeuser $delugepass; add -p $linked $torrentfile"

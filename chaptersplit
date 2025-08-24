@@ -21,13 +21,13 @@ START=1
 edit=0
 scriptname="$(realpath $0)"
 basename "$PWD"
-title="Tree of Smoke"
+title="Slave Narratives"
 inext="mp3"
 outext="mp3"
 inext="opus"
 outext="opus"
-inext="m4?"
-outext="m4a"
+#inext="m4?"
+#outext="m4a"
 stamp=$(date +%s)
 #compgen -A file "*$inext"
 
@@ -94,10 +94,9 @@ rm ".tmp$stamp"
 shift
 done
 
-for i in "$title -- Chapter "?.opus;
- do
+for i in "$title -- Chapter "?.opus; do
   mv "$i" "${i/Chapter /Chapter 0}";
- done
+done
 
 if [ -n "$1" ];
  then

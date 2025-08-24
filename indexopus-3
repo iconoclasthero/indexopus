@@ -209,7 +209,8 @@ createindex(){
 #        rawindex+=( "$ts" )
 #        rawindex+=( "$chna" )
 #    fi
-
+(( verb == 3 )) && printf %s\\n "$i"
+(( verb == 3 )) && { ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 file:"$i" >/dev/null 2>&1;  (( "$?" )) && printf %s\\n "$i"; }
     d=$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 file:"$i")
 #     d=$(mplayer -vo dummy -ao dummy -identify "$i" 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "$t"' | tail -n 1)
     t=$(echo "$d + ${t:-0}" | bc)  ## changed 2025-05-15
@@ -304,7 +305,9 @@ reindex(){
 
   chcount=0
   for i in "${chaptitles[@]}"; do [[ "$i" = *Chapter* ]] && ((chcount++)); done
-  (( chcount > 99 )) && triple=1
+
+## check for over 100 chapters and set triple to true:
+  (( chcount > 99 )) && { (( yes )) || confirm -y "${red}Over 99 chapters detected. Zero pad to 3 spaces?$tput0"; } && triple=1
 
 ## This is to allow for outline style because ABS won't allow for *ANY* whitespaces before or after chapter names
 
@@ -589,7 +592,7 @@ path   : ${patharray[$itemid]#/library/books/}"
   fi
 
 
-  if (( outline )) || (( barenum )) || (( zeropadchnna )) || [[ -f "reindex.$jsonfile" ]]; then
+  if true || (( outline )) || (( barenum )) || (( zeropadchnna )) || [[ -f "reindex.$jsonfile" ]]; then
     printf 'The chapter index written to the audiobook file now differs from %s.\n' "$jsonfile"
     confirm -y "${boldred}Do you want to write these changes to $jsonfile?$tput0" && updatejson=1 || continue
 
@@ -1319,9 +1322,9 @@ while [[ "$#" -gt 0 ]]; do
        echo "Default config file location: $confpath"
      fi
   elif [[ "$1" = @(-r|--reindex|reindex) ]]; then
-    reindex=true
+    reindex=1
   elif [[ "$1" = --reindex=*.json ]]; then
-    reindex=true; usemetadata=1; jsonfile="${1/--reindex=}"
+    reindex=1; usemetadata=1; jsonfile="${1/--reindex=}"
   elif [[ "$1" = @(-h|help|--help) ]]; then
     usage
   else
@@ -1335,7 +1338,7 @@ if [[ ! -d "$tmp" ]]; then
  mkdir "$tmp" || printf '%s%sFailed to create %s!\nexit 1\n%s' "$red" "$bold" "$tmp" "$tput0" #&& exit
 fi
 
-if [[ "$reindex" = true ]]; then   #if reindex is true, check for rmmatch and reindex.
+if (( reindex )); then   #if reindex is true, check for rmmatch and reindex.
   reindex
   reindexreturn="$?"
   printf '%sPlease see %s/%s for indexed file.%s\n\n' "$red" "$PWD" "$reintitle" "$tput0"
@@ -1348,14 +1351,14 @@ opusarray=( *.opus )
 # abs doesn't support json files with other names, nor is there anything in the json identifying it
 # as an abs file.  It does check the .json for the chapter index, so there's at least that...
 if ! "${quiet:=false}" && [[ -f metadata.json ]] && [[ "$(jq -r '.chapters[0].title' metadata.json)" ]]; then
-  reindex=true; itemidpwd
+  reindex=1; itemidpwd
   [[ "$(jq -r '.chapters[0] | .title' metadata.json)".opus = "${opusarray[0]}" ]] ||
-     [[ "$(jq -r '.chapters[0] | .title' metadata.json)" = "001" ]] && reindex=false
+     [[ "$(jq -r '.chapters[0] | .title' metadata.json)" = "001" ]] && reindex=0
 
-  [[ "$reindex" = false ]] &&
+  ! (( reindex )) &&
     printf '%sA metadata.json file exists with duplicate chapter information; look up new chapter information at\ngoogle-chrome %s/audiobook/%s/chapters\n\n' "$red" "$absserver" "$(sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$sqlitepwd';" ".exit")" &&
       [[ ! "$rmmatch" = true ]] && confirm "${bold}Would you like to try to reindex the file after importing chapter information? ${tput0}" &&
-      reindex=true
+      reindex=1
 fi
 
 ## this should still work, but the array version is probably cleaner...
@@ -1387,7 +1390,7 @@ if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]; then
 #        printf '\n%s\n\n' "$(printline "  Exiting ${scriptname}: ${red}user abort. exit (130)${tput0}  ")"
 #        exit 130
     if [[ -f metadata.json ]] && confirm "$(printf '\nNot overwriting.\nA metadata.json file was found. Would you like to reindex the file?')"; then
-      reindex=true
+      reindex=1
       overwrite=false
     else
       printf '\n%s\n\n' "$(printline "  Exiting ${scriptname}: ${red}user abort. exit (130)${tput0}")"
@@ -1610,7 +1613,7 @@ fi
 
  (( rmsrc )) && rmsources
 
-! "${quiet:=false}" && "${reindex:=false}" && confirm -y "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info? %s' "${red}" "${bold}" "${tput0}")" && exec indexopus --reindex=metadata.json
+! "${quiet:=false}" && (( reindex )) && confirm -y "$(printf '%sA metadata.json file was found!\n%sReindex the file with audiobookshelf chapter info? %s' "${red}" "${bold}" "${tput0}")" && exec indexopus --reindex=metadata.json
 
 printf '\n\n%sDone.\n\nPlease see %s%s%s/%s\n\n' "$relipsis" "$white" "$bold" "$PWD" "$ioutput"
 

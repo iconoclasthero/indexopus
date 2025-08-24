@@ -36,9 +36,12 @@ filecheck(){
 #    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
 
   if ! [[ -w . ]]; then
-    printf '\n[WARN] The pwd (%s) is not writable;\n  attempting to take ownership.\n\n' "$(pwd)"
-    (( verbose )) && pause "$(type own) $(which own)"
-    own .
+    printf '\n[WARN] The pwd\n(%s)\n is not writable; attempting to take ownership.\n\n' "$(pwd)"
+
+    (( verbose )) && pause "[verbose] $(type own) $(which own)"
+
+    (( rmmatch )) && { own --force .; :; } || own .
+
     if ! [[ -w . ]]; then
       (( verbose )) && printf '\n[WARN] The `own .` command failed\n\nTrying `sudo chown $USER .`\n\n' &&
       eza -glaa .
@@ -215,7 +218,7 @@ allfiles=(*.@(mp3|m4@(a|b)))
 ## this should work for "." as well as set the script up for the screen call below.
 ## this shouldn't need to be before screen...it can happen after screen is invoked.
 
-[[ "$clidir" ]] && clidir="$(realpath clidir)" && [[ "$(pwd)" != "$clidir" ]] && cd "$clidir"
+[[ "$clidir" ]] && clidir="$(realpath "$clidir")" && [[ "$(pwd)" != "$clidir" ]] && cd "$clidir"
 
 [[ "$rmmatch" ]] && args=("-y") || unset args  #this resets args from "$@"
 
@@ -322,7 +325,7 @@ else
   title=(*\ --\ Audiobook.opus)
   (( "${#title[@]}" == 1 )) && title="${title% -- Audiobook.opus}"
   ioutput="$(tput sitm)$title$(tput ritm) -- Audiobook.opus"
-  read -rp "$(printf '[verbose] title: %s\n' "$title")"
+  (( verbose )) && read -rp "$(printf '[verbose] title: %s\n' "$title")"
 
   if (( opusdursec > 0 )); then
     verifydur=$(( (1000 * (sourcedursec - opusdursec)) / opusdursec ))

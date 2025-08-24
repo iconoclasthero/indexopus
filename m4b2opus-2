@@ -74,35 +74,31 @@ fnrmr(){
   ##--> fn_rmfile() <--###############################################################################
 
 
-for path in "$@"
-  do
+  for path in "$@"; do
     if [[ -d "$path" ]]; then
-	printf '%s%s\n' "$red" "$bold"
-	if rmdir "$path" 2>/dev/null; then
-	   printf 'Removing %s... \n\n$ ls %s/ \n\n' "$path" "$path"
-	else
-	   printf '\n%s' "$tput0"
-	   find "$path"
- 	   printf '%s' "$bold"
-	   rm -rI "$path"
-	   printf '%s' "$tput0"
-	fi
-
-	if [ ! -e "$path" ]; then
-      	   printf '%s\nDone!\n' "$relipsis"
-      	else
-      	   printf '\n\n%s%sRemoval Failed!%s\n\n%s is still present check ownership and permissions:\n' "$relipsis" "$bold" "$tput0" "$path"
-      	   ls -lad --color=always "$path"
-	fi
-  elif [[ -f "$path" ]]; then
-    fn_rmfile "$path"
-
-  else
-    printf '\n\n No such directory or file found!\n\n'
-
-  fi
-
-done
+	  printf '%s%s\n' "$red" "$bold"
+      if rmdir "$path" 2>/dev/null; then
+	    printf 'Removing %s... \n\n$ ls %s/ \n\n' "$path" "$path"
+	  else
+	    printf '\n%s' "$tput0"
+        [[ "$path" =~ (\[|\]) ]] && { path="${path//\[/\\\[}"; path="${path//\]/\\\]}"; }
+	    find "$path"
+ 	    printf '%s' "$bold"
+	    rm -rI "$path"
+	    printf '%s' "$tput0"
+	  fi
+      if [ ! -e "$path" ]; then
+        printf '%s\nDone!\n' "$relipsis"
+      else
+        printf '\n\n%s%sRemoval Failed!%s\n\n%s is still present check ownership and permissions:\n' "$relipsis" "$bold" "$tput0" "$path"
+        ls -lad --color=always "$path"
+      fi
+    elif [[ -f "$path" ]]; then
+      fn_rmfile "$path"
+    else
+      printf '\n\n No such directory or file found!\n\n'
+    fi
+  done
 }
 ##--> fnrmr() <--###################################################################################
 
@@ -122,7 +118,7 @@ filecheck(){
   if ! [[ -w . ]]; then
     printf '\n[WARN] The pwd (%s) is not writable;\n  attempting to take ownership.\n\n' "$(pwd)"
     (( verbose )) && pause "$(type own) $(which own)"
-    own .
+    (( rmmatch )) && { own --force .; :; } || own .
     if ! [[ -w . ]]; then
       (( verbose )) && printf '\n[WARN] The `own .` command failed\n\nTrying `sudo chown $USER .`\n\n' &&
       eza -glaa .
@@ -195,26 +191,55 @@ return 0
 ##--> filecheck() <--#################################################################################
 
 calctime(){
-  duration=$(find -type f -name "$1" -print0 |
-			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+## this entire function is a complete fucking waste.  It should just use ffprobe to get the $totalsec and then use
+## some method with FP math to divide by 4 to get $divsec (e.g., python, bc)
+
+(( verbose )) && printf 'Starting %s()\n' "$FUNCNAME"
+
+#  duration=$(find -type f -name "$1" -print0 |
+#			{ (( verbose )) && xargs -0 mplayer -vo dummy -ao dummy -identify ||
+#                 xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null; } |
+#			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
+#			tail -n 1)
+#  hours=$(find -type f -name "$1" -print0 |
+#			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+#			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' |
+#			tail -n 1)
+#  minutes=$(find -type f -name "$1" -print0 |
+#			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+#			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' |
+#			tail -n 1)
+#  seconds=$(find -type f -name "*$1" -print0 |
+#			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+#			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' |
+#			tail -n 1)
+#
+  duration=$({ (( verbose )) && mplayer -vo dummy -ao dummy -identify "$1" ||
+                 mplayer -vo dummy -ao dummy -identify "$1" 2>/dev/null; } |
 			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
 			tail -n 1)
-  hours=$(find -type f -name "$1" -print0 |
-			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+  hours=$({ (( verbose )) && mplayer -vo dummy -ao dummy -identify "$1" ||
+                 mplayer -vo dummy -ao dummy -identify "$1" 2>/dev/null; } |
 			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' |
 			tail -n 1)
-  minutes=$(find -type f -name "$1" -print0 |
-			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+  minutes=$({ (( verbose )) && mplayer -vo dummy -ao dummy -identify "$1" ||
+                 mplayer -vo dummy -ao dummy -identify "$1" 2>/dev/null; } |
 			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' |
 			tail -n 1)
-  seconds=$(find -type f -name "*$1" -print0 |
-			xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+  seconds=$({ (( verbose )) && mplayer -vo dummy -ao dummy -identify "$1" ||
+                 mplayer -vo dummy -ao dummy -identify "$1" 2>/dev/null; } |
 			perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' |
 			tail -n 1)
 
   [[ "$hours" =~ "0*(.*)" ]] && hours=${BASH_REMATCH[1]}
   [[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
   [[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
+
+(( verbose )) && printf duration\ %s\\n "$duration"
+(( verbose )) && printf hours\ %s\\n "$hours"
+(( verbose )) && printf minutes\ %s\\n "$minutes"
+(( verbose )) && printf seconds\ %s\\n "$seconds"
+
 
 #BASH_REMATCH is an array variable in Bash that contains the results of the most recent pattern match operation performed using the =~ operator with the [[ ... ]] conditional expression.
 #
@@ -243,6 +268,16 @@ calctime(){
  ##echo "totalsec $totalsec"
  divsec=$(python3 -c "print($totalsec/4)")
  ##echo "divsec $divsec"
+(( verbose )) && printf totalsec=%s\\n "$totalsec"
+(( verbose )) && printf divsec=%s\\n "$divsec"
+(( verbose )) && printf '\n\nAlternate method for determining $totalsec and $divsec:\n'
+ totalsec=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$1")
+# divsec=$(python3 -c "print($totalsec/4)")
+ divsec=$(echo "$totalsec/4" | bc -l)
+
+(( verbose )) && printf totalsec=%s\\n "$totalsec"
+(( verbose )) && printf divsec=%s\\n "$divsec"
+(( verbose )) && printf 'Returning from %s\n' "$FUNCNAME"
 }
 ##--> calctime{} <--#############################################################################
 
@@ -331,8 +366,14 @@ noindexsplit(){
 
   printf '%s%sNo index found in %s!\n...%s%sThe item will be spiit into %s parts for efficient ffmpeg conversion.\n...Reindex later with chapter information pulled from the web.\n\n' "$relipsis" "$bold" "$m4bin" "$tput0" "$red" "$partno"
     partno=1
-    calctime "$m4bin"  #why?  i think this is the only call to calctime?  there's no need for it here...
+(( verbose )) && printf '[verbose] Not calling calctime() %s\n' "$m4bin"
+#    calctime "$m4bin"  #why?  i think this is the only call to calctime?  there's no need for it here...
                        #oh contrare! this is what provides $divsec and the script fails without that line!
+                       #yes, but it's a fucking wasteful function.
+ totalsec=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$1")
+# divsec=$(python3 -c "print($totalsec/4)")
+ divsec=$(echo "$totalsec/4" | bc -l)
+
 (( verbose )) && pause "[verbose] \$divsec: $divsec"
 
 ## will need to determine if this is enough checking:
@@ -348,21 +389,52 @@ printf '[verbose] $(pwd): %s\n' "$(pwd)";
 
 pause "[verbose] \$convertdir/\$partna -- Part 0\$partno.m4a: $convertdir/$partna -- Part 0$partno.m4a"; }
 
+
+(( verbose )) && {
+
+## this is an idea for a way to have exactly what's assigned to the variables printed:
+##    expr='$(echo "($partno-1)*$divsec" | bc -l)'
+##    eval startsec="$expr"
+##    printf '\n[verbose] -ss %s: %s\n' "$expr" "$startsec"
+
+
+    startsec=$(echo "($partno-1)*$divsec" | bc -l)
+    tosec=$(echo "$partno*$divsec" | bc -l)
+    printf '\n[verbose] -ss $(echo "($partno-1)*$divsec" | bc -l): %s\n[verbose] -to $(echo "$partno*$divsec" | bc -l): %s\n\n' "$startsec" "$tosec"
+    printf '[verbose] %s\n' "$(pwd)"
+    pause "[verbose] \$convertdir/\$partna -- Part 0\$partno.m4a: $convertdir/$partna -- Part 0$partno.m4a";
+                 }
+
+
+
+
 #[[ "$m4bin" = *:* ]] && { m4bin="${m4bin//:/_}"; mv "$1" "$m4bin"; (( verbose )) && pause "[verbose] \$m4bin: $m4bin"; }
 #[[ "$m4bin" = *:* ]] && { m4bin="${m4bin//:/\\:}"; (( verbose )) && pause "[verbose] \$m4bin: $m4bin"; }
 
+#       ffmpeg -n \
+#         -nostdin \
+#         -hide_banner \
+#         -stats \
+#         -v error \
+#         -ss $(python3 -c "print(($partno-1)*$divsec)") \
+#         -to $(python3 -c "print($partno*$divsec)") \
+#         -i file:"${m4bin}" \
+#         -vn \
+#         -acodec copy \
+#         file:"$convertdir/$partna -- Part 0$partno.m4a"
+##         file:"$convertdir/${m4bin%% -- *} -- Part 0$partno.m4a"
        ffmpeg -n \
-         -nostdin \
-         -hide_banner \
-         -stats \
-         -v error \
-         -ss $(python3 -c "print(($partno-1)*$divsec)") \
-         -to $(python3 -c "print($partno*$divsec)") \
-         -i file:"${m4bin}" \
-         -vn \
-         -acodec copy \
-         file:"$convertdir/$partna -- Part 0$partno.m4a"
-#         file:"$convertdir/${m4bin%% -- *} -- Part 0$partno.m4a"
+           -nostdin \
+           -hide_banner \
+           -stats \
+           -v error \
+           -ss $(echo "($partno-1)*$divsec" | bc -l) \
+           -to $(echo "$partno*$divsec" | bc -l) \
+           -i file:"${m4bin}" \
+           -vn \
+           -acodec copy \
+           file:"$convertdir/$partna -- Part 0$partno.m4a"
+
        printf '%s' "$tput0"
     done
     cd "$convertdir"
@@ -540,7 +612,10 @@ fi
 
 (( verbose )) && pause "$(printf '[verbose] $(mediainfo "$m4bin"|grep "Menu #"):\n%s\n' "$(mediainfo "$m4bin"|grep "Menu #")")"
 
-if ! [[ $(mediainfo "$m4bin"|grep Menu\ \#) =~ ^Menu ]]; then  #process unindexed m4b files
+#if ! [[ $(mediainfo "$m4bin"|grep Menu\ \#) =~ ^Menu ]]; then  #process unindexed m4b files
+#if ! [[ $(mediainfo "$m4bin"|grep Menu\ \#) =~ ^Menu ]] && ! [[ $(mediainfo "$m4bin"|grep Menu\ For) =~ ^Menu\ For ]]; then  #process unindexed m4b files
+#if ! mediainfo "$m4bin"|\grep -Eq ^Menu\ For\|^Menu\ \#; then
+if (( $(ffprobe -i "$m4bin" -show_chapters -loglevel error | grep -c '\[CHAPTER\]') < 2 )); then
 (( verbose )) && pause "[verbose] calling \`noindexsplit $m4bin $convertdir\`"
   noindexsplit "$m4bin" "$convertdir"
 else

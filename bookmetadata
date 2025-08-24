@@ -3,6 +3,11 @@
 . $HOME/.config/indexopus.conf
 . $HOME/bin/gits/indexopus/mklnbook.functions
 
+(( YES )) && yes=1
+
+echo "\$yes=$yes"
+echo "\$YES=$YES"
+
 #exarray(){
 #  local output delim
 #  delim="$1"
@@ -97,7 +102,7 @@ if [[ "$title" =~ ^\[.+\] ]]; then
 #  printf '\nWARN: Title from directory begins with "%s" which will be stripped!\n\n' "${title%%\]*}]"
   printf '\nWARN: Title from directory begins with "%s"!\n\n' "${title%%\]*}]"
 #  pause "Press any key to continue or ^C to exit"
-  confirm "${boldred}Strip ${title%%\]*}] from linked directory title?$tput0" && title="${title#*\] }" || keepseries=1
+  { (( YES )) || confirm "${boldred}Strip ${title%%\]*}] from linked directory title?$tput0"; } && title="${title#*\] }" || keepseries=1
 fi
 
 (( verbose )) && pause "title: $title"
@@ -112,12 +117,13 @@ if (( "${#opustitle[@]}" < 1 )); then
     if (( opusmatch )) && (( "${#allopus[@]}" > 1 )); then
       printf '%sMultiple *.opus files found!\nUnmerged audiobook?\n\n%s' "$boldred" "$tput0"
       printf %s\\n "${allopus[@]}"
-      confirm -Y "${boldred}\nMerge opus files with indexopus?$tput0" && indexopus &&
+      { (( YES )) || confirm -Y "${boldred}\nMerge opus files with indexopus?$tput0"; } &&
+        { (( YES )) && YES=1 indexopus || indexopus; } &&
         opustitle=("$bookdir"/*" -- Audiobook.opus")  ||
         { printf '\nInvestigate (exit 1)\n'; exit 1; }
     elif (( opusmatch )) && (( "${#allopus[@]}" == 1 )); then
       printf 'It appears you need to rename the opus files in your book directory.\n'
-      confirm "Move\n  ${allopus[0]} \n  ${allopus[0]%.opus} -- Audiobook.opus\nConfirm move?" &&
+      { (( YES )) || confirm "Move\n  ${allopus[0]} \n  ${allopus[0]%.opus} -- Audiobook.opus\nConfirm move?"; } &&
         mv "${allopus[0]}" "${allopus[0]%.opus} -- Audiobook.opus" ||
         printf 'Unable to find suitible file in the form of %s -- Audiobook.opus\nExiting (exit 1)\n\n' "$title"
       exit 1
@@ -138,7 +144,7 @@ elif (( opusmatch )); then
   printf 'Error: directory contains multiple .opus files including <title> -- Audiobook.opus:\n'
   printf %s\\n "${allopus[@]}"
   printf \\n
-  ! confirm "Proceed with tagging ${opustitle[*]}?" &&
+  ! { (( YES )) && confirm "Proceed with tagging ${opustitle[*]}?"; } &&
     { printf 'Investigate. (exit 1)\n\n'; exit 1; }
 fi
 
@@ -203,7 +209,7 @@ language="$(jq -r '.language' "$metadata")"
 isbn="$(jq -re '.isbn | select(. != null)' "$metadata" || unset isbn)"
 asin="$(jq -re '.asin | select(. != null)' "$metadata" || unset asin)"
 
-[[ "$language" != "English" ]] && confirm -y "The language tag is \"$language\", not \"English\"$'!'\nWould you like to set \"language=English\"?" && language="English"
+[[ "$language" != "English" ]] && { (( yes )) || confirm -y "The language tag is \"$language\", not \"English\"$'!'\nWould you like to set \"language=English\"?"; } && language="English"
 
 args=(-i)
 args+=("$book")
@@ -237,7 +243,7 @@ args+=("--set" "TIT2=$title")
 
 if (( verbose )); then
   printf %s\\n "${args[@]}"
-  confirm -y "Apply tags to audiobook with opustags?" && opustags "${args[@]}"
+  { (( YES )) || confirm -y "Apply tags to audiobook with opustags?"; } && opustags "${args[@]}"
 else
   opustags "${args[@]}"
 fi
