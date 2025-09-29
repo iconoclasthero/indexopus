@@ -90,19 +90,6 @@ confirm(){
 ##--> confirm() <--################################################################
 
 delugecreds(){
-  hostlistconf="$HOME/.config/deluge/hostlist.conf"
-  local confvalues
-  readarray -t confvalues < <(jq -r '.hosts[0] | select(. != null) | .[0], .[1], .[2], .[3], .[4]' "$hostlistconf")
-  delugehost="${confvalues[1]}"
-  delugeport="${confvalues[2]}"
-  delugeuser="${confvalues[3]}"
-  delugepass="${confvalues[4]}"
-  tracker="$(jq -r '.trackers.mam' "$hostlistconf")"
-}
-##--> delugecreds() <--################################################################
-
-
-delugecreds(){
   # Generic config structure example:
   # -------------------------------
   # {
@@ -276,11 +263,38 @@ printdescrip(){
 
   swd="$(pwd)"
 
-  [[ "$1" = @(-v|--verbose) ]] && shift && verbose=1
-  [[ "$1" = -y ]] && shift && yes=1
-  [[ "$1" = -Y ]] && shift && YES=1 && yes=1
-  [[ "$1" = @(-c|--cover) ]] && shift && coveronly=1 && { getcoverurl "$swd"; ec="$?"; printf \\n; return "$ec"; }
-  [[ "$1" = @(-d|--description) ]] && printf '\n\nPrinting description\n' && shift && description=1 && { printdescrip; ec="$?"; printf \\n; return "$ec"; }
+#  [[ "$1" = @(-v|--verbose) ]] && shift && verbose=1
+#  [[ "$1" = -y ]] && shift && yes=1
+#  [[ "$1" = -Y ]] && shift && YES=1 && yes=1
+#  [[ "$1" = @(-c|--cover) ]] && shift && coveronly=1 && { getcoverurl "$swd"; ec="$?"; printf \\n; return "$ec"; }
+#  [[ "$1" = @(-d|--description) ]] && printf '\n\nPrinting description\n' && shift && description=1 && { printdescrip; ec="$?"; printf \\n; return "$ec"; }
+
+  while (( "$#" )); do
+    [[ "$1" = --indent ]] && { indent=1; shift; continue; }
+    [[ "$1" = @(-v|--verbose) ]] && { verbose=1; shift; continue; }
+    [[ "$1" = -y ]] && { yes=1; shift; continue; }
+    [[ "$1" = -Y ]] && { YES=1 yes=1; shift; continue; }
+
+    [[ "$1" = @(-c|--cover) ]] && {
+      coveronly=1
+      getcoverurl "$swd"; ec=$?
+      printf '\n'
+      return "$ec"
+    }
+
+    [[ "$1" = @(-d|--description) ]] && {
+      printf '\n\nPrinting description\n'
+      description=1
+      shift
+      printdescrip; ec=$?
+      printf '\n'
+      return "$ec"
+    }
+
+  printf '%s is unrecognized.\n' "$1"
+  shift
+  confirm -y 'Proceed with script?' && continue || exit 1
+done
 
 #  hostlistconf="$HOME/.config/deluge/hostlist.conf"
   delugecreds -h gigabyte -t mam
@@ -410,6 +424,7 @@ printdescrip(){
 
   if { (( yes )) || confirm -Y "${boldred}Set book metadata from ABS metadata.json?$tput0"; }; then
     bookmetadatacmd=( bookmetadata )
+    (( indent )) && bookmetadatacmd+=( --indent )
     (( verbose )) && bookmetadatacmd+=( --verbose )
     { (( YES )) && bookmetadatacmd=( env YES=1 "${bookmetadatacmd[@]}" ); } ||
     { (( yes )) && bookmetadatacmd=( env yes=1 "${bookmetadatacmd[@]}" ); }
@@ -504,7 +519,14 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
 #    cd "$1"
 #    middlePWD="$PWD"
 #    /home/bvargo/bin/gits/indexopus/indexopus-2 --reindex=metadata.json -y
-    indexopus --reindex=metadata.json -y
+    unset cmdenv indexopuscmd
+    (( YES )) && cmdenv+=( YES=1 )
+    (( verbose )) && cmdenv+=( verbose=1 )
+    [[ "$cmdenv" ]] && indexopuscmd+=( env "${cmdenv[@]}" )
+    indexopuscmd+=( "indexopus" "--reindex=metadata.json" "-y" )
+    (( verbose )) && printf '[verbose] indexopuscmd+=( "${cmdenv[@]}" "indexopus" "--reindex=metadata.json" "-y" ):\n[verbose] indexopuscmd=%s\n' "$(printf %s\  "${indexopuscmd[@]}")"
+    "${indexopuscmd[@]}"
+
 #    cd - >/dev/null
 #    endPWD="$PWD"
 #    printf %s\\n%s\\n "$startPWD" "$middlePWD"
@@ -643,56 +665,6 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
      fi
     }
 
-#    if (( $(mediainfo --Inform="Image;%Height%" "$1/$cover") > 1200 || $(mediainfo --Inform="Image;%Width%" "$1/$cover") > 1200 )); then
-#      convert "$1/$cover" -resize 1200x1200 jpg:- | \
-#      opustags -o "$1/$t -- Audiobook-2.opus" --set-cover - "$1/$t -- Audiobook.opus"
-#    else
-#      opustags -o "$1/$t -- Audiobook-2.opus" --set-cover "$cover" "$1/$t -- Audiobook.opus"
-#    fi
-
-#  while :; do
-#    if (( largest < scale )); then
-#      tmpimg="$1/$cover"
-#      scale="$largest"
-#(( verbose )) && read -rp "$tmpimg"
-#    elif (( w >= h )); then
-#      convert "$1/$cover" -resize "${scale}x" -strip -quality 85 "$tmpimg"
-#    else
-#      convert "$1/$cover" -resize "x${scale}" -strip -quality 85 "$tmpimg"
-#    fi
-#
-#    size=$(stat -c %s "$tmpimg"); echo "${scale}: $size"
-#(( verbose )) && read -rp "${scale}: $size"
-#    if (( size < maxcover )); then
-#      opustags -o "$1/$t -- Audiobook-2.opus" --set-cover "$tmpimg" "$1/$t -- Audiobook.opus"
-#      ec="$?"
-#      (( ec )) && { printf 'opustags reported an unknown error embedding %s, see above.\nexiting (return 1)' "$tmpimg"; return 1; }
-#      break
-## 2025-05-18T21:37-04:00
-## mediainfo now does not report conformance erros for large images so there was never a problem
-## and this check is unnecessary.  If 1200x1200 is the starting size and it gets scaled down further
-## that's fine.  this can go in a couple weeks.
-##      mediainfo "$1/$t -- Audiobook-2.opus" | grep -q 'Conformance errors'
-##      ec="$?"
-##      if (( ec == 1 )); then
-##        break
-##      elif (( ec == 0 )); then
-##        printf 'Image still larger than max page size\nContinue resizing...\n'
-##      elif (( ec != 0 )); then
-##        printf 'Error checking conformance\n' >&2
-##        info=$(mediainfo "$1/$t -- Audiobook-2.opus")
-##        printf %s\\n "$info"
-##        grep 'Conformance errors' <<< "$info"
-##        return $ec
-##      fi
-#    fi
-#    (( scale -= 50 ))
-#    (( scale <= 0 )) && {     echo "image too large even at minimal scale" >&2;     return 1;   }
-#  done
-
-
-# need to delete in a couple weeks 2025-05-18T22:08-04:00
-
 size=$((1<<30)) # 1 GiB size
 (( scale > largest )) && scale="$largest"
 
@@ -797,6 +769,12 @@ fi ### to checking if .jpg files exist?
    confirm -y "Remove *.opf? "; then
     rm *.opf
   fi
+  lnjson=("$PWD"/*json)
+  if [[ -L "${lnjson[0]}" ]] &&
+   printf '\n.json found\n%s\n' "$(eza -la --no-user *.json)" &&
+   confirm -y "Remove *.json? "; then
+    rm *.json
+  fi
 
   parts=("$PWD"/*.part)
   if [[ -L "${parts[0]}" ]] && printf '\nFound .part files!\n%s\n' "$(eza -la --no-user *.part)" &&       { (( yes )) || confirm -y "\n${boldred}Remove .part files?$tput0"; };  then
@@ -842,7 +820,12 @@ fi ### to checking if .jpg files exist?
   readarray -t partnames < <(jq -r '.chapters[].title' metadata.json)
   for i in "${partnames[@]}"; do [[ "$i" = *\/* ]] && i="${i//\//\\}"; touch "$i.part"; done
 
-  confirm -y "$red${blink}Run updatetracker function?$tput0" && updatetracker || return 0
+  confirm -y "$red${blink}Run updatetracker function?$tput0" && updatetracker ||
+    { printf 'To update tracker, run:\ndelugecreds -h gigabyte -t mam\n';
+      hash="$(transmission-show "$torrentfile" | \grep -oP 'Hash v1: \K.*')"
+      printf 'deluge-console "connect $delugehost:$delugeport $delugeuser $delugepass; update_tracker ${hash@Q}"\n'
+      printf 'NB: This has not been tested yet.\n'
+      return 0; }
 
   printline "\n ${FUNCNAME[0]} finished \n\n"
   return "$?"

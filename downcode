@@ -26,7 +26,7 @@ yn(){
   done
 }
 
-[[ "$1" = @(edit|e|-e) ]] && editscript
+[[ "$1" = @(--edit|e|-e) ]] && editscript
 
 #if ! command -v mediainfo &> /dev/null; then
 #  unset mi
@@ -182,29 +182,49 @@ for i in *flac; do
     fi
   fi
 
-  if [[ "$i" = *".24."* ]]
-    then
-      flac24="$i"
-      flac16="${flac24/.24.flac/.flac}"
-      ffmpeg -n \
-        -hide_banner \
-        -nostdin \
-        -i file:"$flac24" \
-        -af aresample=osf=s16:dither_method=triangular_hp \
-        -ar "$Hz" \
-        file:"$flac16"
+
+  if [[ "$i" = *.24.flac ]]; then
+    flac24="$i"
+    flac16="${flac24/.24.flac/.flac}"
   else
     flac16="$i"
     flac24="${i/.flac/.24.flac}"
     mv "$i" "$flac24"
-    ffmpeg -n \
-      -hide_banner \
-      -nostdin \
-      -i file:"$flac24" \
-      -af aresample=osf=s16:dither_method=triangular_hp \
-      -ar "$Hz" \
-      file:"$flac16"
   fi
+
+  ffmpeg -n \
+    -hide_banner \
+    -nostdin \
+    -i file:"$flac24" \
+    -af aresample=osf=s16:dither_method=triangular_hp \
+    -ar "$Hz" \
+    file:"$flac16"
+
+
+#  if [[ "$i" = *".24."* ]]
+#    then
+#      flac24="$i"
+#      flac16="${flac24/.24.flac/.flac}"
+#      ffmpeg -n \
+#        -hide_banner \
+#        -nostdin \
+#        -i file:"$flac24" \
+#        -af aresample=osf=s16:dither_method=triangular_hp \
+#        -ar "$Hz" \
+#        file:"$flac16"
+#  else
+#    flac16="$i"
+#    flac24="${i/.flac/.24.flac}"
+#    mv "$i" "$flac24"
+#    ffmpeg -n \
+#      -hide_banner \
+#      -nostdin \
+#      -i file:"$flac24" \
+#      -af aresample=osf=s16:dither_method=triangular_hp \
+#      -ar "$Hz" \
+#      file:"$flac16"
+#  fi
+
 done
 
 mkdir "24-bit"

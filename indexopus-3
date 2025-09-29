@@ -298,6 +298,7 @@ reindex(){
         (.start // empty) | tostring
       end
     ' "$jsonfile" 2>/dev/null)
+    modified=1
   fi
 
   (( verbose )) && for (( i=0; i<"${#chapstarts[@]}"; i++ )); do printf '[verbose] %s\t%s\n' "${chapstarts[i]}" "${chaptitles[i]}"; done
@@ -309,10 +310,20 @@ reindex(){
 ## check for over 100 chapters and set triple to true:
   (( chcount > 99 )) && { (( yes )) || confirm -y "${red}Over 99 chapters detected. Zero pad to 3 spaces?$tput0"; } && triple=1
 
+
+  if (( indent )); then
+    for i in "${!chaptitles[@]}"; do
+      [[ "${chaptitles[$i]}" =~ ^Chapter ]] && chaptitles[$i]="..${chaptitles[$i]}"
+    done
+    outline=1
+  fi
+
 ## This is to allow for outline style because ABS won't allow for *ANY* whitespaces before or after chapter names
 
   for ((chno=0; chno<"${#chaptitles[@]}"; chno++)); do
-    if [[ "${chaptitles[$chno]}" = ..* ]]; then
+    if (( outline )); then
+      break
+    elif [[ "${chaptitles[$chno]}" = ..* ]]; then
       printf '%sAn index title contains prefix "..", possibly indication outline style%s:\n  "%s"\n\n' "$red" "$tput0" "${chaptitles[$chno]}"
       confirm -y "${red}Use outline style (i.e., convert prefix periods to spaces)?$tput0" && outline=1
       break
@@ -591,10 +602,14 @@ path   : ${patharray[$itemid]#/library/books/}"
     printf '%s\n' "${selectedids[@]}"
   fi
 
+#   printf 'This will need to be put back on (( verbose )) after testing:\n'
 
-  if true || (( outline )) || (( barenum )) || (( zeropadchnna )) || [[ -f "reindex.$jsonfile" ]]; then
+  (( verbose )) && pause "[verbose] removed 'true' from 'if (( outline )) || (( barenum )) || (( zeropadchnna )) || [[ -f \"reindex.$jsonfile\" ]]; then'"
+
+#  if true || (( outline )) || (( barenum )) || (( zeropadchnna )) || [[ -f "reindex.$jsonfile" ]]; then
+  if (( modified )) || (( outline )) || (( barenum )) || (( zeropadchnna )) || [[ -f "reindex.$jsonfile" ]]; then
     printf 'The chapter index written to the audiobook file now differs from %s.\n' "$jsonfile"
-    confirm -y "${boldred}Do you want to write these changes to $jsonfile?$tput0" && updatejson=1 || continue
+    { (( YES )) || confirm -y "${boldred}Do you want to write these changes to $jsonfile?$tput0"; } && updatejson=1 || continue
 
 
 #    [[ -f "reindex.$jsonfile" ]] && injson="reindex.$jsonfile" || injson="$jsonfile"
@@ -634,11 +649,13 @@ printf '\n%sChapter titles from jq .chapters %s/%s:\n%s' "$red" "$tmp" "$outjson
 #      [[ "$absresponse" = UPTODATE ]] && printf 'ABS database was already up to date.\nInvestigate\n.'
 #    fi
 
-    if confirm -y "${boldred}Update $jsonfile from $outjson?$tput0"; then
+    if { (( YES )) || confirm -y "${boldred}Update $jsonfile from $outjson?$tput0"; }; then
+      (( YES )) && printf '%sUpdating %s from %s.%s\n\n' "$boldred" "$jsonfile" "$outjson" "$tput0"
       install -g "$absgroup" -m 664 "$outjson" "$jsonfile" && rm "$outjson"
       sudo chown "$absuser":"$absgroup" "$jsonfile"
       sudo -k
-      if confirm -y "${red}Push changes in $jsonfile to abs server via API?$tput0"; then
+      if { (( YES )) || confirm -y "${red}Push changes in $jsonfile to abs server via API?$tput0"; }; then
+        (( YES )) && printf '%sPushing changes in %s to abs server via API.%s\n\n' "$boldred" "$jsonfile" "$tput0"
         for itemid in "${selectedids[@]}"; do
           printf 'Pushing updated index to %s/item/%s...\n' "$absserver" "$itemid"
           absresponse="$(curl -sSX POST "$absserver/api/items/$itemid/scan" \
@@ -855,7 +872,13 @@ mvopus(){
 
 ## changed from a splat to the first index item
 #  elif [[ "$opusarray" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]]; then
-  elif [[ "${opusarray[0]}" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]]; then
+#  elif [[ "${opusarray[0]}" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]]; then
+## added a check to make sure that what ends up being the title is actually the same across the first two files
+  elif { [[ "${opusarray[0]}" =~ (.+)\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]];
+         t=("${BASH_REMATCH[1]}"); } &&
+       { [[ "${opusarray[1]}" =~ (.+)\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]];
+         t+=("${BASH_REMATCH[1]}"); } &&
+       [[ "${t[0]}" = "${t[1]}" ]]; then
     echo "Using rename pattern 2."
     for i in "${opusarray[@]}"; do
       n="${i%.opus}"; n="${n##* }"
@@ -894,7 +917,9 @@ mvopus(){
 
     mvopus
 
-  elif [[ "$opusarray" = .+\ Part\ [[:digit:]]{1,3}\.opus ]]; then
+#  elif [[ "$opusarray" =~ .+\ Part\ [[:digit:]]{1,3}\.opus ]]; then
+  elif [[ "${opusarray[0]}" =~ (.+\ )?([Cc]hapter|[Pp]art|[Dd]isc|[Tt]rack)\ [[:digit:]]{1,3}\.opus ]]; then
+
     echo "Using rename pattern 4."
 
 #   this is logic to add double or triple digits to all the part numbers.
@@ -902,11 +927,59 @@ mvopus(){
     for i in "${opusarray[@]}"; do n="${i%.opus}"; n="${n##* }"; parts["$i"]="$n"; done
     (( "$(printf %s\\n "${parts[@]}"|sort|tail -n1)" > 99 )) && hundreds=true
 
-#
+titleinput(){
+  local title
+  title="$(gum input --width="$(( $(tput cols) - $(tput cols)/10 ))" --value="${PWD##*\/}" --header.foreground="11" --header="$(printf '\nNB: Using this rename pattern requires setting a title.\n\nEnter title to use for part files:')")"
+  if confirm -y "Use $red$iton$title$tput0 as title for part files?"; then
+    printf %s\\n "$title"
+  else
+    printf '\nFix directory name and return.\nExiting. (exit 1)\n\n'
+    exit 1
+  fi
+}
+
+
+titleinput(){
+  local title
+  title="$(gum input \
+    --width="$(( $(tput cols) - $(tput cols)/10 ))" \
+    --value="${PWD##*/}" \
+    --header.foreground="11" \
+    --header $'NB: Using this rename pattern requires setting a title.\n\nEnter title to use for part files:')"
+
+  if confirm -y "Use $red$iton$title$tput0 as title for part files?"; then
+    printf '%s' "$title"   # only print the title itself
+  else
+    printf '\nFix directory name and return.\nExiting.\n(exit 1)\n' >&2
+    exit 1
+  fi
+}
+
+#    t="${BASH_REMATCH[1]:-$(titleinput)}"
+
+    if [[ "${BASH_REMATCH[1]}" ]]; then
+      t="${BASH_REMATCH[1]}"
+    else
+      t="$(gum input \
+        --width="$(( $(tput cols) - $(tput cols)/10 ))" \
+        --value="${PWD##*/}" \
+        --header.foreground="11" \
+        --header $'NB: Using this rename pattern requires setting a title.\n\nEnter title to use for part files:')"
+
+      if confirm -y "Use $red$iton$t$tput0 as title for part files?"; then
+        (( verbose )) && printf '%s' "$title"   # only print the title itself
+      else
+        printf '\nFix directory name and return.\nExiting.\n(exit 1)\n' >&2
+        exit 1
+      fi
+    fi
+
+    (( verbose )) && pause "$(printf '[verbose] $t=%s\n' "$t")"
 
     for i in "${opusarray[@]}"; do
-      n="${i%.opus}"; n="${n##* }"; [[ "$hundreds" = true ]] && n="$(printf %03d "$n")" || n="$(printf %02d "$n")"
-      newname="${i% *}"; newname="${newname% @(p|P)art*} -- Part $n: Part $n.opus"
+      n="${i%.opus}"; n="$((10#${n##* }))"; [[ "$hundreds" = true ]] && n="$(printf %03d "$n")" || n="$(printf %02d "$n")"
+#      newname="${i% *}"; newname="${newname% @(p|P)art*} -- Part $n: Part $n.opus"
+      newname="$t -- Part $n: Part $n.opus"
       confirmrename["$i"]="$newname"
       printf '%s    %s---->%s    %s%s\n%s' "$i" "$bold" "$tput0" "$red" "${confirmrename["$i"]}" "$tput0"
     done
@@ -1046,6 +1119,7 @@ mvopus(){
     regex="([[:digit:]]{1,3})(: ?|\. ?|\ -\ ?|\ ?)?(.+\.opus)"
 
     for i in *.opus; do
+      (( verbose )) && printf '[verbose] $regex=%s\n' "$regex"
       (( verbose )) && printf '[verbose] $i=%s\n' "$i"
       if [[ "$i" =~ $regex ]]; then
         n="${BASH_REMATCH[1]}"
@@ -1292,46 +1366,33 @@ printline "${bold}  Welcome to ${red}indexopus  ${tput0}"
 echo
 
 # Parse command-line options
-while [[ "$#" -gt 0 ]]; do
-  if [[ "$1" = @(e|edit|--edit) ]]; then
-     editscript;
-  elif [[ "$1" = @(-v|--verbose) ]]; then
-    verbose=1
-  elif [[ "$1" = @(-y|--force) ]]; then
-     rmmatch=true
-  elif [[ "$1" = -f ]]; then
-     fd="$2"; shift
-  elif [[ "$1" = @(-d) ]]; then
-     opuspartdur="$2"; shift
-  elif [[ "$1" = @(-q|--quiet) ]]; then
-     quiet=true; shift
-  elif [[ "$1" = @(-t|--title) ]]; then
-     title="$2"; shift
-  elif [[ "$1" = @(-s|--stamp) ]]; then
-     stamp="$2"; shift
-  elif [[ "$1" = @(-m|--tmp) ]]; then
-     tmp="$2"; shift
-  elif [[ "$1" = @(c|config|--config) ]]; then
-     if [[ -n "$2" && -f "$2" && $(grep -q "absserver" "$2") ]]; then
+while (( "$#" )); do
+  [[ "$1" = @(e|edit|--edit) ]] && { editscript; exit; }
+  [[ "$1" = @(-v|--verbose) ]] && { verbose=1; shift; continue; }
+  [[ "$1" = @(-y|--force) ]] && { rmmatch=true; shift; continue; }
+  [[ "$1" = @(-q|--quiet) ]] && { quiet=true; shift; continue; }
+  [[ "$1" = --indent ]] && { indent=1; shift; continue; }
+  [[ "$1" = -f ]] && { fd="$2"; shift 2; continue; }
+  [[ "$1" = -d ]] && { opuspartdur="$2"; shift 2; continue; }
+  [[ "$1" = @(-t|--title) ]] && { title="$2"; shift 2; continue; }
+  [[ "$1" = @(-s|--stamp) ]] && { stamp="$2"; shift 2; continue; }
+  [[ "$1" = @(-m|--tmp) ]] && { tmp="$2"; shift 2; continue; }
+  [[ "$1" = @(c|config|--config) ]] &&
+     { if [[ "$2" && -f "$2" && $(grep -q "absserver" "$2") ]]; then
        config="$2"
-       shift
+       shift 2
      else
 #      if [[ -f "$confpath" && $(grep -q "absserver" "$confpath") ]]; then
 #         config="$confpath"
 #      fi
        echo "Default config file location: $confpath"
-     fi
-  elif [[ "$1" = @(-r|--reindex|reindex) ]]; then
-    reindex=1
-  elif [[ "$1" = --reindex=*.json ]]; then
-    reindex=1; usemetadata=1; jsonfile="${1/--reindex=}"
-  elif [[ "$1" = @(-h|help|--help) ]]; then
-    usage
-  else
-    echo "Unknown option: $1"
-    exit 1
-  fi
-  shift
+       shift
+     fi; }
+  [[ "$1" = @(-r|--reindex|reindex) ]] && { reindex=1; shift; continue; }
+  [[ "$1" = --reindex=*.json ]] && { reindex=1; usemetadata=1; jsonfile="${1/--reindex=}"; shift; continue; }
+  [[ "$1" = @(-h|help|--help) ]] && { usage; exit; }
+  { printf '%s is unrecognized.\n' "$1"; shift;
+    { confirm -y 'Proceed with script?' && continue; } || exit 1; }
 done
 
 if [[ ! -d "$tmp" ]]; then

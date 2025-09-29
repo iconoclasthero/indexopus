@@ -473,7 +473,7 @@ while (( $# > 0 )); do
   [[ "$1" = @(-|--)@(Ys|Yes) ]] && { (( rmmatch=screened=1 )); args+=(-Y); shift; continue; }
   [[ "$1" =  @(-v|--verbose) ]] && { args+=("$1"); verbose=1; shift; continue; }
   [[ "$1" =  @(-D|--discord) ]] && { args+=("$1"); discord=0; shift; continue; }
-#   { args+=("$1"); shift; discord=1; . "$HOME/.config/apprise.conf"; continue; }
+#   { args+=("$1"); shift; discord=1; . "$HOME/.config/discord-local.conf"; continue; }
   [[ -f "$1" || -d "$1" ]] && (( checked )) && { clifile="$1"; args+=("$clifile"); shift; continue; }
   [[ -f "$1" || -d "$1" ]] && { clifile="$(realpath "$1")"; args+=("$clifile"); shift; continue; }
 ## maybe the clifle="$1" if --checked is set?  is that even something that can be done? yes, but it requires a lot more processing in the event that checked is after clifile.  maybe that doesn't matter since the user should not be calling --checked.

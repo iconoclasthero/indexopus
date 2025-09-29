@@ -118,7 +118,7 @@ if (( "${#opustitle[@]}" < 1 )); then
       printf '%sMultiple *.opus files found!\nUnmerged audiobook?\n\n%s' "$boldred" "$tput0"
       printf %s\\n "${allopus[@]}"
       { (( YES )) || confirm -Y "${boldred}\nMerge opus files with indexopus?$tput0"; } &&
-        { (( YES )) && YES=1 indexopus || indexopus; } &&
+        { (( YES )) && YES=1 indent="$indent" indexopus || indent="$indent" indexopus; } &&
         opustitle=("$bookdir"/*" -- Audiobook.opus")  ||
         { printf '\nInvestigate (exit 1)\n'; exit 1; }
     elif (( opusmatch )) && (( "${#allopus[@]}" == 1 )); then

@@ -183,7 +183,8 @@ while (( $# > 0 )); do
   [[ "$1" = @(|-)@(-ys|-yes) ]] && shift && rmmatch=1 && screened=1 && continue
   [[ "$1" = -y ]] && shift && rmmatch=1 && continue
   [[ "$1" = --save ]] && args+=("$1") && shift && save=1 && continue
-  [[ "$1" = @(-D|--discord) ]] && { args+=("$1"); unset discord; . ~/.config/apprise.conf; shift; continue; }
+  [[ "$1" = @(-D|--discord) ]] && { args+=("$1"); unset discord; . ~/.config/discord-local.conf; shift; continue; }
+  [[ "$1" = --calling-tmp  && -f "$2" ]] && { calltmpf="$2"; shift 2; continue; }  ## requires calling script to touch file first
   [[ -f "$1" ]] && args+=("$1") && shift && clifile="${args[-1]}" && continue
   { printf '"%s" is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script' || exit 1; }
 done
@@ -204,7 +205,8 @@ if (( screened == 1 )); then
   exit
 fi
 
-(( verbose )) && pause "rmmatch=$rmmatch"
+(( verbose )) && [[ "$calltmpf" ]] && printf '[verbose] $calltmpf=%s\n' "$calltmpf"
+(( verbose )) && pause "[verbose] rmmatch=$rmmatch"
 
 SWD="$(pwd)"
 
@@ -212,7 +214,7 @@ if [[ "$clifile" ]]; then
   if [[ "$clifile" = *@(.mp3|.m4@(a|b)|wav|.mp4) ]]; then
     path="$clifile"
   fi
-  (( verbose )) && pause "$path"
+  (( verbose )) && pause "[verbose] \$path=$path"
 else
   ckbook=( *@(mp3|m4@(a|b)|wav) )
   if (( ${#ckbook[@]} == 1 )); then
@@ -378,9 +380,7 @@ else
   confirm "Remove $tmp?" && rm -r "$tmp" || printf '...Leaving %s\n' "$tmp"
 fi
 
-#checkdur
-#printf \\n
-(( verbose )) && pause "..."
+# (( verbose )) && pause "...Continue ?"
 
 
 #printf '%s\n%s\n' "$(ls *\ Audiobook.m4?)" "$(mediainfo *\ Audiobook.m4?|grep ^Duration\ |uniq)"
@@ -468,7 +468,16 @@ fi
 
 (( discord )) && discorddm "mp32opus completed: ${title:-title unavailable}"
 
-exit 0
+## communicate sourcable "$title" "$titleopus" variables back to script calling with --calling-temp "$calltmpf" file
+if [[ "$calltmpf" ]]; then
+  printf 'title="%s"\n' "$title" >> "$calltmpf"
+  printf 'titleopus="%s"\n' "$titleopus" >> "$calltmpf"
+fi
+
+: "${ec:=0}"
+printline "${bold}  Exiting $0 (exit $ec)  $tput0"
+
+exit "$ec"
 
 #https://www.reddit.com/r/ffmpeg/comments/107p3mh/remove_all_apart_from_audio/
 #Mon Dec 11 10:52:50 AM EST 2023

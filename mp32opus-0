@@ -26,7 +26,7 @@ while (( $# > 0 )); do
   [[ "$1" = "-n"           ]] && args+=("$1") && shift && no=1 && unset rmmatch && continue
   [[ "$1" = "--stats"      ]] && args+=("$1") && shift && stats=true && initargs=("$1") && continue
   [[ "$1" = @(-ys|-yes)    ]] && args+=("-y") && shift && rmmatch=1 && screened=1 && continue
-  [[ "$1" = @(-D|--discord) ]] && { args+=("$1"); shift; discord=1; . ~/.config/apprise.conf; continue; }
+  [[ "$1" = @(-D|--discord) ]] && { args+=("$1"); shift; discord=1; . ~/.config/discord-local.conf; continue; }
 #  [[ -e "$1" ]] && args+=("$1") && shift && clipath="$1" && continue
   [[ -d "$1" ]] && args+=("$1") && shift && clidir="$1" && continue
   [[ -f "$1" ]] && args+=("$1") && shift && clifile="$1" && continue
@@ -110,7 +110,7 @@ printf \\n
        printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tput sitm)" "$(tput ritm)" "$tput0" ||
        printf '%sDurations match!%s\n' "$relipsis" "$tput0"
     printf '\n%sDone.\n\nPlease see %s/%s%s\n\n' "$relipsis" "$(pwd)" "$ioutput" "$tput0"
-    (( discord )) && apprise "$apprisediscord" -t "mp32opus completed:" -b "$title"
+    (( discord )) && discord-local "$discord-localdiscord" -t "mp32opus completed:" -b "$title"
     exit
   elif (( rmmatch )) && (( verifydur )); then
     printf '%s%sThe source and opus audiobook durations do not match!\n' "$bold" "$red"
@@ -129,4 +129,4 @@ elif (( opusdursec = 0 )); then
 fi
 
 
-(( discord )) && apprise "$apprisediscord" -t "m4b2opus completed:" -b "$title"
+(( discord )) && discord-local "$discord-localdiscord" -t "m4b2opus completed:" -b "$title"

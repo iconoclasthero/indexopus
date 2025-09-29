@@ -399,7 +399,7 @@ while (( $# > 0 )); do
   [[ "$1" = @(-v|--verbose) ]] && args+=("$1") && shift && verbose=1 && continue
   [[ "$1" = @(-D|--discord) ]] &&
     { args+=("$1"); shift; discord=0; continue; }
-#   { args+=("$1"); shift; discord=1; . "$HOME/.config/apprise.conf"; continue; }
+#   { args+=("$1"); shift; discord=1; . "$HOME/.config/discord-local.conf"; continue; }
   [[ -f "$1" || -d "$1" ]] && { clifile="$(realpath "$1")"; args+=("$clifile"); shift; continue; }
   [[ "$1" = "" ]] && { shift; continue; }
   { printf '%s is unrecognized.\n' "$1"; shift;
