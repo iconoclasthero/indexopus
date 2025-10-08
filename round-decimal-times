@@ -1,0 +1,43 @@
+#!/bin/bash
+
+## this script rounds the decimal seconds of ABS metadata.json files with the break point being at 0.5 seconds:
+## if <0.5 s it rounds up 1 s
+## if >=0.5 s it rounds up 2 s
+## eventually this can be fixed to allow for more flexibility based on the book.
+## could also assume linear drift and add a counter that is total final drift (sec) / total chapters and
+## apply a progressive adjustment
+
+while IFS= read -r line; do
+  if [[ "$line" =~ \"end\"\:\ (([0-9]+)\.([0-9]+)), ]]; then
+#  if [[ "$line" =~ ^([[:space:]]*)\"end\"\:\ (([0-9]+)\.([0-9]+)), ]]; then
+#    ws="${BASH_REMATCH[1]}"
+#    t="${BASH_REMATCH[2]}"
+#    d="${BASH_REMATCH[4]:0:1}"
+#    i="${BASH_REMATCH[3]}"
+    t="${BASH_REMATCH[1]}"
+    i="${BASH_REMATCH[2]}"
+    d="${BASH_REMATCH[3]:0:1}"
+#    read -rp "$line" </dev/tty
+    (( d < 5 )) && (( i++ ))
+    (( d > 4 )) && i=$(( i+2 ))
+#    echo "${ws}\"end\": $i,"
+    echo "${line/$t/$i}"
+    while IFS= read -r line2; do
+      if [[ "$line2" =~ \"start\"\:\  ]]; then
+#      if [[ "$line2" =~ ^([[:space:]]*)\"start\"\:\  ]]; then
+#        ws2="${BASH_REMATCH[1]}"
+#        echo "${ws2}\"start\": $i,"
+        echo "${line2/$t/$i}"
+        continue 2
+      else
+#        [[ "$line2" =~ ^([[:space:]]*) ]] && ws3="${BASH_REMATCH[1]}"
+#        echo "${ws3}${line2#$ws3}"
+        echo "$line2"
+      fi
+    done
+  else
+#    [[ "$line" =~ ^([[:space:]]*) ]] && ws="${BASH_REMATCH[1]}"
+#    echo "${ws}${line#$ws}"
+    echo "$line"
+  fi
+done

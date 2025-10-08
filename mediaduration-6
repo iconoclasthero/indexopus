@@ -1,0 +1,394 @@
+#!/bin/bash
+
+########################################
+###  USING FFMPEG IS WAAAAY SLOWER!  ###
+########################################
+
+# nb: the swp file that editscript relies on is provided by nano
+# <konsolebox_> iconoclast_hero: 1) Yes that's one way to do it but bash doesn't support decimals so checking if the result is > 0 would be more complicated. 2) You can use printf and pipe it back to Perl.
+# <konsolebox_> iconoclast_hero: You can also just do everything in Perl: ... | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t += $1); END { if ($t > 0) { printf "%02d:%02d:%02d\n", $t/3600, $t/60%60, $t%60; }; }'
+#trap read DEBUG
+#set -x
+
+declare -A exts
+declare -A extsplits
+
+checkdev(){
+  local ext="${1:-flac}"  ## for now, the only thing we need to split out and run in parallel is flac
+                  ## but $extsplits provides for expanding that later, e.g., for opus
+
+  # decide number of splits if not given on cli or from a flag
+  if [[ ! "$splits" || "$splits" = auto ]]; then
+
+    if [[ ! "$rot" ]]; then
+#      local dir="${clidir:=.}" ## this isn't necessary since we cd into "$clidir"
+      [[ "$(findmnt -T . -nr -o FSTYPE)" = fuse.sshfs ]] && { printf '%s is an sshfs mount; run this on the local machine. (exit 1)\n' "$(pwd)"; exit 1; }
+
+      dev=$(df -P . | awk 'NR==2{print $1}')
+
+      # check for tmpfs
+      if [[ "$dev" == tmpfs ]]; then
+        rot=0
+
+      #check for fuse.sshfs > now redundant.
+      #elif [[ $(findmnt -T . -rn -o FSTYPE) = 'fuse.sshfs' ]]; then
+      #  rot=1
+
+      # check normal block device for ssd/hdd
+      else
+        disk=$(lsblk -no PKNAME "$dev" 2>/dev/null)
+        [[ -z "$disk" ]] && disk=$(basename "$dev")
+        # rotational info with fallback
+        rot=$(cat "/sys/block/$disk/queue/rotational" 2>/dev/null || echo 1)
+      fi
+    fi # if [[ ! "$rot" ]]
+
+#only runs now if cli exts are used
+    [[ ! "${exts[$ext]}" ]] && (( ! rot )) &&
+       while IFS=: read -r k v; do
+         k=${k,,}
+         (( exts["$k"] += v ))  ## this *adds* v; to replace; `exts["$k"]="$v"`
+       done < <(find . -xdev -type f \( "${findexpr[@]}" \) 2>/dev/null \
+                | sed -rn 's|.*/[^/]+\.([^/.]+)$|\1|p' \
+                | awk '{cnt[tolower($0)]++} END {for (e in cnt) print e ":" cnt[e]}'
+               )
+
+
+    # count files
+    nfiles="${exts[$ext]}"
+    (( verbose )) && printf 'nfiles="${exts[%s]}": %s\n' "$ext" "$nfiles"
+    # if spinning use < not more than 2 jobs else use $nproc
+    (( rot )) && extsplits["$ext"]=$(( nfiles < 200 ? 1 : 2 )) || extsplits["$ext"]=$(( nfiles < 50 ? 1 : $(nproc) ))
+  fi
+  (( verbose )) && printf 'extsplits[%s]: %s\n' "$ext" "${extsplits[$ext]}"
+  (( ! rot )) && [[ "$ext" != opus ]] && checkdev 'opus'
+
+}
+
+
+durtools(){
+#  command -v exiftool >/dev/null 2>&1 && exiftool=1 && (( verbose )) && printf 'exiftool: %s\n' "$exiftool"
+#  command -v metaflac >/dev/null 2>&1 && metaflac=1 && (( verbose )) && printf 'metaflac: %s\n' "$metaflac"
+#  command -v mplayer >/dev/null 2>&1 && mplayer=1 && (( verbose )) && printf 'mplayer: %s\n' "$mplayer"
+#  command -v shntool >/dev/null 2>&1 && shntool=1 && (( verbose )) && printf 'shntool: %s\n' "$shntool"
+  for tool in exiftool metaflac mplayer shntool; do
+    if command -v "$tool" >/dev/null; then
+      (( verbose )) && printf '%s: 1\n' "$tool"
+      declare -g "$tool"=1
+    elif (( verbose )); then
+      printf '%s: 0\n' "$tool"
+    fi
+  done
+}
+
+sec2sex(){
+  [[ "$1" = -d ]] && { local decimal=1; shift; }
+  local h m s d input dec
+  input="$1"
+  if (( decimal )); then
+    dec="${input#*.}"
+    [[ ! "$dec" ]] && dec=0
+    d="${dec:0:3}"
+    (( ${#d} < 3 )) && d=$(printf '%-3s' "$d" | tr ' ' '0')
+    input="${input%.*}"   # integer part
+     # [[ "${dec:0:1}" > 4 ]] && ((input++)) # why is this here?  we're retaining the decimal!
+     ## there's also a better way to round
+  else
+    input=$(printf '%.0f' "$1")
+  fi
+
+  if (( seconds )); then
+    (( decimal )) && printf '%d.%d' "$((10#$input))" "$((10#$d))" ||
+                     printf '%d' "$((10#$input))"
+  else
+    h=$(( input / 3600 ))
+    m=$(( (input % 3600) / 60 ))
+    s=$(( input % 60 ))
+
+    (( decimal )) && printf '%02d:%02d:%02d.%03d' "$((10#$h))" "$((10#$m))" "$((10#$s))" "$((10#$d))" ||
+                     printf '%02d:%02d:%02d' "$((10#$h))" "$((10#$m))" "$((10#$s))"
+  fi
+
+}
+
+
+sec2sex(){
+  [[ "$1" = -d ]] && { local decimal=1; shift; }
+  local h m s d input
+
+  if (( decimal )); then
+    local dec="${1#*.}"
+    [[ -z "$dec" ]] && dec=0
+    # take up to 4 digits for rounding
+    dec="${dec:0:4}"
+    (( input=10#${1%.*} ))              # integer part
+    # round to 3 places
+    d=$(( (10#$dec + 5) / 10 ))
+    if (( d == 1000 )); then
+      d=0
+      ((input++))
+    fi
+    d=$(printf '%03d' "$d")
+  else
+    input=$(printf '%.0f' "$1")
+  fi
+
+  if (( seconds )); then
+    (( decimal )) && printf '%d.%s' "$((10#$input))" "$d" ||
+                     printf '%d' "$((10#$input))"
+  else
+    h=$(( input / 3600 ))
+    m=$(( (input % 3600) / 60 ))
+    s=$(( input % 60 ))
+    (( decimal )) && printf '%02d:%02d:%02d.%s' "$h" "$m" "$s" "$d" ||
+                     printf '%02d:%02d:%02d' "$h" "$m" "$s"
+  fi
+}
+
+
+
+finddur(){
+  local shntotal flactotal aflactotal tflactotal h m s
+#  if [[ "$ext" = "shn" ]]; then
+#    ! (( shntool )) && { printf 'Duration of .shn files : < install shntool >\n'; return; }
+#    shntotal=0
+#    while IFS= read -r -d '' f; do
+#      dur=$(shntool len -q "$f" | awk 'NR==2 {
+#            split($1,t,":"); m=t[1]; s=t[2];
+#            split(s,u,"."); print m*60 + u[1] + ("0." u[2])
+#            }')
+#      shntotal=$(echo "$shntotal + ${dur:-0}" | bc)
+#    done < <(find . -xdev -type f -iname "*.$ext" -print0)
+#
+#    shntotal="$(printf '%.0f\n' "$shntotal")"
+##    h=$((shntotal/3600))
+##    m=$((shntotal/60%60))
+##    s=$((shntotal%60))
+##    printf 'Duration of  .%s files: %02d:%02d:%02d\n' "$ext" "$h" "$m" "$s"
+#    printf 'Duration of  .%s files: %s\n' "$ext" "$(sec2sex "$shntotal")"
+if [[ "$ext" = "shn" ]]; then
+  ! (( shntool )) && { printf 'Duration of .shn files : < install shntool >\n'; return; }
+  shntotal=$(find . -xdev -type f -iname "*.$ext" -print0 |
+    xargs -0 -I{} shntool len -q "{}" |
+    awk 'NR>1 {
+      split($1,t,":");
+      split(t[2],u,".");
+      sum += t[1]*60 + u[1] + ("0." u[2]);
+    }
+    END { printf "%.0f\n", sum }')
+
+  printf 'Duration of  .%s files: %s\n' "$ext" "$(sec2sex "$shntotal")"
+
+  elif [[ "$ext" = "flac" ]] && (( exiftool || metaflac )); then
+    if ! (( metaflac )); then
+#      while IFS= read -r dur; do
+##       if [[ "$dur" =~ ^([0-9]+):([0-9]+):([0-9]+) ]]; then
+#        if [[ "$dur" =~ ^([0-9]+):([0-9]+):([0-9]+(\.[0-9]+)?)$ ]]; then
+#          h=${BASH_REMATCH[1]}
+#          m=${BASH_REMATCH[2]}
+#          s=${BASH_REMATCH[3]}
+#          (( flactotal += 10#$h*3600 + 10#$m*60 + 10#$s ))
+#        elif [[ "$dur" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+#          flactotal=$(echo "$flactotal + $dur" | bc)
+#        fi
+#      done < <(find . -xdev -type f -iname "*.$ext" -print0 | xargs -0 exiftool -s -s -s -Duration 2>/dev/null)
+#      flactotal="$(printf '%.0f\n' "$flactotal")"
+#      h=$((flactotal/3600))
+#      m=$((flactotal/60%60))
+#      s=$((flactotal%60))
+#      (( verbose )) && printf 'exiftool used for flac\n'
+#      printf 'Duration of .%s files: %02d:%02d:%02d\n' "$ext" "$h" "$m" "$s"
+      flactotal=$(
+        find . -xdev -type f -iname '*.flac' -print0 |
+        xargs -0 exiftool -s3 -Duration 2>/dev/null |
+        awk '
+        function tosec(t,   h, m, s, n, a) {
+          if (t ~ /:/) {
+            n = split(t, a, ":")
+            if (n == 3) { h=a[1]; m=a[2]; s=a[3] }
+            else if (n == 2) { h=0; m=a[1]; s=a[2] }
+            else { h=0; m=0; s=a[1] }
+            return h*3600 + m*60 + s
+          } else {
+            return t
+          }
+        }
+        { sum += tosec($0) }
+        END { printf "%.0f\n", sum }
+        ')
+      (( verbose )) && printf 'exiftool used for flac\n'
+      printf 'Duration of .%s files: %s\n' "$ext" "$(sec2sex "$flactotal")"
+    else
+      flactotal=$(find . -xdev -type f -iname '*.flac' -print0 |
+      xargs -0 -P"${extsplits[$ext]}" -n1 metaflac --show-total-samples --show-sample-rate 2>/dev/null|
+      awk 'NR%2==1{samp=$1} NR%2==0{rate=$1; sum+=samp/rate} END{printf "%.0f\n", sum}')
+      (( verbose )) && printf 'metaflac with xargs -P%s used for flac\n' "${extsplits[$ext]}"
+#      h=$((flactotal/3600))
+#      m=$((flactotal/60%60))
+#      s=$((flactotal%60))
+#      printf 'Duration of .%s files: %02d:%02d:%02d\n' "$ext" "$h" "$m" "$s"
+       printf 'Duration of .%s files: %s\n' "$ext" "$(sec2sex "$flactotal")"
+    fi
+#  else
+#    p="${extsplits[$ext]:-1}"
+#    IFS=':'; tdurs=( $(find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
+#                       xargs -0 -P"$p" mplayer -vo dummy -ao dummy -frames 0 -identify 2>/dev/null |
+#                       perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%d\n",$t' | tail -n 1)
+#
+##                       perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+#                   )
+##    [[ "${tdurs[0]}" ]] && tdur=$(( 10#${tdurs[0]} + 10#${tdurs[1]} + 10#${tdurs[2]} )) || tdur=0
+#tdur=$(sec2sex "$tdurs")
+#    (( verbose )) && printf 'mplayer with xargs -P %s used for %s\n' "$p" "$ext"
+#    [[ "$tdur" -gt 0 ]] && { (( "${#ext}" == 3 )) &&
+#      printf 'Duration of  .%s files: %s\n' "$1" "${tdurs[*]}" ||
+#      printf 'Duration of .%s files: %s\n' "$1" "${tdurs[*]}"; }
+#  fi
+
+else
+  p="${extsplits[$ext]:-1}"
+  tdur=$( find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
+          xargs -0 -P"$p" mplayer -vo dummy -ao dummy -frames 0 -identify 2>/dev/null |
+          perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t += $1) && print $t' |
+          tail -n1 )
+
+  tdur=$(sec2sex "$tdur")
+
+  (( verbose )) && printf 'mplayer with xargs -P %s used for %s\n' "$p" "$ext"
+
+  [[ -n "$tdur" && "$tdur" != "00:00:00" ]] && {
+    (( ${#ext} == 3 )) &&
+      printf 'Duration of  .%s files: %s\n' "$1" "$tdur" ||
+      printf 'Duration of .%s files: %s\n' "$1" "$tdur"
+  }
+fi
+
+}
+
+
+. /usr/local/bin/editscript
+
+tempfile=$(mktemp)
+durtools
+
+#readarray exts < <(find . -xdev -type f 2>/dev/null | sed -rn 's|.*/[^/]+\.([^/.]+)$|\1|p' | sort -u)
+
+mediaexts=(flac opus mp3 m4a m4b ogg mp4 avi shn wav)
+#regex="($(IFS='|'; echo "${mediaexts[*]}"))"
+regex="^\.?($(IFS='|'; echo "${mediaexts[*]}"))$"
+
+findexpr=()
+for ext in "${mediaexts[@]}"; do
+  findexpr+=( -iname "*.$ext" -o )
+done
+#unset 'findexpr[${#findexpr[@]}-1]'  # remove trailing -o
+unset 'findexpr[-1]'  # remove trailing -o
+
+shopt -s nocasematch
+while (( "$#" )); do
+ ##[[ "$1" =~ ^-[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789]{2,}$ ]]
+ [[ "$1" =~ ^-[a-zA-Z0-9]{2,}$ ]] && { one="-${1:1:1}" two="-${1:2}" && therest=( "${@:2}" )
+                                 set -- "$one" "$two" "${therest[@]}"; }
+#  [[ "$1" =~ (mp3|m4(a|b)|flac|ogg|mp4|avi|shn|wav|opus) ]] && { cliext+=( "$1" ); shift; continue; }
+  [[ "$1" = @(-s|--seconds) ]] && { seconds=1; shift; continue; }
+  [[ "$1" = @(-d|--decimal) ]] && { decimal=1; shift; continue; }
+  [[ "$1" = @(-o|--durations|--only) ]] && { only=1; shift; continue; }
+  [[ "$1" =~ $regex ]] && { cliext+=( "${1#.}" ); shift; continue; } ## leave $regex unquoted
+  [[ -d "$1" ]] && { clidir+=( "$1" ); shift; continue; }
+# [[ "$1" = "" ]] && { shift; continue; }
+  [[ -z "$1" ]] && { shift; continue; }
+  { printf '%s is unrecognized.\n' "$1"; shift;
+    { confirm -y 'Proceed with script?' && continue; } || exit 1; }
+done
+shopt -u nocasematch
+
+if ((${#clidir[@]})); then
+  if ((${#clidir[@]} > 1)); then
+    printf '[ERROR] More than one directory specified; only entering the first.\nGot: %s\n' "${clidir[@]}"
+  fi
+  cd -- "${clidir[0]}" || { printf '[ERROR] Directory not accessible: %s\n' "${clidir[0]}"; exit 1; }
+fi
+
+
+if (( "${#cliext[@]}" > 0 )); then
+#  find -type f -name "*.$1" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+  readarray -t cliext < <(printf %s\\n "${cliext[@],,}"|sort -u)
+  (( verbose )) && { printf '${cliext[@]} (%d):\n' "${#cliext[@]}" && printf '  %s\n' "${cliext[@]}"; }
+  checkdev
+  for ext in "${cliext[@]}"; do
+    finddur "$ext" >> "$tempfile" &
+  done
+else
+
+#  readarray -t extcount < <(
+#    find . -xdev -type f \( "${findexpr[@]}" \) 2>/dev/null \
+#      | sed -rn 's|.*/[^/]+\.([^/.]+)$|\1|p' \
+#      | sort \
+#      | uniq -c \
+#      | awk '{print $2 ":" $1}'
+#    )
+#
+##  readarray -t exts < <(printf %s\\n "${extcount[@]%:*}")
+#
+#  for i in "${extcount[@]}"; do
+#    k="${i%:*}"; v="${i#*:}"; exts["$k"]="$v"
+#  done
+#
+### combine cases in exts:
+#  for k in "${!exts[@]}"; do
+#    (( verbose )) && printf %s\ =\ %s\\n "$k" "${exts[$k]}"
+#    [[ ${mediaexts[*]} != *"$k"* ]] && exts[${k,,}]=$(( "${exts[$k]} + ${exts[${k,,}]}" )) && unset exts[$k]
+#  done
+
+
+while IFS=: read -r k v; do
+  k=${k,,}
+  (( exts["$k"] += v ))  ## this *adds* v; to replace; `exts["$k"]="$v"`
+done < <(find . -xdev -type f \( "${findexpr[@]}" \) 2>/dev/null \
+    | sed -rn 's|.*/[^/]+\.([^/.]+)$|\1|p' \
+    | awk '{cnt[tolower($0)]++} END {for (e in cnt) print e ":" cnt[e]}'
+)
+
+
+  ## after determining the exts and extcounts
+  checkdev
+
+# run jobs in parallel
+#  for ext in mp3 m4a m4b flac ogg mp4 avi shn wav opus; do
+#    [[ "${exts[@]}" =~ $ext ]] || continue
+
+  for ext in "${!exts[@]}"; do
+    (( verbose )) && printf %s\\n "$ext"
+    finddur "$ext" >> "$tempfile" &
+  done
+fi
+
+(( verbose )) && { readarray -t jobsout < <(jobs -l); printf '[verbose] %s\n' "${jobsout[@]}"; }
+wait
+(( verbose )) && { printf '\n== Start of %s ==\n' "$tempfile" ; cat "$tempfile"; printf '== End of %s ==\n\n' "$tempfile"; }
+
+[[ "$flacsum" ]] && { (( verbose )) && printf 'flacsum: %s\n' "$flacsum";
+                      printf 'Duration of .%s files: %02d:%02d:%02d\n' "flac" "$h" "$m" "$s" >> "$tempfile"; }
+
+#! (( only )) && printf 'Media durations of %s:\n' "$(realpath .)"
+
+# print in the defined order
+for ext in mp3 m4a m4b ogg mp4 avi shn wav flac opus; do
+ while read -r line; do
+    if [[ "$line" = "Duration of .$ext"* || "$line" = "Duration of  .$ext"* ]]; then
+      hhmmss="${line#*: }"; (( ${#hhmmss} == 8 )) && hhmmss=" $hhmmss"
+      # printf %s\\n "$line"
+      (( "${#ext}" == 3 )) && ext=" .$ext" || ext=".$ext"
+      printf 'Duration of %s files: %s\n' "$ext" "$hhmmss"
+    elif [[ "$line" = "$ext: "* ]]; then
+      flacsum=$(( flacsum + "${line#* }" ))
+    fi
+    [[ "$ext" = "t.flac" ]] && printf 'flactotal: %s\n' "$flacsum"
+#   [[ -n "${durations[$ext]}" ]] && echo "${durations[$ext]}"
+  done < "$tempfile"
+done
+
+rm "$tempfile"
+
+exit
+
