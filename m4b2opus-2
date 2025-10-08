@@ -114,12 +114,20 @@ filecheck(){
 
 #  if [[ "$clipath" ]]; then
 #    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
-  findmnt -T "$clipath" | grep -q "fuse.sshfs" && fuse=1
+  findmnt -T "${clipath:=.}" | grep -q "fuse.sshfs" && fuse=1
+
+(( verbose )) && printf '[verbose] $fuse=%s\n' "$fuse"
+
   if (( fuse )); then
+    (( verbose )) && printf '[verbose] in if (( fuse )) block\n'
     localclipath="/dev/shm/cache/${clipath##*/}"
     mkdir -p "$localclipath"
+    [[ ! "$clifilename" ]] && { printf 'On an sshfs mount but no file name specified on cli. Correct and retry. (exit 1)\n'; exit 1; }
     cp "$clifilename" "$localclipath"
     clipath="$localclipath"
+    (( verbose )) && printf '[verbose] $localclipath=%s\n' "$localclipath"
+    (( verbose )) && printf '[verbose] $clipath=%s\n' "$clipath"
+    (( verbose )) && printf '[verbose] leaving if (( fuse )) block\n'
   fi
 
   if ! [[ -w . ]]; then
