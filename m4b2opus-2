@@ -114,6 +114,13 @@ filecheck(){
 
 #  if [[ "$clipath" ]]; then
 #    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
+  findmnt -T "$clipath" | grep -q "fuse.sshfs" && fuse=1
+  if (( fuse )); then
+    localclipath="/dev/shm/cache/${clipath##*/}"
+    mkdir -p "$localclipath"
+    cp "$clifilename" "$localclipath"
+    clipath="$localclipath"
+  fi
 
   if ! [[ -w . ]]; then
     printf '\n[WARN] The pwd (%s) is not writable;\n  attempting to take ownership.\n\n' "$(pwd)"
