@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 ## taglinked
 ## tag ABS items for .opus files that are symlinked as .ogg under $basedir.
 ## This is a model script for interacting with tags in the ABS DB via sqlite3 and the API.
