@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+## taglinked
+## tag ABS items for .opus files that are symlinked as .ogg under $basedir.
+## This is a model script for interacting with tags in the ABS DB via sqlite3 and the API.
+## It can be adapted for adding or removing tags in a variety of scenarios.
+## minimal flag/argument processing included; probably unnecessary to build out
+## Tue Oct 21 10:37:12 AM EDT 2025
+
+
+[[ -f /usr/local/bin/editscript ]] && . /usr/local/bin/editscript
+
+#set -u
+. ~/.config/abc.conf  #defines things like $abs_server $abs_sqlite $abs_token
+new_tag="Linked Torrent"
+tput0="$(tput sgr0)"
+yellow="$(tput bold setaf 11)"
+basedir="${1:-/library/torrent/seeds/mam/linked}"
+red="$(tput bold setaf 9)"
+
+## modify batchlimit to limit main while loop vs. going through everything:
+batchlimit=0 # count incremented before so 0=no limit.
+
+## Not used, for example purposes
+## escape single quotes for SQL string literal
+escape_sql(){
+  printf '%s' "${1//\'/\'\'}"
+}
+
+# apply tag "Linked torrent" to an item id (append client-side safely)
+
+tag_item(){
+  local itemId="$1" oldtags newtags raw updatedtags
+  raw="$(curl -sS "$abs_server/api/items/$itemId" \
+           -H "Authorization: Bearer $abs_token")"
+
+  oldtags="$(jq -c '.media.tags // []' <<<"$raw")"
+  newtags="$(jq -c --arg new_tag "$new_tag" '(.media.tags // []) + [$new_tag] | unique' <<<"$raw")"
+
+  (( verbose )) && printf '%s\n' "$newtags"
+
+  if [[ "$oldtags" = "$newtags" ]]; then
+    printf '%sTags already contain "%s". Skipping.%s\n\n' "$yellow" "$new_tag" "$tput0"
+
+  elif raw="$(curl -sSX PATCH "$abs_server/api/items/$itemId/media" \
+              -H "Authorization: Bearer $abs_token" \
+              -H "Content-Type: application/json" \
+              -d "{\"tags\": $newtags}")"; then
+
+    updatedtags="$(jq -c '.libraryItem.media.tags // []' <<<"$raw")"
+
+    if [[ "$updatedtags" = "$newtags" ]]; then
+      printf '%spatched %s → tags=%s\n%s\n\n' \
+        "$yellow" "$itemId" "$(jq -r '.libraryItem.media.tags // empty | @sh' <<<"$raw")" "$tput0"
+    else
+      printf '%sWarning:%s %s patched but tags differ!\nExpected: %s\nGot: %s\n\n' \
+        "$red" "$tput0" "$itemId" "$newtags" "$updatedtags"
+    fi
+
+  else
+    printf '%sERROR patching %s: %s%s\n' "$red" "$itemId" "$raw" "$tput0"
+  fi
+}
+
+
+check4broken(){
+  local brokenlinks
+  readarray -t brokenlinks < <(find "$basedir" -type l ! -xtype f)
+  if (( "${#brokenlinks[@]}" )); then
+    printf 'You have %s broken links as reported by\n' "${#brokenlinks[@]}"
+    printf '`readarray -t brokenlinks < <(find "%s" -type l ! -xtype f)\n`' "$basedir"
+    printf 'The broken links are:\n%s\n' "$(printf %s\\n "${#brokenlinks[@]}")"
+    printf 'Fix before continuing or pass --ignore-broken (when implemented) or ignorebroken=1 to continue...\n'
+    ! (( ignorebroken )) && exit 1
+  fi
+}
+
+# main: find .ogg symlinks and process
+
+check4broken
+
+count=0
+totalcount=0
+
+while IFS= read -r -d '' link; do
+  ((count++))
+  ((totalcount++))
+  printf 'count %s/%s: ' "$count" "$totalcount"
+  # resolve target
+  src="$(realpath "$link" 2>/dev/null || true)"
+  (( verbose )) && printf '[verbose] link=%s -> src=%s\n' "$link" "$src"
+  [[ -n "$src" && -f "$src" ]] || { (( verbose )) && printf '[verbose] skipping %s (no target)\n' "$link"; continue; }
+
+  # only consider .opus targets (some foo.opus might be linked)
+  case "$src" in
+    *.opus) ;;
+    *) (( verbose )) && printf '[verbose] skipping %s (target not .opus)\n' "$src"; continue ;;
+  esac
+
+  sqlec=1
+  while (( sqlec )); do
+    srcdir="${src%\/*}"
+    sqlitepwd="${srcdir//\'/\'\'}"
+
+    ids_output=$(sqlite3 "file:$abs_sqlite?mode=ro&busy_timeout=2000" \
+        "SELECT id FROM libraryitems WHERE path=='$sqlitepwd';")
+    sqlec="$?"  # Now sqlec reflects sqlite3 exit status correctly
+
+    if (( sqlec )); then
+      read -t 2 -rp "sqlite3 failed, press enter to retry..." </dev/tty
+    else
+      readarray -t itemids <<< "$ids_output"
+      break
+    fi
+  done
+
+  if (( ${#itemids[@]} == 0 )); then
+    # try fallback: maybe ABS stored a different normalized path; try LIKE on basename or parent dir
+    bn="$(basename "$src")"
+    bn_escaped="${bn//\'/\'\'}"
+    (( verbose )) && printf '[verbose] no ids exact-match for %s, trying basename search %s\n' "$src" "$bn"
+    mapfile -t itemids < <(sqlite3 -batch -noheader "$abs_sqlite" \
+      "SELECT libraryItems.id FROM libraryItems, json_each(libraryItems.libraryFiles)
+       WHERE json_extract(json_each.value, '\$.metadata.path') LIKE '%$bn_escaped%';")
+  fi
+
+  if (( ${#itemids[@]} == 0 )); then
+    printf '\e[1;33mNo ABS itemid found for %s (link %s)\e[0m\n' "$src" "$link"
+    continue
+  fi
+
+  for id in "${itemids[@]}"; do
+    printf 'Checking %s for %s\n' "$id" "$src"
+    tag_item "$id"
+  done
+
+  (( count == batchlimit )) &&
+    { read -rp "Batch count=$batchlimit; review and continue... " </dev/tty; count=0; }
+
+done < <(find "$basedir" -type l -name '*.ogg' -print0)
+
+printf 'Done.\n'

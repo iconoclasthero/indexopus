@@ -2,6 +2,9 @@
 
 #. /usr/local/bin/editscript
 
+linked_tag="Linked Torrent"
+
+
 sourcefn(){
   local lib fn verbose awkout OPTIND
   while getopts 'l:f:v' opt; do
@@ -241,12 +244,24 @@ printdescrip(){
 #  (( "${#hh}" == 3 )) && hhmm="$hh:$mm hhh:mm" || hhmm="$hh:$mm hh:mm"
   (( "${#hh}" == 3 )) && hhmm="$hh:$mm hhh:mm" || hhmm="$(printf '%02d' "$hh"):$mm hh:mm"
   (( "${#hh}" > 3 )) && { printf 'Error: Book appears to have a duration over 1000 hours!  Investigate.\nExiting (return 1)\n\n'; return 1; }
-  readarray -t genretags < <({ mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Genre[[:space:]]\+: //p'; mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Tags[[:space:]]\+: //p'; } | tr '/' '\n'|sed 's/^[[:space:]]*//;s/[[:space:]]*$//'|sort -u )
+#  readarray -t genretags < <({ mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Genre[[:space:]]\+: //p'; mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Tags[[:space:]]\+: //p'; } | tr '/' '\n'|sed 's/^[[:space:]]*//;s/[[:space:]]*$//'|sort -u )
+
+  readarray -t genretags < <(
+    {
+      mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Genre[[:space:]]\+: //p'
+      mediainfo "$t -- Audiobook.ogg" | sed -n 's/^Tags[[:space:]]\+: //p'
+    } |
+    tr '/' '\n' |
+    sed -e 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+        -e "/^${linked_tag//\//\\/}\$/d" |
+    sort -u
+    )
+
   printf \\n
 
   printf %s\ \|\ %s\ \|\  "$pubdate" "$hhmm"
   printf %s\ \|\   "${genretags[@]}"
-  printf '17 kb/s opus transcode | embedded chapter index and cover\n\n'
+  printf '17 kb/s opus transcode | embedded chapter index & cover\n\n'
   (( description )) && swd="$(readlink "${allogg[0]}")" && swd="${swd%\/*}" && read -rp "$swd"
 ## not sure I want to use "$swd" here, but it should suffice, at least to start.
    coverurl="$(getcoverurl "$swd")"
@@ -450,19 +465,9 @@ printline "\n Comparing indices... \n"
 
 printf 'Comparing the chapter index between metadata.json and mediainfo %s -- Audiobook.opus\n\n' "$it"
 
-#hr2 "Comparing indices..."
 
 # From mediainfo
 unset miarray; declare -A miarray
-#while IFS= read -r line; do
-#  [[ $line =~ ^([0-9:.]+)\:\=+(.+) ]] && miarray["${BASH_REMATCH[1]}"]="${BASH_REMATCH[2]}"
-#done < <(mediainfo --Output=JSON "$t"\ --\ Audiobook.opus|jq -r '
-#  .media.track[]
-#  | select(.["@type"] == "Menu")
-#  | .extra
-#  | to_entries[]
-#  | "\(.key | ltrimstr("_") | gsub("_"; ":"; "g"))=\(.value)"
-#')
 
 while IFS= read -r line; do
   [[ $line =~ ^([0-9:.]+)\=+(.+) ]] && miarray["${BASH_REMATCH[1]}"]="${BASH_REMATCH[2]}"
@@ -479,14 +484,12 @@ done < <(mediainfo --Output=JSON "$t -- Audiobook.opus" | jq -r '
      )=\(.value)"
 ')
 
-
 # From metaarray
 unset metaarray; declare -A metaarray
 while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title"; done < <(
   jq -r '.chapters[] | "\(.start)\n\(.title)"' metadata.json |
   while IFS= read -r start && IFS= read -r title; do
     start="$(sec2sex "$start")"
-#    printf '%s\n%s\n' "${start/./:}" "$title"  #going to remove the miliseconds instead
     printf '%s\n%s\n' "${start%.*}" "$title"  #going to remove the miliseconds instead
   done
 )
@@ -502,23 +505,12 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
   done
 
 ## Reindex if the compare fails
-
-
-
-
-## why the fuck is this cd "$1" and then cd -??
-## this does not make sense on the surface of it.
-## commenting out 2025-05-20T08:01-04:00
-## remove after reasonable time
-
-
-
+## ec1 & ec2 are the checks to see if there's a mismatch in the arrays made from the audiofile and metadata.json
+## Using env here to “inject” variables directly into a indexopus’s environment to avoid
+##  - having to modify indexopus to accept extra CLI flags
+##  - export globals that might leak into other commands
 
   if (( ec1 || ec2 )) && { (( YES )) || confirm -y "\n${boldred}Reindex $it?$white"; }; then
-#    startPWD="$PWD"
-#    cd "$1"
-#    middlePWD="$PWD"
-#    /home/bvargo/bin/gits/indexopus/indexopus-2 --reindex=metadata.json -y
     unset cmdenv indexopuscmd
     (( YES )) && cmdenv+=( YES=1 )
     (( verbose )) && cmdenv+=( verbose=1 )
@@ -526,11 +518,6 @@ while IFS= read -r start && IFS= read -r title; do   metaarray["$start"]="$title
     indexopuscmd+=( "indexopus" "--reindex=metadata.json" "-y" )
     (( verbose )) && printf '[verbose] indexopuscmd+=( "${cmdenv[@]}" "indexopus" "--reindex=metadata.json" "-y" ):\n[verbose] indexopuscmd=%s\n' "$(printf %s\  "${indexopuscmd[@]}")"
     "${indexopuscmd[@]}"
-
-#    cd - >/dev/null
-#    endPWD="$PWD"
-#    printf %s\\n%s\\n "$startPWD" "$middlePWD"
-#    read -rp "$endPWD"
   else
     printf '\nIndex of metadata.json matches output of mediainfo for %s -- Audiobook.opus\n\n' "$it"
   fi
@@ -814,6 +801,62 @@ fi ### to checking if .jpg files exist?
   printf '\nLeaving: \n%s\n' "$(pwd)"
   printf '\nReturning to %s\n' "$swd"
   cd - > /dev/null
+
+  ## set the "Linked Torrent" tag for this book in ABS
+  ## linked_tag="Linked Torrent" defined at the top of the script
+  printf 'Adding "%s" tag to existing book tags...\n' "$linked_tag"
+
+  tag_item(){
+    local itemId="$1"
+    local id="$1"
+    local updatedtags oldtags raw
+    local linked_tag="$2"
+    raw="$(curl -sS "$abs_server/api/items/$itemId" \
+           -H "Authorization: Bearer $abs_token")"
+
+    oldtags="$(jq -c '.media.tags // []' <<<"$raw")"
+    updatedtags="$(jq -c --arg linked_tag "$linked_tag" '(.media.tags // []) + [$linked_tag] | unique' <<<"$raw")"
+
+    (( verbose )) && printf '%s\n' "$updatedtags"
+
+    raw="$(curl -sSX PATCH "$abs_server/api/items/$itemId/media" \
+           -H "Authorization: Bearer $abs_token" \
+           -H "Content-Type: application/json" \
+           -d "{\"tags\": $updatedtags}")"
+
+    # print result summary (best-effort)
+    if [[ "$oldtags" == "$updatedtags" ]]; then
+      printf '%sTags already contains the new tag: "%s". Skipping.%s\n\n' "$yellow" "$linked_tag" "$tput0"
+    elif jq -e . >/dev/null 2>&1 <<<"$raw"; then
+      printf '%spatched %s → tags=%s\n%s\n\n' "$yellow" "$itemId" \
+             "$(jq -r '.libraryItem.media.tags // empty | @sh' <<<"$raw")" "$tput0"
+    else
+      printf '\e[1;31mERROR patching %s: %s\e[0m\n' "$itemId" "$raw"
+    fi
+  }
+
+
+  sqliteec=1
+  while (( sqliteec )); do
+    srcdir="$(pwd)"
+    sqlitepwd="${srcdir//\'/\'\'}"
+
+    ids_output=$(sqlite3 "file:$abssqlite?mode=ro&busy_timeout=2000" \
+        "SELECT id FROM libraryitems WHERE path=='$sqlitepwd';")
+    sqliteec=$?  # Now ec reflects sqlite3 exit status correctly
+
+    if (( sqliteec )); then
+      read -t 2 -rp "sqlite3 failed, press enter to retry..." </dev/tty
+    else
+      readarray -t itemids <<< "$ids_output"
+      for id in "${itemids[@]}"; do
+        printf 'Checking tags of %s (%s) for "%s"\n' "$t -- Audiobook.opus" "$id" "$linked_tag"
+        tag_item "$id" "$linked_tag"
+      done
+    fi
+  done
+
+
 
   parts=( *.part )
   [[ -f "${parts[0]}" ]] && \rm *.part

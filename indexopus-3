@@ -247,6 +247,7 @@ itemidpwd(){
 
 reindex(){
   local selectedids uuids uuidre selected sel selid descarray libarray titlearray patharray
+  local success updated rawabsresponse absresponse
   local -A titlearray patharray libarray descarray
   local t chap_title chapstarts reintitle
   t=0
@@ -302,7 +303,6 @@ reindex(){
   fi
 
   (( verbose )) && for (( i=0; i<"${#chapstarts[@]}"; i++ )); do printf '[verbose] %s\t%s\n' "${chapstarts[i]}" "${chaptitles[i]}"; done
-#  (( verbose )) && printf '[verbose] %s\n' "${starts
 
   chcount=0
   for i in "${chaptitles[@]}"; do [[ "$i" = *Chapter* ]] && ((chcount++)); done
@@ -310,6 +310,8 @@ reindex(){
 ## check for over 100 chapters and set triple to true:
   (( chcount > 99 )) && { (( yes )) || confirm -y "${red}Over 99 chapters detected. Zero pad to 3 spaces?$tput0"; } && triple=1
 
+## check to see if indent flag is on (HOW?) and prefix each Chapter with .. and turn outline flag on
+## is this implemented?
 
   if (( indent )); then
     for i in "${!chaptitles[@]}"; do
@@ -319,7 +321,6 @@ reindex(){
   fi
 
 ## This is to allow for outline style because ABS won't allow for *ANY* whitespaces before or after chapter names
-
   for ((chno=0; chno<"${#chaptitles[@]}"; chno++)); do
     if (( outline )); then
       break
@@ -402,7 +403,6 @@ reindex(){
   mediainfo "$reintitle"
   printf '%s%sProposed index for %s:%s%s\n' "$red" "$bold" "$reintitle" "${tput0}" "$bold"
   printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
-# printf '%s                             : %s\n' "${rawindex[@]}"
   itemidpwd
   readarray -t itemids < <( sqlite3 "$abssqlite" "select id FROM libraryitems WHERE path=='$sqlitepwd';" )
 
@@ -420,8 +420,10 @@ reindex(){
 #    exit 1
 #  fi
 
-
-  if (( "${#itemids[@]}" )); then
+  if ! (( "${#itemids[@]}" )); then
+    printf 'This is the case where there are no itemids in the abs database.  I think this should error out here.\nInvestigate. (exit 1)\n\n'
+    exit 1
+  else  ## i.e., (( "${#itemids[@]}" > 0 ))
     printf '\n%sThis index was generated from existing %s;\n' "$relipsis" "$jsonfile"
     printf '...look up new chapter information at\n%sgoogle-chrome %s/audiobook/%s/chapters\n\n\n' "$tput0" "$absserver" "$itemids"
 
@@ -493,7 +495,7 @@ reindex(){
         printf '%s\t\t\t\t : %s\n' "${rawindex[@]}"
         confirm -y "\n${red}Continue?$tput0" || { printf 'Exiting. (exit 2)\n'; exit 2; }
 #        cat "$tmp/opusindex"
-(( verbose )) && cat "$tmp/prefixindex"
+        (( verbose )) && cat "$tmp/prefixindex"
         if confirm -y "${red}Replace opusindex with prefixindex?${tput0}"; then
           mv "$tmp/opusindex" "$tmp/opusindex~" && mv "$tmp/prefixindex" "$tmp/opusindex" ||
             { printf '%s[ERROR]%s Error replacing %s/opusindex with %s/prefixindex. Exiting. (exit 1)\n' "$boldred" "$tput0" "$tmp" "$tmp"; exit 1; }
@@ -541,14 +543,20 @@ reindex(){
         exit
       fi
     fi
-  else
-    printf 'This is the case where there are no itemids in the abs database.  I think this should error out here.\nInvestigate. (exit 1)\n\n'
-    exit 1
-  fi
+  fi  ## to (( "${#itemids[@]}" ))
+
   mediainfo *Audiobook.opus
 
 
-  if (( "${#itemids[@]}" > 1 )); then
+  if ! (( "${#itemids[@]}" )); then
+    ## this was already checked above, but in case that check is removed or this block is moved, check again.
+    printf 'This is the case where there are no itemids in the abs database.  I think this should error out here.\nInvestigate. (exit 1)\n\n'
+    exit 1
+  elif (( "${#itemids[@]}" == 1 )); then
+    ## Only one item, no menu needed
+    selectedids=( "${itemids[0]}" )
+  elif (( "${#itemids[@]}" > 1 )); then
+    ## more than one itemid exists, use menu to select appropriate one(s):
     for itemid in "${itemids[@]}"; do
       absresp="$(curl -Ss "$absserver/api/items/$itemid?expanded=0&include=authors" \
         -H "Authorization: Bearer $abstoken")"
@@ -559,11 +567,10 @@ reindex(){
       libarray[$itemid]="$(jq -r .libraryId <<< "$absresp")"
       libarray[$itemid]="$(curl -sS "$absserver/api/libraries/${libarray[$itemid]}" \
                            -H "Authorization: Bearer $abstoken"|jq -r .name)"
-
       descarray[$itemid]="itemid : $itemid
-library: ${libarray[$itemid]}
-title  : ${titlearray[$itemid]}
-path   : ${patharray[$itemid]#/library/books/}"
+      library: ${libarray[$itemid]}
+      title  : ${titlearray[$itemid]}
+      path   : ${patharray[$itemid]#/library/books/}"
 
     done
     for itemid in "${itemids[@]}"; do
@@ -574,7 +581,12 @@ path   : ${patharray[$itemid]#/library/books/}"
       printf %s\\n\\n "${descarray[$itemid]}"
     done
 
-    while ! (( "${selectedid[@]}" )) && ! (( uuids )); do
+## it looks like this should actually be while ! (( ${#selectedids[@]} )) ...
+    while ! (( "${#selectedids[@]}" )) && ! (( uuids )); do
+      (( verbose )) && printf '[verbose] in while ! (( "${#selectedids[@]}" )) && ! (( uuids )); do\n'
+      (( verbose )) && printf %s\\n '[verbose] $uuids=%s\n' "$uuids"
+      (( verbose )) && printf %s\\n '[verbose] ${selectedids[@]}=%s\n' "${selectedids[@]}"
+
       readarray -t selected < <(printf '%s\n' "${descarray[@]}" |
        gum choose --no-limit --header='Choose only itemids!')
 
@@ -619,8 +631,8 @@ path   : ${patharray[$itemid]#/library/books/}"
 
     # Parse chapter titles from "$tmp/opusindex"
     readarray -t newtitles < <(\grep -E '^CHAPTER[0-9]+NAME=' "$tmp/opusindex" | sed -E 's/^CHAPTER[0-9]+NAME=//')
-printf '\n%sChapter titles from %s/opusindex:\n%s' "$red" "$tmp" "$tput0"
-printf %s\\n "${newtitles[@]}"
+    printf '\n%sChapter titles from %s/opusindex:\n%s' "$red" "$tmp" "$tput0"
+    printf %s\\n "${newtitles[@]}"
     # Create a jq program to update titles
     jqprog='
       .chapters |= [
@@ -632,22 +644,9 @@ printf %s\\n "${newtitles[@]}"
     jq --argjson titles "$(printf '%s\n' "${newtitles[@]}" | jq -R . | jq -s .)" "$jqprog" "$jsonfile" > "$outjson"
 #    jq . "$outjson"
 
-printf '\n%sChapter titles from jq .chapters %s/%s:\n%s' "$red" "$tmp" "$outjson" "$tput0"
+    printf '\n%sChapter titles from jq .chapters %s/%s:\n%s' "$red" "$tmp" "$outjson" "$tput0"
     jq '.chapters[] | ((.id | if . < 10 then "0" + tostring else tostring end)) as $id_str | "\($id_str): \(.title)"' "$outjson"
     printf \\n
-
-#    if confirm -y "Update $jsonfile from $outjson?"; then
-#      install -g "$absgroup" -m 664 "$outjson" "$jsonfile" && rm "$outjson"
-#      sudo chown "$absuser":"$absgroup" "$jsonfile"
-#      sudo -k
-#      confirm -y "${red}Push changes in $jsonfile to abs server via API?$tput0" &&
-#        absresponse="$(curl -sSX POST "$absserver/api/items/$(itemid)/scan" \
-#        -H "Authorization: Bearer  $abstoken"|jq -r .result)" &&
-#        [[ "$absresponse" != @(UPTODATE|UPDATED) ]] &&
-#        printf '%sNB: ABS FAILED TO UPDATE!!%s' "$boldred" "$tput0"
-#      [[ "$absresponse" = UPDATED ]] && printf 'ABS database updated successfully.\n\n'
-#      [[ "$absresponse" = UPTODATE ]] && printf 'ABS database was already up to date.\nInvestigate\n.'
-#    fi
 
     if { (( YES )) || confirm -y "${boldred}Update $jsonfile from $outjson?$tput0"; }; then
       (( YES )) && printf '%sUpdating %s from %s.%s\n\n' "$boldred" "$jsonfile" "$outjson" "$tput0"
@@ -656,57 +655,59 @@ printf '\n%sChapter titles from jq .chapters %s/%s:\n%s' "$red" "$tmp" "$outjson
       sudo -k
       if { (( YES )) || confirm -y "${red}Push changes in $jsonfile to abs server via API?$tput0"; }; then
         (( YES )) && printf '%sPushing changes in %s to abs server via API.%s\n\n' "$boldred" "$jsonfile" "$tput0"
+        (( verbose )) && printf '[verbose] ${selectedids[@]}:\n %s\n' "$(printf %s\\n "${selectedids[@]}")"
         for itemid in "${selectedids[@]}"; do
           printf 'Pushing updated index to %s/item/%s...\n' "$absserver" "$itemid"
-          absresponse="$(curl -sSX POST "$absserver/api/items/$itemid/scan" \
-            -H "Authorization: Bearer  $abstoken"|jq -r .result)"
-          case "$absresponse" in
-            UPDATED)
-              echo "✔ $itemid updated."
-              ;;
-            UPTODATE)
-              echo "⚠ $itemid already up to date."
-              ;;
-            *)
-              printf '%sNB: ABS FAILED TO UPDATE!!%s\n' "$boldred" "$tput0"
-              printf '✘ %s response: %s' "$itemid" "$absresponse"
-              ;;
+#          absresponse="$(curl -sSX POST "$absserver/api/items/$itemid/scan" \
+#            -H "Authorization: Bearer  $abstoken"|jq -r .result)"
+#          case "$absresponse" in
+#            UPDATED)
+#              echo "✔ $itemid updated."
+#              ;;
+#            UPTODATE)
+#              echo "⚠ $itemid already up to date."
+#              ;;
+#            *)
+#              printf '%sNB: ABS FAILED TO UPDATE!!%s\n' "$boldred" "$tput0"
+#              printf '✘ %s response: %s' "$itemid" "$absresponse"
+#              ;;
+#          esac
+          rawabsresponse="$(curl -sSX POST "$abs_server/api/items/$itemid/chapters" \
+            -H "Authorization: Bearer $abs_token"   -H "Content-Type: application/json" \
+            -d "$(jq -c '{chapters: .chapters}' metadata.json)")"
+          read -r success updated <<< "$(jq -r '"\(.success) \(.updated)"' <<< "$rawabsresponse")"
+          case "$success $updated" in
+            "true true")
+               printf '✔ %s updated.\n' "$itemid" ;;
+            "true false")
+               printf '⚠ %s already up to date.\n' "$itemid" ;;
+             *)
+               printf '%sNB: ABS FAILED TO UPDATE!!%s\n' "$boldred" "$tput0"
+               printf '✘ %s response: \n%s\n' "$itemid" "$(printf %s\\n "$rawabsresponse"|jq -r)"
+               ;;
           esac
         done
       fi
     fi
 
 
-
-
-
-
-
-
-
-
-for itemid in "${selectedids[@]}"; do
-  printf 'Pushing updated index to %s/item/%s...\n' "$absserver" "$itemid"
-  resp=$(curl -sSX POST "$absserver/api/items/$itemid/scan" \
-    -H "Authorization: Bearer $abstoken" | jq -r .result)
-
-  case "$resp" in
-    UPDATED)   echo "✔ $itemid updated." ;;
-    UPTODATE)  echo "⚠ $itemid already up to date." ;;
-    *)         echo "✘ Failed to update $itemid (response: $resp)" ;;
-  esac
-done
-
-
-
-
-
-
-
-
-
-
-
+## this appears to duplicate the above without the checks in place.
+## this could be intentional in the (( YES )) case, but I don't think so, i think it's just left over
+## commenting out Mon Oct 20 09:07:32 AM EDT 2025
+## upon further review, it looks like the case where itemids=1 was never transferred to selecteditemids
+## I can't really figure out how any of this ever actually worked.
+#
+#    for itemid in "${selectedids[@]}"; do
+#      printf 'Pushing updated index to %s/item/%s...\n' "$absserver" "$itemid"
+#      resp=$(curl -sSX POST "$absserver/api/items/$itemid/scan" \
+#        -H "Authorization: Bearer $abstoken" | jq -r .result)
+#
+#      case "$resp" in
+#        UPDATED)   echo "✔ $itemid updated." ;;
+#        UPTODATE)  echo "⚠ $itemid already up to date." ;;
+#        *)         echo "✘ Failed to update $itemid (response: $resp)" ;;
+#      esac
+#    done
 
 
   fi
