@@ -69,7 +69,7 @@ check4broken(){
     printf 'You have %s broken links as reported by\n' "${#brokenlinks[@]}"
     printf '`readarray -t brokenlinks < <(find "%s" -type l ! -xtype f)\n`' "$basedir"
     printf 'The broken links are:\n%s\n' "$(printf %s\\n "${#brokenlinks[@]}")"
-    printf 'Fix before continuing or pass --ignore-broken (when implemented) or ignorebroken=1 to continue...\n'
+    printf 'Fix to continue or pass ignorebroken=1 (--ignore-broken when implemented)...\n'
     ! (( ignorebroken )) && exit 1
   fi
 }
