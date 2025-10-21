@@ -63,12 +63,13 @@ tag_item(){
 
 
 check4broken(){
-  local brokenlinks
+  local brokenlinks numbroken
   readarray -t brokenlinks < <(find "$basedir" -type l ! -xtype f)
-  if (( "${#brokenlinks[@]}" )); then
-    printf 'You have %s broken links as reported by\n' "${#brokenlinks[@]}"
+  numbroken="${#brokenlinks[@]}"
+  if (( "$numbroken" )); then
+    printf 'You have %s broken links as reported by\n' "$numbroken"
     printf '`readarray -t brokenlinks < <(find "%s" -type l ! -xtype f)\n`' "$basedir"
-    printf 'The broken links are:\n%s\n' "$(printf %s\\n "${#brokenlinks[@]}")"
+    printf 'The broken links are:\n%s\n' "$(printf %s\\n "${brokenlinks[@]}")"
     printf 'Fix to continue or pass ignorebroken=1 (--ignore-broken when implemented)...\n'
     ! (( ignorebroken )) && { printf '(exit 1)\n\n'; exit 1; }
   fi
