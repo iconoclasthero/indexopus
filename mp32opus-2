@@ -378,7 +378,7 @@ if [[ "$clifile" ]] || (( "${#allfiles[@]}" == 1 )); then
   (( verbose )) && args+=(-v)
   args+=(-D) ## unset the discord flag since this should be doing the notification.
   [[ "$calltmpf" ]] && touch "$calltmpf" && args+=( '--calling-tmp' "$calltmpf" )
-  [[ "$clifile" ]] && args+=("$clidir/$clifile")
+  [[ "$clifile" ]] && args+=("$(pwd)/$clifile")
   (( verbose )) &&  pause "$(printf '[verbose] mp32opus calling quartero4 %s\n' "${args[*]}")"
   printline "${bold}  Calling ${white}quartero4 ${args[@]}  ${tput0}"
   quartero4 "${args[@]}"
