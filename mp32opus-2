@@ -127,7 +127,7 @@ return 0
 
 filecheck(){
 (( verbose )) && printf '[verbose] Entering %s().\n' "$FUNCNAME"
-  local clifilepath clifile  clidir clipath mvoutput mvec writable unwritable ## not sure what to do here.  need to see the scope of these variables.
+  local clifilepath clipath clidir clifile mvoutput mvec writable unwritable ## not sure what to do here.  need to see the scope of these variables.
   if [[ ! "$1" ]]; then
     until (( writable )); do
       unwritable=0
@@ -316,11 +316,12 @@ while (( $# > 0 )); do
   [[ "$1" = @(-|--)@(Ys|Yes) ]] && { args+=("-Y"); (( screened=rmmatch=1 )); shift; continue; }
   [[ "$1" =  @(-v|--verbose) ]] && { args+=("$1"); verbose=1; shift; continue; }
   [[ "$1" =  @(-D|--discord) ]] && { args+=("$1"); unset discord; . ~/.config/discord-local.conf; shift; continue; }
-  [[ -d "$1" ]] && { args+=("$1"); clipath="$1"; clidir="$1"; shift; continue; }
-  [[ -f "$1" ]] && { args+=("$1"); clipath="$1"; clifile="$1"; shift; continue; }
+  [[ -d "$1" ]] && { args+=("$1"); clipath="$1"; clidir=$( realpath "$1"); shift; continue; }
+  [[ -f "$1" ]] && { args+=("$1"); clipath="$1"; clifile=$( realpath "$1"); shift; continue; }
   { printf '"%s" is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script?' || exit 1; }
 done
 
+set +H  ## turns set histexpand off to prevent !}" below from throwing errors in an interactive bash shell
 
 [[ ! "$clifile" ]] && { allm4s=( *.m4[ab] ); allmp3=( *.mp3 )
                         allfiles=( "${allmp3[@]}" ); allfiles+=( "${allm4s[@]}" )
@@ -355,7 +356,8 @@ if (( screened )); then
   printf \\n
 #  screen -dmS "${screenname:0:16}" "${args[@]}"
 #  screen -dmS "${screenname:0:16}" bash -i -c "$(printf '%q ' "${args[@]}")"
-  screen -dmS "${screenname:0:16}" bash -i "${args[@]}"
+#  screen -dmS "${screenname:0:16}" bash -i "${args[@]}"
+  screen -dmS "${screenname:0:16}" bash "${args[@]}"  ## removing the interactive bash call to see if it's needed
   screen -ls                                     #could probably add some logic to not delete shit
   printf \\n\\n                                  #leaving that for later, but screen implies -y as
   exit                                           #it doesn't really work otherwise?
@@ -371,6 +373,8 @@ allfiles=(*.@(mp3|m4@(a|b)))
 
 [[ "$rmmatch" ]] && args=("-y") || unset args  #this resets args from "$@"
 
+(( verbose )) && printf '[verbose] ${#allfiles[@]}=%s\n' "${#allfiles[@]}"
+
 if [[ "$clifile" ]] || (( "${#allfiles[@]}" == 1 )); then
   [[ ! -w "$allfiles" ]] && (( discord )) && discorddm "mp32opus notification: ${title:-${allfiles[0]:-title unavailable}} not writeable."
 
@@ -378,7 +382,7 @@ if [[ "$clifile" ]] || (( "${#allfiles[@]}" == 1 )); then
   (( verbose )) && args+=(-v)
   args+=(-D) ## unset the discord flag since this should be doing the notification.
   [[ "$calltmpf" ]] && touch "$calltmpf" && args+=( '--calling-tmp' "$calltmpf" )
-  [[ "$clifile" ]] && args+=("$(pwd)/$clifile")
+  [[ "$clifile" ]] && args+=( "$clifile" )
   (( verbose )) &&  pause "$(printf '[verbose] mp32opus calling quartero4 %s\n' "${args[*]}")"
   printline "${bold}  Calling ${white}quartero4 ${args[@]}  ${tput0}"
   quartero4 "${args[@]}"

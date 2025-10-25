@@ -791,7 +791,7 @@ cd "$swd"
 
 ## it seems that indexopus normally creates a /tmp/indexopus-$(date +"%s") directory for its working index files but when passed a -m <directory> it uses that instead.  so the working index files are probably being created in "$convertdir" since that is what is getting passed with indexopus -m above.
 
-## OK, it looks like indexopus is, in fact, creating it's index working files in "$convertdir" which is ok.  the question remaining is, should they explicitly be deleted by m4b2opus if they remain?  should it just be left to the removal of "$convertdir" itself and call it a day?  
+## OK, it looks like indexopus is, in fact, creating it's index working files in "$convertdir" which is ok.  the question remaining is, should they explicitly be deleted by m4b2opus if they remain?  should it just be left to the removal of "$convertdir" itself and call it a day?
 ## probably the latter.
 ## regardless,` ! (( rmmatch )) && pause "Need to check to see if $tmp is being created... when indexopus isn't run with -y"` can be commented out pending removal later since the tmp is never created and i see no strong advantage of creating it in /tmp since the working conversion directory is on /cache anyway.
 

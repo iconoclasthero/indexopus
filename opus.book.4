@@ -342,6 +342,7 @@ mapfile -t extensions < <(printf '%s\n' "${extensions[@]}" | sort -u)
 #  printf '\n%sMore than one type of media file found!\nopus.book.4 cannot be launched from a folder where more than one type of media file is located.\nCorrect and try again.\n\n%s\n\n%sexit 1\n\n' "$bold" "$PWD" "$tput0" &&
 #  exit 1
 
+## why am I allowing this to happen?  this is going to totally fuck things up later.
 if (( ${#extensions[@]} > 1 )); then
   if ! [[ " ${extensions[*]} " =~ ' m4a ' && " ${extensions[*]} " =~ ' mp3 ' && ${#extensions[@]} -eq 2 ]]; then
     printf '\n%sMore than one type of media file found!\nopus.book.4 cannot be launched from a folder where more than one type of media file is located.\nCorrect and try again.\n\n%s\n\n%sexit 1\n\n' "$bold" "$PWD" "$tput0"
@@ -372,9 +373,15 @@ if [[ "$clifile" && ! -f "$clifile" && "$clifile" != $mediaext ]] || (( "${#medi
 fi
 
 rm /tmp/mytmpfile .opus.book.pids "$pidfile" 2>/dev/null  	# clean any old files that will be in the way
-startext=( ${mediaext} ); startext="${startext##*.}"		# define what the starting extension is in dir
+## this doesn't need to be done a second time:
+#startext=( ${mediaext} ); startext="${startext##*.}"		# define what the starting extension is in dir
+## when there can't be more than one ext in the directory from the chech above.  just define startext as:
+startext="${extensions[0]}"
+
 #mediafiles=                                                 # why the fuck is this here?  there should be no reason to unset mediafiles AND this isn't the way to do it anyway...
-filenum="$(ls ${mediaext}|wc -l)"							# how many of those files are there?
+#filenum="$(ls ${mediaext}|wc -l)"							# how many of those files are there?
+extfiles=( *."$startext" )
+filenum="${#extfiles[@]}"
 
 if [[ "$tmpdir" ]]; then
   mkdir -p "$tmpdir" || exit 1

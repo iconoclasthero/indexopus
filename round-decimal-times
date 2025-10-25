@@ -6,9 +6,8 @@
 ## eventually this can be fixed to allow for more flexibility based on the book.
 ## could also assume linear drift and add a counter that is total final drift (sec) / total chapters and
 ## apply a progressive adjustment
-
 while IFS= read -r line; do
-  if [[ "$line" =~ \"end\"\:\ (([0-9]+)\.([0-9]+)), ]]; then
+  if [[ "$line" =~ \"end\"\:\ (([0-9]+)\.([0-9]+)),? ]]; then
 #  if [[ "$line" =~ ^([[:space:]]*)\"end\"\:\ (([0-9]+)\.([0-9]+)), ]]; then
 #    ws="${BASH_REMATCH[1]}"
 #    t="${BASH_REMATCH[2]}"
@@ -40,4 +39,4 @@ while IFS= read -r line; do
 #    echo "${ws}${line#$ws}"
     echo "$line"
   fi
-done
+done < "$1"

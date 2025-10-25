@@ -875,9 +875,9 @@ mvopus(){
 #  elif [[ "$opusarray" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]]; then
 #  elif [[ "${opusarray[0]}" =~ .+\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]]; then
 ## added a check to make sure that what ends up being the title is actually the same across the first two files
-  elif { [[ "${opusarray[0]}" =~ (.+)\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]];
+  elif { [[ "${opusarray[0]}" =~ (.+)\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]] &&
          t=("${BASH_REMATCH[1]}"); } &&
-       { [[ "${opusarray[1]}" =~ (.+)\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]];
+       { [[ "${opusarray[1]}" =~ (.+)\ -\ ((C|c)hapter|(P|p)art|(D|d)isc|(T|t)rack)\ [[:digit:]]{1,3}\.opus ]] &&
          t+=("${BASH_REMATCH[1]}"); } &&
        [[ "${t[0]}" = "${t[1]}" ]]; then
     echo "Using rename pattern 2."
