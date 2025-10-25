@@ -185,7 +185,7 @@ while (( $# > 0 )); do
   [[ "$1" = --save ]] && args+=("$1") && shift && save=1 && continue
   [[ "$1" = @(-D|--discord) ]] && { args+=("$1"); unset discord; . ~/.config/discord-local.conf; shift; continue; }
   [[ "$1" = --calling-tmp  && -f "$2" ]] && { calltmpf="$2"; shift 2; continue; }  ## requires calling script to touch file first
-  [[ -f "$1" ]] && args+=("$1") && shift && clifile="${args[-1]}" && continue
+  [[ -f "$1" ]] && { echo "this is \$1: $1"; args+=("$1"); shift; clifile="${args[-1]}"; continue; }
   { printf '"%s" is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script' || exit 1; }
 done
 
