@@ -147,7 +147,7 @@ filecheck(){
 
 ## This is more than a little problematic:
 
-  (( "${#allfiles[@]}" )) && for i in "${allfiles[@]}"; do own "$i"; done
+#  (( "${#allfiles[@]}" )) && for i in "${allfiles[@]}"; do own "$i"; done
 
 
   [[ -e "$1" ]] && clifilepath="$(realpath "$1")"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
@@ -186,9 +186,9 @@ filecheck(){
   fi
 
 
-  [[ ! -w "$clifile" ]] && {
-    (( discord )) && discorddm "mp32opus notification: ${clifile:-${allfiles[0]:-title unavailable}} not writeable.";
-    printf 'mp32opus notification: %s not writeable.\n' "${clifile:-${allfiles[0]:-title unavailable}}"; }
+#  [[ ! -w "$clifile" ]] && {
+#    (( discord )) && discorddm "mp32opus notification: ${clifile:-${allfiles[0]:-title unavailable}} not writeable.";
+#    printf 'mp32opus notification: %s not writeable.\n' "${clifile:-${allfiles[0]:-title unavailable}}"; }
 
  (( verbose )) && read -rp "Need to implement an own warn step here step here; continue..."
 
@@ -303,7 +303,6 @@ extractcover(){
 ## flag processing ###################################################################################
 
 args=(mp32opus)
-
 while (( $# > 0 )); do
   [[ "$1" =         "--edit" ]] && editscript && exit
   [[ "$1" =             "-y" ]] && { args+=("$1"); args+=(--save); (( save=rmmatch=1 )); shift; continue; }
@@ -316,8 +315,8 @@ while (( $# > 0 )); do
   [[ "$1" = @(-|--)@(Ys|Yes) ]] && { args+=("-Y"); (( screened=rmmatch=1 )); shift; continue; }
   [[ "$1" =  @(-v|--verbose) ]] && { args+=("$1"); verbose=1; shift; continue; }
   [[ "$1" =  @(-D|--discord) ]] && { args+=("$1"); unset discord; . ~/.config/discord-local.conf; shift; continue; }
-  [[ -d "$1" ]] && { args+=("$1"); clipath="$1"; clidir=$( realpath "$1"); shift; continue; }
-  [[ -f "$1" ]] && { args+=("$1"); clipath="$1"; clifile=$( realpath "$1"); shift; continue; }
+  [[ -d "$1" ]] && { clipath="$1"; clidir=$(realpath "$1"); args+=("$clidir"); shift; continue; }
+  [[ -f "$1" ]] && { clipath="$1"; clifile=$(realpath "$1"); args+=("$clifile"); shift; continue; }
   { printf '"%s" is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script?' || exit 1; }
 done
 
@@ -357,7 +356,7 @@ if (( screened )); then
 #  screen -dmS "${screenname:0:16}" "${args[@]}"
 #  screen -dmS "${screenname:0:16}" bash -i -c "$(printf '%q ' "${args[@]}")"
 #  screen -dmS "${screenname:0:16}" bash -i "${args[@]}"
-  screen -dmS "${screenname:0:16}" bash "${args[@]}"  ## removing the interactive bash call to see if it's needed
+  screen -dmS "${screenname:0:16}" "${args[@]}"  ## removing the interactive bash call to see if it's needed
   screen -ls                                     #could probably add some logic to not delete shit
   printf \\n\\n                                  #leaving that for later, but screen implies -y as
   exit                                           #it doesn't really work otherwise?

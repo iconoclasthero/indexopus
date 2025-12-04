@@ -2,7 +2,8 @@
 #depends opustags, ffmpeg, indexopus, opus.book.4, mplayer, mediaduration
 #need to address existing m4a files in the convert directory prior to the m4b to m4a split.
 
-. /usr/local/bin/editscript.sh
+
+[[ -r /usr/local/bin/editscript ]] && source /usr/local/bin/editscript
 
 #trap pause DEBUG
 shopt -s nullglob
@@ -480,6 +481,7 @@ while (( $# > 0 )); do
   [[ "$1" =             "-y" ]] && { (( rmmatch=save=1 )); args+=(--save); shift; continue; }
   [[ "$1" =             "-Y" ]] && { args+=("$1"); rmmatch=1; shift; continue; }
   [[ "$1" =             "-n" ]] && { args+=("$1"); no=1; shift; continue; }
+  [[ "$1" =        "--leave" ]] && { args+=("$1"); leave=1; shift; continue; }
   [[ "$1" =         "--save" ]] && { args+=("$1"); save=1; shift; continue; }
   [[ "$1" =        "--stats" ]] && { args+=("$1"); stats=1; shift; continue; }
   [[ "$1" =      "--checked" ]] && { checked=1; shift; continue; }
@@ -741,7 +743,7 @@ indent() {
 
 # this is another way to indent: `sed 's/^/    /'`
 
-mvoutput="$(mv "$titleopus" "$swd" 2>&1)"
+(( ! leave )) && mvoutput="$(mv "$titleopus" "$swd" 2>&1)"
 ec="$?"
 if (( ec )); then
   unset rmmatch

@@ -67,11 +67,7 @@ checkdev(){
 
 
 durtools(){
-#  command -v exiftool >/dev/null 2>&1 && exiftool=1 && (( verbose )) && printf 'exiftool: %s\n' "$exiftool"
-#  command -v metaflac >/dev/null 2>&1 && metaflac=1 && (( verbose )) && printf 'metaflac: %s\n' "$metaflac"
-#  command -v mplayer >/dev/null 2>&1 && mplayer=1 && (( verbose )) && printf 'mplayer: %s\n' "$mplayer"
-#  command -v shntool >/dev/null 2>&1 && shntool=1 && (( verbose )) && printf 'shntool: %s\n' "$shntool"
-  for tool in exiftool metaflac mplayer shntool; do
+  for tool in exiftool metaflac mplayer shntool ffprobe mediaduration; do
     if command -v "$tool" >/dev/null; then
       (( verbose )) && printf '%s: 1\n' "$tool"
       declare -g "$tool"=1
@@ -166,18 +162,23 @@ finddur(){
 ##    s=$((shntotal%60))
 ##    printf 'Duration of  .%s files: %02d:%02d:%02d\n' "$ext" "$h" "$m" "$s"
 #    printf 'Duration of  .%s files: %s\n' "$ext" "$(sec2sex "$shntotal")"
-if [[ "$ext" = "shn" ]]; then
-  ! (( shntool )) && { printf 'Duration of .shn files : < install shntool >\n'; return; }
+  if [[ "$ext" = "shn" ]]; then
+    ! (( shntool )) && { printf 'Duration of .shn files : < install shntool >\n'; return; }
+#    shntotal=$(find . -xdev -type f -iname "*.$ext" -print0 |
+#      xargs -0 -I{} shntool len -q "{}" |
+#      awk 'NR>1 {
+#        split($1,t,":");
+#        split(t[2],u,".");
+#        sum += t[1]*60 + u[1] + ("0." u[2]);
+#      }
+#      END { printf "%.0f\n", sum }')
   shntotal=$(find . -xdev -type f -iname "*.$ext" -print0 |
-    xargs -0 -I{} shntool len -q "{}" |
-    awk 'NR>1 {
-      split($1,t,":");
-      split(t[2],u,".");
-      sum += t[1]*60 + u[1] + ("0." u[2]);
-    }
-    END { printf "%.0f\n", sum }')
+    xargs -0 shntool len -q |
+    tail -n1 |
+    awk '{ split($1,t,":"); split(t[2],u,".");
+           print t[1]*60 + u[1] + ("0." u[2]) }')
 
-  printf 'Duration of  .%s files: %s\n' "$ext" "$(sec2sex "$shntotal")"
+    printf 'Duration of  .%s files: %s\n' "$ext" "$(sec2sex "$shntotal")"
 
   elif [[ "$ext" = "flac" ]] && (( exiftool || metaflac )); then
     if ! (( metaflac )); then
@@ -245,28 +246,66 @@ if [[ "$ext" = "shn" ]]; then
 #      printf 'Duration of .%s files: %s\n' "$1" "${tdurs[*]}"; }
 #  fi
 
-else
-  p="${extsplits[$ext]:-1}"
-  tdur=$( find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
-          xargs -0 -P"$p" mplayer -vo dummy -ao dummy -frames 0 -identify 2>/dev/null |
-          perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t += $1) && print $t' |
-          tail -n1 )
+  elif (( 0 == 1 )); then  ## this is the old version that does not offer ffmpeg/mediainfo fallbacks
+    p="${extsplits[$ext]:-1}"
+    tdur=$( find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
+            xargs -0 -P"$p" mplayer -vo dummy -ao dummy -frames 0 -identify 2>/dev/null |
+            perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t += $1) && print $t' |
+            tail -n1 )
 
-  tdur=$(sec2sex "$tdur")
+    tdur=$(sec2sex "$tdur")
 
-  (( verbose )) && printf 'mplayer with xargs -P %s used for %s\n' "$p" "$ext"
+    (( verbose )) && printf 'mplayer with xargs -P %s used for %s\n' "$p" "$ext"
 
-  [[ -n "$tdur" && "$tdur" != "00:00:00" ]] && {
-    (( ${#ext} == 3 )) &&
-      printf 'Duration of  .%s files: %s\n' "$1" "$tdur" ||
-      printf 'Duration of .%s files: %s\n' "$1" "$tdur"
-  }
-fi
+    [[ -n "$tdur" && "$tdur" != "00:00:00" ]] && {
+      (( ${#ext} == 3 )) &&
+        printf 'Duration of  .%s files: %s\n' "$1" "$tdur" ||
+        printf 'Duration of .%s files: %s\n' "$1" "$tdur"
+    }
 
+  else
+    p="${extsplits[$ext]:-1}"
+    tdur=
+
+    if command -v mplayer >/dev/null 2>&1; then
+      # original mplayer logic
+      tdur=$( find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
+              xargs -0 -P"$p" mplayer -vo dummy -ao dummy -frames 0 -identify 2>/dev/null |
+              perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t += $1) && print $t' |
+              tail -n1 )
+      (( verbose )) && printf 'mplayer with xargs -P %s used for %s\n' "$p" "$ext"
+
+    elif command -v ffprobe >/dev/null 2>&1; then
+      # ffprobe fallback
+      tdur=$(find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
+        xargs -0 -P"$p" -I{} ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{}" 2>/dev/null |
+        awk '{s+=$1} END{print s}')
+      (( verbose )) && printf 'ffprobe with xargs -P %s used for %s\n' "$p" "$ext"
+
+    elif command -v mediainfo >/dev/null 2>&1; then
+      # mediainfo fallback
+      tdur=$(find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
+        xargs -0 -P"$p" -I{} mediainfo --Inform="General;%Duration%" "{}" 2>/dev/null |
+        awk '{s+=$1/1000} END{print s}')
+      (( verbose )) && printf 'mediainfo with xargs -P %s used for %s\n' "$p" "$ext"
+    fi
+
+    (( verbose )) && printf 'Before sec2sex $tdur = %s\n' "$tdur"
+    tdur=$(sec2sex "$tdur")
+    (( verbose )) && printf ' After sec2sex $tdur = %s\n' "$tdur"
+
+    [[ -n "$tdur" && "$tdur" != "00:00:00" ]] && {
+      (( ${#ext} == 3 )) &&
+        printf 'Duration of  .%s files: %s\n' "$1" "$tdur" ||
+        printf 'Duration of .%s files: %s\n' "$1" "$tdur"
+      }
+  fi
 }
+##--> finddur() <--###################################################################################
 
 
-. /usr/local/bin/editscript
+
+[[ -r /usr/local/bin/editscript ]] && source /usr/local/bin/editscript
 
 tempfile=$(mktemp)
 durtools
@@ -379,6 +418,7 @@ for ext in mp3 m4a m4b ogg mp4 avi shn wav flac opus; do
       hhmmss="${line#*: }"; (( ${#hhmmss} == 8 )) && hhmmss=" $hhmmss"
       # printf %s\\n "$line"
       (( "${#ext}" == 3 )) && ext=" .$ext" || ext=".$ext"
+      (( only )) && printf %s\\n "${line#*: }" ||
       printf 'Duration of %s files: %s\n' "$ext" "$hhmmss"
     elif [[ "$line" = "$ext: "* ]]; then
       flacsum=$(( flacsum + "${line#* }" ))
