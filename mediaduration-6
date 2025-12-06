@@ -704,7 +704,7 @@ for ext in mp3 m4a m4b ogg mp4 avi shn wav flac opus; do
 #  --arg d "${hhmmss// }" \
 #  --arg ds "$(sec2sex "$hhmmss")" \
 #  '{${ext##*.}:{ext:$ext,duration:($d|tonumber),dursex:$ds}}')"
-        totalsjson["${ext##*.}"]="$(jq -n \
+       (( json )) && totalsjson["${ext##*.}"]="$(jq -n \
           --arg e "${ext##*.}" \
           --arg d "${hhmmss// }" \
           --arg ds "$(sec2sex "$hhmmss")" \
