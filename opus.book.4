@@ -5,6 +5,7 @@
 #trap read DEBUG
 
 . ~/.config/indexopus.conf
+: "${mediaduration:=/usr/local/bin/mediaduration}"
 
 # Invokes breakout function upon INT/^C
 trap '{ breakout -B; exit 1; }' INT
@@ -196,10 +197,12 @@ progress() {
 
 #  [[ "$opuspresent" ]] && opusdur="$(checkdur opus)"
   if (( "${#opuspresent[@]}" )); then
-    opusdur="$(checkdur opus)"
+#    opusdur="$(checkdur opus)"
+    opusdur="$("$mediaduration" --only opus)"
   elif [[ "$tmpdir" ]]; then
     opusdur="$( cd "$tmpdir" && opuspresent=(*opus);
-                (( "${#opuspresent[@]}" )) && checkdur opus; )"
+#                (( "${#opuspresent[@]}" )) && checkdur opus; )"
+                (( "${#opuspresent[@]}" )) && "$mediaduration" --only opus; )"
   fi
   [[ ! "$bfreq" =~ [[:digit:]]+ ]] && bfreq=12 # flashing frequency (( $(date +%s) % bfreq == 0 )) && .
   [[ ! "$rfreq" =~ [[:digit:]]+ ]] && bfreq=6 # flashing frequency (( $(date +%s) % bfreq == 0 )) && .
@@ -253,10 +256,12 @@ progress() {
       sleep 12
       opuspresent=( *.opus )
       if (( "${#opuspresent[@]}" )); then
-        opusdur="$(checkdur opus)"
+#        opusdur="$(checkdur opus)"
+        opusdur="$("$mediaduration" --only opus)"
       elif [[ "$tmpdir" ]]; then
         opusdur="$( cd "$tmpdir" && opuspresent=(*opus);
-                   (( "${#opuspresent[@]}" )) && checkdur opus; )"
+#                   (( "${#opuspresent[@]}" )) && checkdur opus; )"
+                   (( "${#opuspresent[@]}" )) && "$mediaduration" --only opus; )"
       fi
 #      opusdur="$(mediaduration opus)"
 #      (( "$(date +%s)" % "$rfreq" == 0 )) && $(tput reset); clear -x
@@ -412,8 +417,10 @@ elif [[ "$clifile" ]]; then
 # sample rate is 48 kHz; 24 kHz here is probably wasteful
 
   printf '\n%sDurations:\n%s' "$bold" "$tput0"
-  checkdur "$clifile"
-  checkdur "$opusfile"
+#  checkdur "$clifile"
+#  checkdur "$opusfile"
+  "$mediaduration" --only "$clifile"
+  "$mediaduration" --only "$opusfile"
 
 elif (( filenum > 0 )); then
 #need to add a formal confirm here at some point, but really, who's going to be doing this?

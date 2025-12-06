@@ -28,6 +28,7 @@ white="$(tput setaf 15)"
 yellow="$(tput setaf 11)"
 relipsis="$red..."
 stamp="$(date +%s)"
+: "${mediaduration:=/usr/local/bin/mediaduration}"
 
 ## load functions ##############################################################################
 ## printline()
@@ -598,15 +599,18 @@ fi
 
 (( stats )) && mediainfo "$m4bin"
 
-m4bindur="$(checkdur "$m4bin" | sed $'s/\e\\[[0-9;]*m//g')"
-                                 # this function returns the duration of "$m4bin" **by itself!**
-                                 # but in color so that's what the sed is doing.  should fix checkdur()
-                                 # instead of the whole directory, but this returns
-                                 # <hh:mm:ss> <filename> so it needs to be corrected
-m4bindur="${m4bindur%% *}"       # remove file name
+#m4bindur="$(checkdur "$m4bin" | sed $'s/\e\\[[0-9;]*m//g')"
+#                                 # this function returns the duration of "$m4bin" **by itself!**
+#                                 # but in color so that's what the sed is doing.  should fix checkdur()
+#                                 # instead of the whole directory, but this returns
+#                                 # <hh:mm:ss> <filename> so it needs to be corrected
+#m4bindur="${m4bindur%% *}"       # remove file name
+m4bindur="$("$mediaduration" --only "$m4bin" | sed $'s/\e\\[[0-9;]*m//g')"
 (( verbose )) && pause "[verbose] \$m4bindur: ${m4bindur:-null}"
 
-! [[ "$m4bindur" =~ ^[0-9]{2,3}\:[0-9]{2}\:[0-9]{2}$ ]] && { printf 'The m4b input duration ($m4bindur) is not correct: %s\nInvestigate. (exit 1)\n\n' "$m4bindur"; exit 1; }
+! [[ "$m4bindur" =~ ^[0-9]{2,3}\:[0-9]{2}\:[0-9]{2}$ ]] &&
+     { printf 'The m4b input duration ($m4bindur) is not correct: %s\nInvestigate. (exit 1)\n\n' "$m4bindur";
+       exit 1; }
 
 printf '\n%sStarting .m4b file: %s%s%s\n' "$bold" "$red" "$m4bin" "$tput0"
 ##printf ' %s%s%s\n' "$boldred" "$m4bin" "$tput0"  ## this appears to be redundant
@@ -662,7 +666,7 @@ opus.book.4 --stats -d "$m4bindur"  #this is a dependency; needs to be made a fu
 #opus.book.4 --stats -d "${m4bindur#*: }"  #this is a dependency; needs to be made a function?
                        ## why is this here?  $m4bindur should not have a `: ` to remove
                        ## it shouldn't matter because i've already checked it to make sure it's right
-                       ## when i call checkdur "$m4bin"
+#                      ## when i call checkdur "$m4bin"
                        ## presumably it is a hangover from when checkdur reported something else back
 
 if (( "$?" > 0 ));  then
@@ -678,7 +682,8 @@ clear -x
 #need to renable rmyn below if these are uncommented
 #[[ ! -d "$convertdir/m4a" ]] && mkdir "$convertdir/m4a"
 #mv *.m4a ./m4a
-opuspartdur="$(checkdur opus)"
+#opuspartdur="$(checkdur opus)"
+opuspartdur="$(mediaduration --only opus)"
 ## this should be ok and give the .opus parts duration properly because i'm in the convert dir here
 
 ##m4bindur="${m4bindur#*: }"
@@ -798,8 +803,10 @@ cd "$swd"
 ## regardless,` ! (( rmmatch )) && pause "Need to check to see if $tmp is being created... when indexopus isn't run with -y"` can be commented out pending removal later since the tmp is never created and i see no strong advantage of creating it in /tmp since the working conversion directory is on /cache anyway.
 
 
-opusdur="$(checkdur "$titleopus" | sed $'s/\e\\[[0-9;]*m//g')"
-opusdur="${opusdur%% *}"
+#opusdur="$(checkdur "$titleopus" | sed $'s/\e\\[[0-9;]*m//g')"
+#opusdur="${opusdur%% *}"
+
+opusdur="$("$mediaduration" --only "$titleopus")"
 
 ## ititle could be used here, but i'm using the split apart variables becuase that's what the durations are actually calculated from:
 
@@ -837,7 +844,8 @@ if (( rmmatch )) && (( opusdursec > 0 )); then
    (( discord )) && discorddm "m4b2opus completed: $titleopus" > /dev/null
     printline "${bold}  Exiting (0) ${white}m4b2opus  ${tput0}"
     exit
-  elif (( rmmatch ))  && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
+#  elif (( rmmatch ))  && [[ "$(checkdur m4b)" != "$(checkdur opus)" ]]; then
+  elif (( rmmatch ))  && [[ "$(mediaduration --only m4b)" != "$(mediaduration --only opus)" ]]; then
     printf '%s%sThe m4b and opus audiobook durations do not match!\n' "$bold" "$red"
     printf '%s%sm4b2opus will not automatically delete starting and temporary files!\n' "$white" "$tput0"
     printf '\n\n'

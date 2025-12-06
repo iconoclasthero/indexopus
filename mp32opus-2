@@ -401,7 +401,7 @@ else
   printf \\n
   printline "${bold}  Calling ${white}opus.book.4 ${args[@]}  ${tput0}"
   clear -x
-  readarray -t initdurations < <(mediaduration --durations)
+  readarray -t initdurations < <(mediaduration --only)
   printf %s\\n "${initdurations[@]}"
 
 ## this check is a false sense of security as there's no way at present to check if there's not more than
