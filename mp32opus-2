@@ -18,7 +18,7 @@ calltmpf="/tmp/mp32opus-calltmpf-$(date -Im).tmp"  ## temp file to communicate w
 
 ## source functions #################################################################################
 . /usr/local/bin/editscript
-sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec -f printline -f confirm
+source <(sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec -f printline -f confirm)
 
 
 ## functions ########################################################################################
