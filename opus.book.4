@@ -358,12 +358,13 @@ fi
 
 while (( $# > 0 )); do
   [[ "$1" = @(edit|e|-e) ]] && editscript
-  [[ "$1" = --tmp ]] && shift && tmpdir="$1" && shift && continue
-  [[ "$1" = --cache ]] && usecache=1 && shift && continue
-  [[ "$1" = @(-s|--stats) ]] && shift && stats=1 && continue
-  [[ "$1" = "-d" ]] && inputdur="$2" && shift 2 && continue
-  [[ "$1" = @(-h|--help) ]]  && shift && help=true && continue
-  [[ "$1" = @(-f|--force) ]] && shift && overwrite=true && continue  #this doesn't actually change what ffmpeg does yet!
+  [[ "$1" = --tmp          ]] && { tmpdir="$2";   shift 2; continue; }
+  [[ "$1" = --cache        ]] && { usecache=1;    shift;   continue; }
+  [[ "$1" = @(-v|--verbose ]] && { verbose=1;     shift;   continue; }
+  [[ "$1" = @(-s|--stats)  ]] && { stats=1;       shift;   continue; }
+  [[ "$1" = "-d"           ]] && { inputdur="$2"; shift 2; continue; }
+  [[ "$1" = @(-h|--help)   ]] && { help=1;        shift;   continue; }
+  [[ "$1" = @(-f|--force)  ]] && { overwrite=1;   shift;   continue; }  #this doesn't actually change what ffmpeg does yet!
   [[ "$1" = @(-b|--break) ]] && shift && break-m4b2opus=true && trap '{ breakout -B -b m4b2opus; exit 1; }' INT && continue
   [[ -f "$1" ]] && clifile="$1" && file="$clifile" && opusfile="${file%.*}.opus" && continue	 #it's just letting me into the program atm
   { printf '%s is not a recognized cli option.\nContinue with %s?' "$1" "$0"; confirm -Y && shift && continue || exit 1; }
@@ -394,7 +395,7 @@ fi
 
 (( filenum < threads )) && threads="$filenum"
 
-if  [[ "$clifile" ]] && [[ -f "$opusfile" ]] && [[ "$overwrite" != true ]]; then
+if  [[ "$clifile" ]] && [[ -f "$opusfile" ]] && ! (( overwrite )); then
   printf '\n%s%s%s exists!%s\n   %sexit 1\n\n%s' "$relipsis" "$bold" "$opusfile" "$white" "$tput0"
   echo "$line"
   exit 1
@@ -426,7 +427,7 @@ elif (( filenum > 0 )); then
 #need to add a formal confirm here at some point, but really, who's going to be doing this?
 #ffmpeg cannot overwrite here so probably have to exit if the files aren't deleted... further, we could actully compare the opus files that exist to the ones that are going to be converted...but since im not using find here, that probably donesnt matter.
 
-  if [[ "$overwrite" = true ]]; then
+  if (( overwrite )); then
     printf '\n%s%s invoked with --force|-f flag to overwrite existing .opus files.\n' "$red" "$script"
     printf '\n%sConfirm deletion of existing *.opus files prior to starting conversion!%s\n' "$bold" "$tput0"
     printf '\nIt'\''d be great if there was actually a confirm here... your shit'\''s deleted sucker!\n'
