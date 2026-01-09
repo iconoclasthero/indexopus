@@ -359,13 +359,13 @@ fi
 
 while (( $# > 0 )); do
   [[ "$1" = @(edit|e|-e) ]] && editscript
-  [[ "$1" = --tmp          ]] && { tmpdir="$2";   shift 2; continue; }
-  [[ "$1" = --cache        ]] && { usecache=1;    shift;   continue; }
-  [[ "$1" = @(-v|--verbose ]] && { verbose=1;     shift;   continue; }
-  [[ "$1" = @(-s|--stats)  ]] && { stats=1;       shift;   continue; }
-  [[ "$1" = "-d"           ]] && { inputdur="$2"; shift 2; continue; }
-  [[ "$1" = @(-h|--help)   ]] && { help=1;        shift;   continue; }
-  [[ "$1" = @(-f|--force)  ]] && { overwrite=1;   shift;   continue; }  #this doesn't actually change what ffmpeg does yet!
+  [[ "$1" = --tmp           ]] && { tmpdir="$2";   shift 2; continue; }
+  [[ "$1" = --cache         ]] && { usecache=1;    shift;   continue; }
+  [[ "$1" = @(-v|--verbose) ]] && { verbose=1;     shift;   continue; }
+  [[ "$1" = @(-s|--stats)   ]] && { stats=1;       shift;   continue; }
+  [[ "$1" = "-d"            ]] && { inputdur="$2"; shift 2; continue; }
+  [[ "$1" = @(-h|--help)    ]] && { help=1;        shift;   continue; }
+  [[ "$1" = @(-f|--force)   ]] && { overwrite=1;   shift;   continue; }  #this doesn't actually change what ffmpeg does yet!
   [[ "$1" = @(-b|--break) ]] && shift && break-m4b2opus=true && trap '{ breakout -B -b m4b2opus; exit 1; }' INT && continue
   [[ -f "$1" ]] && clifile="$1" && file="$clifile" && opusfile="${file%.*}.opus" && continue	 #it's just letting me into the program atm
   { printf '%s is not a recognized cli option.\nContinue with %s?' "$1" "$0"; confirm -Y && shift && continue || exit 1; }
