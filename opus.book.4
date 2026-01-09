@@ -10,7 +10,8 @@
 # Invokes breakout function upon INT/^C
 trap '{ breakout -B; exit 1; }' INT
 pidfile="/tmp/.opus.book.pids"
-cache="${cache:-"/cache/"}"
+: "${CACHE:=/cache/}"
+cache="$CACHE"
 
 # global shopt settings.  nullglob causes unwanted things with ls, so it needs to be reconsidered
 shopt -s extglob nullglob   # as a global option
