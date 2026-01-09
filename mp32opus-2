@@ -6,6 +6,10 @@ shopt -s nullglob extglob
 [[ "$TERM" = dummy ]] && TERM=xterm-256color
 export TERM
 
+## source defaults ##################################################################################
+source "$HOME/.config/indexopus.conf"
+
+## assign initial  ##################################################################################
 tput0="$(tput sgr0)"
 white="$(tput setaf 15)"
 boldred="$(tput bold setaf 9)"
@@ -16,8 +20,6 @@ discord=1
 calltmpf="/tmp/mp32opus-calltmpf-$(date -Im).tmp"  ## temp file to communicate with called scripts
 #rmmatch=1
 
-## source defaults ##################################################################################
-source "$HOME/.config/indexopus.conf"
 
 ## source functions #################################################################################
 source /usr/local/bin/editscript
@@ -37,14 +39,14 @@ filecheck(){
   fi
 
   [[ -e "$1" ]] && clifilepath="$(realpath "$1")"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
-read -rp "\$clifilepath is $clifilepath"
+  echo "\$clifilepath is $clifilepath"
 
 
-(( verbose )) && read -rp "[verbose] \$clifilepath: ${clifilepath:-null}"
+(( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
   [[ -d "$clifilepath" ]] && clipath="${clifilepath%/}" && cd "$clipath" && unset clifilepath
   [[ -f "$clifilepath" ]] && clipath="${clifilepath%/*}" && cd "$clipath" && clifilepath="${clifilepath##*/}" ## add an || unset clifilepath here?
-(( verbose )) && read -rp "[verbose] \$clifilepath: ${clifilepath:-null}"
-(( verbose )) && read -rp "[verbose] \$clipath: ${clipath:-null}"
+(( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
+(( verbose )) && echo "[verbose] \$clipath: ${clipath:-null}"
 
 #  if [[ "$clipath" ]]; then
 #    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
@@ -52,7 +54,7 @@ read -rp "\$clifilepath is $clifilepath"
   if ! [[ -w . ]]; then
     printf '\n[WARN] The pwd\n(%s)\n is not writable; attempting to take ownership.\n\n' "$(pwd)"
 
-    (( verbose )) && pause "[verbose] $(type own) $(which own)"
+    (( verbose )) && echo "[verbose] $(type own) $(which own)"
 
     (( rmmatch )) && { own --force .; :; } || own .
 
@@ -142,7 +144,7 @@ filecheck(){
 #      (( n )) && allfiles=( --force "${allfiles[@]}" )
        (( n )) && set -- "$allfiles" && break
       (( unwritable )) && { confirm -Y "Do you want to own all of these files:\n$(printf %s\\n "${allfiles[@]}")\nConfirm?" && group=media own "${allfiles[@]}" || return 1; }
-      read -rp "$(which own)"
+      echo "$(which own)"
       (( n++ ))
     done
   fi
@@ -155,16 +157,16 @@ filecheck(){
 
   [[ -e "$1" ]] && clifilepath="$(realpath "$1")"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
 
-(( verbose )) && read -rp "[verbose] \$clifilepath is $clifilepath"
+(( verbose )) && echo "[verbose] \$clifilepath is $clifilepath"
 
 
-(( verbose )) && read -rp "[verbose] \$clifilepath: ${clifilepath:-null}"
+(( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
   [[ -d "$clifilepath" ]] && clidir="$clifilepath" && cd "$clidir" && unset clifilepath
   [[ -f "$clifilepath" ]] && { clifile="$(basename "$clifilepath")"; clidir="$(dirname "$clifilepath")"; cd "$clidir" || exit 1; } ## add an || unset clifilepath here?
-(( verbose )) && read -rp "[verbose] \$clifilepath: ${clifilepath:-null}"
-(( verbose )) && read -rp "[verbose] \$clipath: ${clipath:-null}"
-(( verbose )) && read -rp "[verbose] \$clidir: ${clidir:-null}"
-(( verbose )) && read -rp "[verbose] \$clifile: ${clifile:-null}"
+(( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
+(( verbose )) && echo "[verbose] \$clipath: ${clipath:-null}"
+(( verbose )) && echo "[verbose] \$clidir: ${clidir:-null}"
+(( verbose )) && echo "[verbose] \$clifile: ${clifile:-null}"
 
 #  if [[ "$clipath" ]]; then
 #    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
@@ -172,7 +174,7 @@ filecheck(){
   if ! [[ -w . ]]; then
     printf '\n[WARN] The pwd\n(%s)\n is not writable; attempting to take ownership.\n\n' "$(pwd)"
 
-    (( verbose )) && pause "[verbose] $(type own) $(which own)"
+    (( verbose )) && echo "[verbose] $(type own) $(which own)"
 
     (( rmmatch )) && { own --force .; :; } || own .
 
@@ -193,7 +195,7 @@ filecheck(){
 #    (( discord )) && discorddm "mp32opus notification: ${clifile:-${allfiles[0]:-title unavailable}} not writeable.";
 #    printf 'mp32opus notification: %s not writeable.\n' "${clifile:-${allfiles[0]:-title unavailable}}"; }
 
- (( verbose )) && read -rp "Need to implement an own warn step here step here; continue..."
+ (( verbose )) && echo "Need to implement an own warn step here step here; continue..."
 
 
 
@@ -403,7 +405,6 @@ else
   eza -l --no-user
   printf \\n
   (( verbose )) && args+=( -v )
-  printline "${bold}  Calling ${white}opus.book.4 ${args[*]}  ${tput0}"
   clear -x
   readarray -t initdurations < <(mediaduration --only)
   printf 'Initial Durations ("${initialdurations[@]}"): '
@@ -420,10 +421,9 @@ else
 
   tmpdir="$tmpdir/mp32opus-${PWD##*/}"
 
-  opus.book.4 --tmp "$tmpdir" || { ec="$?"; printf 'An error was returned by opus.book.4; exit code %s. Investigate. (exit %s)\n' "$ec" "$ec"; exit "$?"; }
+  printline "${bold}  Calling ${white}opus.book.4 --tmp $tmpdir ${args[*]}  ${tput0}"
 
-  printline "${bold}  Calling ${white}indexopus ${args[*]} ${tput0}"
-
+  opus.book.4 --tmp "$tmpdir" "${args[@]}" || { ec="$?"; printf 'An error was returned by opus.book.4; exit code %s. Investigate. (exit %s)\n' "$ec" "$ec"; exit "$?"; }
 
 ##  This is yet to be implemented in opus.book.4...
 ##  i.e., it needs to send the transcoded files to "$tmp" before cd there.
@@ -433,9 +433,12 @@ else
 
   eza -gla --no-user
 #  (( verbose )) && args+=('-v') this should be set right after the else branch above
-  (( verbose )) && pause "\$args=$(printf %s\\n "${args[@]}")"
+  (( verbose )) && pause "\$args=$(printf %s\\n "${args[*]}")"
   (( verbose )) && pause "pwd=$PWD"
   opuspartdur="$(mediaduration -o opus)"
+
+  printline "${bold}  Calling ${white}indexopus ${args[*]} -d $opuspartdur ${tput0}"
+
   indexopus "${args[@]}" -d "$opuspartdur"
   ec="$?"
   (( ec )) && (( ec == 1 )) && { printf '\nThe indexopus script did not exit cleanly. Investigate. (exit %s)\n\n' "$ec"; exit "$ec"; } # i don't know for sure that the ec from indexopus can\'t be other than 0, 1, 2.
@@ -488,7 +491,7 @@ else
 #  opusdur="${durations[${opuskey:--1}]#*: }"
   opusdur="${durations[${opuskey:--1}]##* }"
 
-  (( verbose )) && pause "$(printf '[verbose] $sourcedur="%s"\n[verbose] $opusdur="%s"\n' "$sourcedur" "$opusdur")"
+  (( verbose )) && pause "$(printf '[verbose] $sourcedur="%s"\n[verbose]   $opusdur="%s"\n' "$sourcedur" "$opusdur")"
 
 
   opusdursec="$(sex2sec "$opusdur")"

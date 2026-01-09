@@ -13,6 +13,8 @@ pidfile="/tmp/.opus.book.pids"
 : "${CACHE:="/cache/"}"
 : "${cache:=$CACHE}"
 
+(( verbose )) && read -rp "CACHE=$CACHE cache=$cache"
+
 # global shopt settings.  nullglob causes unwanted things with ls, so it needs to be reconsidered
 shopt -s extglob nullglob   # as a global option
 
@@ -364,6 +366,7 @@ while (( $# > 0 )); do
   [[ "$1" = @(-v|--verbose) ]] && { verbose=1;     shift;   continue; }
   [[ "$1" = @(-s|--stats)   ]] && { stats=1;       shift;   continue; }
   [[ "$1" = "-d"            ]] && { inputdur="$2"; shift 2; continue; }
+  [[ "$1" = "-y"            ]] && { rmmatch=1;     shift;   continue; } #unused
   [[ "$1" = @(-h|--help)    ]] && { help=1;        shift;   continue; }
   [[ "$1" = @(-f|--force)   ]] && { overwrite=1;   shift;   continue; }  #this doesn't actually change what ffmpeg does yet!
   [[ "$1" = @(-b|--break) ]] && shift && break-m4b2opus=true && trap '{ breakout -B -b m4b2opus; exit 1; }' INT && continue
