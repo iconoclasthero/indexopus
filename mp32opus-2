@@ -399,9 +399,11 @@ else
   printline "$bold  $(pwd):  $tput0"
   eza -l --no-user
   printf \\n
-  printline "${bold}  Calling ${white}opus.book.4 ${args[@]}  ${tput0}"
+  (( verbose )) && args+=( -v )
+  printline "${bold}  Calling ${white}opus.book.4 ${args[*]}  ${tput0}"
   clear -x
   readarray -t initdurations < <(mediaduration --only)
+  printf 'Initial Durations ("${initialdurations[@]}"): '
   printf %s\\n "${initdurations[@]}"
 
 ## this check is a false sense of security as there's no way at present to check if there's not more than
@@ -427,10 +429,11 @@ else
   { mkdir -p "$tmpdir" && cd "$tmpdir"; } || { printf 'Failure of `mkdir/cd %s` occurred! Investigate. (exit 1)\n' "$tmpdir"; exit 1; }
 
   eza -gla --no-user
-  (( verbose )) && args+=('-v')
+#  (( verbose )) && args+=('-v') this should be set right after the else branch above
   (( verbose )) && pause "\$args=$(printf %s\\n "${args[@]}")"
   (( verbose )) && pause "pwd=$PWD"
-  indexopus "${args[@]}"
+  opuspartdur="$(mediaduration -o opus)"
+  indexopus "${args[@]}" -d "$opuspartdur"
   ec="$?"
   (( ec )) && (( ec == 1 )) && { printf '\nThe indexopus script did not exit cleanly. Investigate. (exit %s)\n\n' "$ec"; exit "$ec"; } # i don't know for sure that the ec from indexopus can\'t be other than 0, 1, 2.
   (( ec == 2 )) && iorm=true # this is something that is part of the m4b2opus integration with indexopus.  iorm *probably* means "indexopus rm" such that the user's said yes to a prompt to remove shit.

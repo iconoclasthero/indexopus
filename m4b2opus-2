@@ -15,6 +15,7 @@ shopt -s extglob
 export TERM
 
 threads=4                #this should be assigned when ~/.config/indexopus.conf is sourced
+: "${CACHE:=/dev/shm/cache}"
 scriptpath="$(realpath "$0")"
 scriptname="${scriptpath##*\/}"
 ulon="$(tput smul)"
@@ -122,7 +123,7 @@ filecheck(){
 
   if (( fuse )); then
     (( verbose )) && printf '[verbose] in if (( fuse )) block\n'
-    localclipath="/dev/shm/cache/${clipath##*/}"
+    localclipath="$CACHE/${clipath##*/}"
     mkdir -p "$localclipath"
     [[ ! "$clifilename" ]] && { printf 'On an sshfs mount but no file name specified on cli. Correct and retry. (exit 1)\n'; exit 1; }
     cp "$clifilename" "$localclipath"

@@ -4,7 +4,7 @@
 . /usr/local/bin/editscript
 . ~/.config/indexopus.conf
 
-tmp=/cache
+tmp="$CACHE"
 mp=tmp
 scriptname=$(realpath "$0")
 ulon=$(tput smul)         # underline on
@@ -19,7 +19,7 @@ shopt -s nullglob extglob dotglob
 #rmmatch=false
 #screened=false
 
-sourcefn -l "$HOME/bin/gits/indexopus/indexopus.lib" -f printline -f confirm
+source <(sourcefn -l "$HOME/bin/gits/indexopus/indexopus.lib" -f printline -f confirm)
 
 
 
