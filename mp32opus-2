@@ -11,13 +11,16 @@ white="$(tput setaf 15)"
 boldred="$(tput bold setaf 9)"
 red="$(tput setaf 1)"
 relipsis="${red}..."
-tmpdir=/cache
+tmpdir="$CACHE"
 discord=1
 calltmpf="/tmp/mp32opus-calltmpf-$(date -Im).tmp"  ## temp file to communicate with called scripts
 #rmmatch=1
 
+## source defaults ##################################################################################
+source "$HOME/.config/indexopus.conf"
+
 ## source functions #################################################################################
-. /usr/local/bin/editscript
+source /usr/local/bin/editscript
 source <(sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec -f printline -f confirm)
 
 
