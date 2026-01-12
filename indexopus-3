@@ -944,6 +944,7 @@ titleinput(){
 
 titleinput(){
   local title
+  (( discord )) && discorddm "indexopus: Attention required! Title entry required."
   title="$(gum input \
     --width="$(( $(tput cols) - $(tput cols)/10 ))" \
     --value="${PWD##*/}" \
