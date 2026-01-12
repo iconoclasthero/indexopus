@@ -32,6 +32,7 @@ gray="$(tput setaf 7)"
 tput0="$(tput sgr0)" #reset tput changes
 bold="$(tput bold)" #bold on
 relipsis="$red..."
+discord=1
 stamp="$(date +%s)"  #sets datecode for all of indexopus - could use info from m4b2opus later
 tmp="/tmp/indexopus-$stamp" #this could change based on info from m4b2opus
 [[ ! "$removetags" ]] &&
@@ -930,6 +931,7 @@ mvopus(){
 
 titleinput(){
   local title
+  (( discord )) && discorddm "indexopus: Attention required! Title entry required."
   title="$(gum input --width="$(( $(tput cols) - $(tput cols)/10 ))" --value="${PWD##*\/}" --header.foreground="11" --header="$(printf '\nNB: Using this rename pattern requires setting a title.\n\nEnter title to use for part files:')")"
   if confirm -y "Use $red$iton$title$tput0 as title for part files?"; then
     printf %s\\n "$title"

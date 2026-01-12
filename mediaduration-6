@@ -482,7 +482,7 @@ durtools
 
 #readarray exts < <(find . -xdev -type f 2>/dev/null | sed -rn 's|.*/[^/]+\.([^/.]+)$|\1|p' | sort -u)
 
-mediaexts=(flac opus mp3 m4a m4b ogg mp4 avi shn wav)
+mediaexts=(flac opus mp3 m4a m4b ogg mp4 avi shn mkv vob wav)
 #regex="($(IFS='|'; echo "${mediaexts[*]}"))"
 #regex="^\.?($(IFS='|'; echo "${mediaexts[*]}"))$"
 regex="\.?($(IFS='|'; echo "${mediaexts[*]}"))$"
@@ -767,7 +767,7 @@ wait
 (( json )) && declare -A totalsjson
 
 # print in the defined order
-for ext in mp3 m4a m4b ogg mp4 avi shn wav flac opus; do
+for ext in mp3 m4a m4b ogg mp4 avi shn vob mkv wav flac opus; do
  while read -r line; do
     if [[ "$line" = "Duration of .$ext"* || "$line" = "Duration of  .$ext"* ]]; then
       hhmmss="${line#*: }"; (( ${#hhmmss} == 8 )) && hhmmss=" $hhmmss"
