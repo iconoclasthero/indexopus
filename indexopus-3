@@ -964,6 +964,7 @@ titleinput(){
     if [[ "${BASH_REMATCH[1]}" ]]; then
       t="${BASH_REMATCH[1]}"
     else
+     (( discord )) && discorddm "indexopus: Attention required! Title entry required."
       t="$(gum input \
         --width="$(( $(tput cols) - $(tput cols)/10 ))" \
         --value="${PWD##*/}" \
@@ -1117,6 +1118,7 @@ titleinput(){
 ## this pattern matches: `001 Author Name - Book Title - Part Name.opus`
     printf '\nNB: Using this rename pattern requires setting a title.\n'
 #    printf 'Use the directory in the format of /path/to/dir/Title[: Subtitle [(Year)]]\nPWD: %s\n\n' "$(pwd)"
+    (( discord )) && discorddm "indexopus: Attention required! Title entry required."
     t="$(gum input --width="$(( $(tput cols) - $(tput cols)/10 ))" --value="${PWD##*\/}" --header="Enter title to use for part files:")"
     confirm -y "Use $red$iton$t$tput0 as title for part files?" || { printf '\nFix directory name and return.\nExiting. (exit 1)\n\n'; exit 1; }
 
