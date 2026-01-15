@@ -316,7 +316,7 @@ while (( $# > 0 )); do
   [[ "$1" =         "--save" ]] && { args+=("$1"); save=1; shift; continue; }
   [[ "$1" =        "--stats" ]] && { args+=("$1"); stats=1; shift; continue; }
   [[ "$1" =   @(--screen|-s) ]] && { screened=1; shift; continue; }
-  [[ "$1" = @(-|--)@(ys|yes) ]] && { args+=("-y"); (( screened=rmmatch=1 )); args+=(--save); shift; continue; }
+  [[ "$1" = @(-|--)@(ys|yes) ]] && { args+=("-y"); (( save=screened=rmmatch=1 )); args+=(--save); shift; continue; }
   [[ "$1" = @(-|--)@(Ys|Yes) ]] && { args+=("-Y"); (( screened=rmmatch=1 )); shift; continue; }
   [[ "$1" =  @(-v|--verbose) ]] && { args+=("$1"); verbose=1; shift; continue; }
   [[ "$1" =  @(-D|--discord) ]] && { args+=("$1"); unset discord; . ~/.config/discord-local.conf; shift; continue; }
@@ -400,7 +400,7 @@ if [[ "$clifile" ]] || (( "${#allfiles[@]}" == 1 )); then
     printline "${bold}  Returned from ${white}quartero4 (exit $ec)  ${tput0}"
     printf \\n
   fi
-else
+else  ## the not quartero4 branch
   printline "$bold  $(pwd):  $tput0"
   eza -l --no-user
   printf \\n
@@ -504,12 +504,15 @@ else
   (( verbose )) && read -rp "$(printf '[verbose] title: %s\n' "$title")"
 
   if (( opusdursec > 0 )); then
+    printf \\n
     verifydur=$(( (1000 * (sourcedursec - opusdursec)) / opusdursec ))
     verifydur=$(( verifydur < 0 ? -verifydur:verifydur ))
-
-    printf \\n
+    (( verbose )) && printf '[verbose] sourcedursec : %s\n' "$sourcedursec"
+    (( verbose )) && printf '[verbose]   opusdursec : %s\n' "$opusdursec"
+    (( verbose )) && printf '[verbose]    verifydur : %s\n' "$verifydursec"
 
     if (( verifydur <= 1 )); then  #this is 0.1% difference
+      (( verbose )) && printf '\n[verbose] verifdur is ≤ 0.1% difference: %s\n\n' "$verifydur"
       { (( rmmatch )) || confirm -y "Durations are within 0.1%.\n$(ls *$ext) \n\nRemove starting $ext files?"; } && ! (( save )) && { rm -vf *."$ext"; rmdir "$tmpdir"; }
       [[ "$sourcedursec" != "$opusdursec" ]] &&
          printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tput sitm)" "$(tput ritm)" "$tput0" ||
@@ -519,6 +522,7 @@ else
      (( discord )) && discorddm "mp32opus completed: ${title:-title unavailable}"
      exit
     elif (( rmmatch )) && (( verifydur )); then
+      (( verbose )) && printf '(( rmmatch )) && (( verifydur )) branch: %s %s\n' "$rmmatch" "$verifydur"
       printf '%s%sThe source and opus audiobook durations do not match!\n' "$bold" "$red"
       printf '%s%s%s will not automatically delete starting and temporary files!\n' "$white" "$tput0" "$0"
       printf '\n\n'
@@ -533,8 +537,8 @@ else
     printf 'The duration of the opus files [in seconds] is zero and would present a divide by zero error. Investigate.\n(exit 1)\n.'
    (( discord )) && discorddm "mp32opus completed: $(printf 'The duration of the opus files [in seconds] is zero and would present a divide by zero error. Investigate.\n(exit 1)\n.')"
     exit 1
-  fi
-fi
+  fi  ## (( opusdursec > 0 ))
+fi  ## quartero4 vs pieces
 
 if [[ -f "$calltmpf" ]]; then
   . "$calltmpf"
