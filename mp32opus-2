@@ -528,6 +528,7 @@ else  ## the not quartero4 branch
      exit
     elif (( rmmatch )) && (( verifydur )); then
       (( verbose )) && printf '(( rmmatch )) && (( verifydur )) branch: %s %s\n' "$rmmatch" "$verifydur"
+      discordmsg="\nThe source and opus audiobook durations do not match!"
       printf '%s%sThe source and opus audiobook durations do not match!\n' "$bold" "$red"
       printf '%s%s%s will not automatically delete starting and temporary files!\n' "$white" "$tput0" "$0"
       printf '\n\n'
@@ -555,5 +556,5 @@ fi
 
 #(( discord )) && apprise "$apprisediscord" -t "$(basename "$0") completed:" -b "${title:-title unavailable}"
 
-(( discord )) && discorddm "mp32opus completed: ${title:-${clifile:-${allfiles[0]:-title unavailable}}}"
+(( discord )) && discorddm "mp32opus completed: ${title:-${clifile:-${allfiles[0]:-title unavailable}}}$discordmsg"
 
