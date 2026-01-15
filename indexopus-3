@@ -1085,11 +1085,12 @@ titleinput(){
       fi
     done
     if [[ "$posstitle" ]]; then
-      renpat="$renpat.1"
+      renpat="$renpat.1" #6.0.1
       printf 'Using rename pattern %s\n' "$renpat"
       t="$posstitle"
 
       regex="([[:digit:]]{1,3})(: ?|\. ?|\ -\ ?|\ ?)((.+)\.opus)"
+      (( discord )) && discorddm "indexopus: Attention needed for rename pattern $renpat"
       read -rp "This is only marginally functional.  There's still no check for padded digits yet."
 
       for i in *.opus; do
