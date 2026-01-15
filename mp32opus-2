@@ -470,6 +470,7 @@ else  ## the not quartero4 branch
   printf \\n
   readarray -t durations < <(mediaduration)
   printf %s\\n "${durations[@]}"
+  (( ! varbose )) && read -rp "verbose off. turning on" && verbose=1
 
   (( "${#durations[@]}" != 2 )) && { printf 'There are not exactly two different formats reported by mediaduration and automatic deletion cannot proceed. Investigate.\n'; confirm "Continue?"; rmmatch=0; }
 
