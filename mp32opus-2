@@ -163,6 +163,7 @@ filecheck(){
 (( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
   [[ -d "$clifilepath" ]] && clidir="$clifilepath" && cd "$clidir" && unset clifilepath
   [[ -f "$clifilepath" ]] && { clifile="$(basename "$clifilepath")"; clidir="$(dirname "$clifilepath")"; cd "$clidir" || exit 1; } ## add an || unset clifilepath here?
+  [[ -f "$clifile" ]] && cliext="${clifile##*.}"
 (( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
 (( verbose )) && echo "[verbose] \$clipath: ${clipath:-null}"
 (( verbose )) && echo "[verbose] \$clidir: ${clidir:-null}"
@@ -406,8 +407,8 @@ else  ## the not quartero4 branch
   printf \\n
   (( verbose )) && args+=( -v )
   clear -x
-  readarray -t initdurations < <(mediaduration --only)
-  printf 'Initial Durations ("${initialdurations[@]}"): '
+  readarray -t initdurations < <(mediaduration)
+  printf 'Initial Durations ("${initialdurations[@]}"): \n'
   printf %s\\n "${initdurations[@]}"
 
 ## this check is a false sense of security as there's no way at present to check if there's not more than
@@ -417,7 +418,8 @@ else  ## the not quartero4 branch
    { printf 'There are more than two different formates reported by mediaduration and automatic deletion cannot proceed. Investigate.\n';
      confirm "Continue?" || exit 130; rmmatch=0; }
 
-  (( "${#initdurations[@]}" == 1 )) && ext="${initdurations[0]#*.}" && ext="${ext%% *}"
+  [[ "$cliext" ]] && ext="$cliext"
+  { [[ ! "$ext" ]] && (( "${#initdurations[@]}" == 1 )); } && ext="${initdurations[0]#*.}" ext="${ext%% *}"
 
   tmpdir="$tmpdir/mp32opus-${PWD##*/}"
 
@@ -433,8 +435,8 @@ else  ## the not quartero4 branch
 
   eza -gla --no-user
 #  (( verbose )) && args+=('-v') this should be set right after the else branch above
-  (( verbose )) && pause "\$args=$(printf %s\\n "${args[*]}")"
-  (( verbose )) && pause "pwd=$PWD"
+  (( verbose )) && printf '[verbose] $args=%s\n' "${args[*]}"
+  (( verbose )) && pause "[verbose] pwd=$PWD"
   opuspartdur="$(mediaduration -o opus)"
 
   printline "${bold}  Calling ${white}indexopus ${args[*]} -d $opuspartdur ${tput0}"
@@ -464,13 +466,13 @@ else  ## the not quartero4 branch
 ## This is yet to be implemented in opus.book.4 as above...
   cd "$swd" >/dev/null || { printf 'Failure to return to SWD after indexopus! Investigate. (exit 1)\n'; exit 1; }
 
-  (( verbose )) && printf 'The $(pwd) is: %s\n' "$(pwd)"
+  (( verbose )) && printf '[verbose] The $(pwd) is: %s\n' "$(pwd)"
 
   printline "${bold}  ${white}Checking durations  ${tput0}"
   printf \\n
   readarray -t durations < <(mediaduration)
   printf %s\\n "${durations[@]}"
-  (( ! varbose )) && read -rp "verbose off. turning on" && verbose=1
+  (( ! verbose )) && read -rp "verbose off. turning on" && verbose=1
 
   (( "${#durations[@]}" != 2 )) && { printf 'There are not exactly two different formats reported by mediaduration and automatic deletion cannot proceed. Investigate.\n'; confirm "Continue?"; rmmatch=0; }
 
@@ -502,7 +504,7 @@ else  ## the not quartero4 branch
   title=(*\ --\ Audiobook.opus)
   (( "${#title[@]}" == 1 )) && title="${title% -- Audiobook.opus}"
   ioutput="$(tput sitm)$title$(tput ritm) -- Audiobook.opus"
-  (( verbose )) && read -rp "$(printf '[verbose] title: %s\n' "$title")"
+  (( verbose )) && printf '[verbose] title: %s\n' "$title"
 
   if (( opusdursec > 0 )); then
     printf \\n
@@ -510,11 +512,13 @@ else  ## the not quartero4 branch
     verifydur=$(( verifydur < 0 ? -verifydur:verifydur ))
     (( verbose )) && printf '[verbose] sourcedursec : %s\n' "$sourcedursec"
     (( verbose )) && printf '[verbose]   opusdursec : %s\n' "$opusdursec"
-    (( verbose )) && printf '[verbose]    verifydur : %s\n' "$verifydursec"
+    (( verbose )) && printf '[verbose]    verifydur : %s\n' "$verifydur"
+    (( verbose )) && read -rp "[verbose] Continue..."
 
     if (( verifydur <= 1 )); then  #this is 0.1% difference
-      (( verbose )) && printf '\n[verbose] verifdur is ≤ 0.1% difference: %s\n\n' "$verifydur"
-      { (( rmmatch )) || confirm -y "Durations are within 0.1%.\n$(ls *$ext) \n\nRemove starting $ext files?"; } && ! (( save )) && { rm -vf *."$ext"; rmdir "$tmpdir"; }
+      (( verbose )) && printf '\n[verbose] verifydur is ≤ 0.1%% difference: %s\n\n' "$verifydur"
+      (( verbose )) && printf '[verbose] the source file *.$ext to remove is *.%s\n' "$ext"
+      { (( rmmatch )) || confirm -y "Durations are within 0.1%.\n$(ls *$ext) \n\nRemove starting $ext files?"; } && ! (( save )) && { rm -vf *."$ext"; [[ -d "$tmpdir" ]] && rmdir "$tmpdir"; }
       [[ "$sourcedursec" != "$opusdursec" ]] &&
          printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tput sitm)" "$(tput ritm)" "$tput0" ||
          printf '%sDurations match!%s\n' "$relipsis" "$tput0"
