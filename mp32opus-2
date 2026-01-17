@@ -6,19 +6,24 @@ shopt -s nullglob extglob
 [[ "$TERM" = dummy ]] && TERM=xterm-256color
 export TERM
 
+## source defaults ##################################################################################
+source "$HOME/.config/indexopus.conf"
+
+## assign initial  ##################################################################################
 tput0="$(tput sgr0)"
 white="$(tput setaf 15)"
 boldred="$(tput bold setaf 9)"
 red="$(tput setaf 1)"
 relipsis="${red}..."
-tmpdir=/cache
+tmpdir="$CACHE"
 discord=1
 calltmpf="/tmp/mp32opus-calltmpf-$(date -Im).tmp"  ## temp file to communicate with called scripts
 #rmmatch=1
 
+
 ## source functions #################################################################################
-. /usr/local/bin/editscript
-sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec -f printline -f confirm
+source /usr/local/bin/editscript
+source <(sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec -f printline -f confirm)
 
 
 ## functions ########################################################################################
@@ -34,14 +39,14 @@ filecheck(){
   fi
 
   [[ -e "$1" ]] && clifilepath="$(realpath "$1")"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
-read -rp "\$clifilepath is $clifilepath"
+  echo "\$clifilepath is $clifilepath"
 
 
-(( verbose )) && read -rp "[verbose] \$clifilepath: ${clifilepath:-null}"
+(( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
   [[ -d "$clifilepath" ]] && clipath="${clifilepath%/}" && cd "$clipath" && unset clifilepath
   [[ -f "$clifilepath" ]] && clipath="${clifilepath%/*}" && cd "$clipath" && clifilepath="${clifilepath##*/}" ## add an || unset clifilepath here?
-(( verbose )) && read -rp "[verbose] \$clifilepath: ${clifilepath:-null}"
-(( verbose )) && read -rp "[verbose] \$clipath: ${clipath:-null}"
+(( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
+(( verbose )) && echo "[verbose] \$clipath: ${clipath:-null}"
 
 #  if [[ "$clipath" ]]; then
 #    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
@@ -49,7 +54,7 @@ read -rp "\$clifilepath is $clifilepath"
   if ! [[ -w . ]]; then
     printf '\n[WARN] The pwd\n(%s)\n is not writable; attempting to take ownership.\n\n' "$(pwd)"
 
-    (( verbose )) && pause "[verbose] $(type own) $(which own)"
+    (( verbose )) && echo "[verbose] $(type own) $(which own)"
 
     (( rmmatch )) && { own --force .; :; } || own .
 
@@ -139,7 +144,7 @@ filecheck(){
 #      (( n )) && allfiles=( --force "${allfiles[@]}" )
        (( n )) && set -- "$allfiles" && break
       (( unwritable )) && { confirm -Y "Do you want to own all of these files:\n$(printf %s\\n "${allfiles[@]}")\nConfirm?" && group=media own "${allfiles[@]}" || return 1; }
-      read -rp "$(which own)"
+      echo "$(which own)"
       (( n++ ))
     done
   fi
@@ -147,21 +152,22 @@ filecheck(){
 
 ## This is more than a little problematic:
 
-  (( "${#allfiles[@]}" )) && for i in "${allfiles[@]}"; do own "$i"; done
+#  (( "${#allfiles[@]}" )) && for i in "${allfiles[@]}"; do own "$i"; done
 
 
   [[ -e "$1" ]] && clifilepath="$(realpath "$1")"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
 
-(( verbose )) && read -rp "[verbose] \$clifilepath is $clifilepath"
+(( verbose )) && echo "[verbose] \$clifilepath is $clifilepath"
 
 
-(( verbose )) && read -rp "[verbose] \$clifilepath: ${clifilepath:-null}"
+(( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
   [[ -d "$clifilepath" ]] && clidir="$clifilepath" && cd "$clidir" && unset clifilepath
   [[ -f "$clifilepath" ]] && { clifile="$(basename "$clifilepath")"; clidir="$(dirname "$clifilepath")"; cd "$clidir" || exit 1; } ## add an || unset clifilepath here?
-(( verbose )) && read -rp "[verbose] \$clifilepath: ${clifilepath:-null}"
-(( verbose )) && read -rp "[verbose] \$clipath: ${clipath:-null}"
-(( verbose )) && read -rp "[verbose] \$clidir: ${clidir:-null}"
-(( verbose )) && read -rp "[verbose] \$clifile: ${clifile:-null}"
+  [[ -f "$clifile" ]] && cliext="${clifile##*.}"
+(( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
+(( verbose )) && echo "[verbose] \$clipath: ${clipath:-null}"
+(( verbose )) && echo "[verbose] \$clidir: ${clidir:-null}"
+(( verbose )) && echo "[verbose] \$clifile: ${clifile:-null}"
 
 #  if [[ "$clipath" ]]; then
 #    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
@@ -169,7 +175,7 @@ filecheck(){
   if ! [[ -w . ]]; then
     printf '\n[WARN] The pwd\n(%s)\n is not writable; attempting to take ownership.\n\n' "$(pwd)"
 
-    (( verbose )) && pause "[verbose] $(type own) $(which own)"
+    (( verbose )) && echo "[verbose] $(type own) $(which own)"
 
     (( rmmatch )) && { own --force .; :; } || own .
 
@@ -186,11 +192,11 @@ filecheck(){
   fi
 
 
-  [[ ! -w "$clifile" ]] && {
-    (( discord )) && discorddm "mp32opus notification: ${clifile:-${allfiles[0]:-title unavailable}} not writeable.";
-    printf 'mp32opus notification: %s not writeable.\n' "${clifile:-${allfiles[0]:-title unavailable}}"; }
+#  [[ ! -w "$clifile" ]] && {
+#    (( discord )) && discorddm "mp32opus notification: ${clifile:-${allfiles[0]:-title unavailable}} not writeable.";
+#    printf 'mp32opus notification: %s not writeable.\n' "${clifile:-${allfiles[0]:-title unavailable}}"; }
 
- (( verbose )) && read -rp "Need to implement an own warn step here step here; continue..."
+ (( verbose )) && echo "Need to implement an own warn step here step here; continue..."
 
 
 
@@ -303,7 +309,6 @@ extractcover(){
 ## flag processing ###################################################################################
 
 args=(mp32opus)
-
 while (( $# > 0 )); do
   [[ "$1" =         "--edit" ]] && editscript && exit
   [[ "$1" =             "-y" ]] && { args+=("$1"); args+=(--save); (( save=rmmatch=1 )); shift; continue; }
@@ -312,12 +317,12 @@ while (( $# > 0 )); do
   [[ "$1" =         "--save" ]] && { args+=("$1"); save=1; shift; continue; }
   [[ "$1" =        "--stats" ]] && { args+=("$1"); stats=1; shift; continue; }
   [[ "$1" =   @(--screen|-s) ]] && { screened=1; shift; continue; }
-  [[ "$1" = @(-|--)@(ys|yes) ]] && { args+=("-y"); (( screened=rmmatch=1 )); args+=(--save); shift; continue; }
+  [[ "$1" = @(-|--)@(ys|yes) ]] && { args+=("-y"); (( save=screened=rmmatch=1 )); args+=(--save); shift; continue; }
   [[ "$1" = @(-|--)@(Ys|Yes) ]] && { args+=("-Y"); (( screened=rmmatch=1 )); shift; continue; }
   [[ "$1" =  @(-v|--verbose) ]] && { args+=("$1"); verbose=1; shift; continue; }
   [[ "$1" =  @(-D|--discord) ]] && { args+=("$1"); unset discord; . ~/.config/discord-local.conf; shift; continue; }
-  [[ -d "$1" ]] && { args+=("$1"); clipath="$1"; clidir=$( realpath "$1"); shift; continue; }
-  [[ -f "$1" ]] && { args+=("$1"); clipath="$1"; clifile=$( realpath "$1"); shift; continue; }
+  [[ -d "$1" ]] && { clipath="$1"; clidir=$(realpath "$1"); args+=("$clidir"); shift; continue; }
+  [[ -f "$1" ]] && { clipath="$1"; clifile=$(realpath "$1"); args+=("$clifile"); shift; continue; }
   { printf '"%s" is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script?' || exit 1; }
 done
 
@@ -357,7 +362,7 @@ if (( screened )); then
 #  screen -dmS "${screenname:0:16}" "${args[@]}"
 #  screen -dmS "${screenname:0:16}" bash -i -c "$(printf '%q ' "${args[@]}")"
 #  screen -dmS "${screenname:0:16}" bash -i "${args[@]}"
-  screen -dmS "${screenname:0:16}" bash "${args[@]}"  ## removing the interactive bash call to see if it's needed
+  screen -dmS "${screenname:0:16}" "${args[@]}"  ## removing the interactive bash call to see if it's needed
   screen -ls                                     #could probably add some logic to not delete shit
   printf \\n\\n                                  #leaving that for later, but screen implies -y as
   exit                                           #it doesn't really work otherwise?
@@ -396,13 +401,14 @@ if [[ "$clifile" ]] || (( "${#allfiles[@]}" == 1 )); then
     printline "${bold}  Returned from ${white}quartero4 (exit $ec)  ${tput0}"
     printf \\n
   fi
-else
+else  ## the not quartero4 branch
   printline "$bold  $(pwd):  $tput0"
   eza -l --no-user
   printf \\n
-  printline "${bold}  Calling ${white}opus.book.4 ${args[@]}  ${tput0}"
+  (( verbose )) && args+=( -v )
   clear -x
-  readarray -t initdurations < <(mediaduration --durations)
+  readarray -t initdurations < <(mediaduration)
+  printf 'Initial Durations ("${initialdurations[@]}"): \n'
   printf %s\\n "${initdurations[@]}"
 
 ## this check is a false sense of security as there's no way at present to check if there's not more than
@@ -412,14 +418,14 @@ else
    { printf 'There are more than two different formates reported by mediaduration and automatic deletion cannot proceed. Investigate.\n';
      confirm "Continue?" || exit 130; rmmatch=0; }
 
-  (( "${#initdurations[@]}" == 1 )) && ext="${initdurations[0]#*.}" && ext="${ext%% *}"
+  [[ "$cliext" ]] && ext="$cliext"
+  { [[ ! "$ext" ]] && (( "${#initdurations[@]}" == 1 )); } && ext="${initdurations[0]#*.}" ext="${ext%% *}"
 
   tmpdir="$tmpdir/mp32opus-${PWD##*/}"
 
-  opus.book.4 --tmp "$tmpdir" || { ec="$?"; printf 'An error was returned by opus.book.4; exit code %s. Investigate. (exit %s)\n' "$ec" "$ec"; exit "$?"; }
+  printline "${bold}  Calling ${white}opus.book.4 --tmp $tmpdir ${args[*]}  ${tput0}"
 
-  printline "${bold}  Calling ${white}indexopus ${args[*]} ${tput0}"
-
+  opus.book.4 --tmp "$tmpdir" "${args[@]}" || { ec="$?"; printf 'An error was returned by opus.book.4; exit code %s. Investigate. (exit %s)\n' "$ec" "$ec"; exit "$?"; }
 
 ##  This is yet to be implemented in opus.book.4...
 ##  i.e., it needs to send the transcoded files to "$tmp" before cd there.
@@ -428,10 +434,14 @@ else
   { mkdir -p "$tmpdir" && cd "$tmpdir"; } || { printf 'Failure of `mkdir/cd %s` occurred! Investigate. (exit 1)\n' "$tmpdir"; exit 1; }
 
   eza -gla --no-user
-  (( verbose )) && args+=('-v')
-  (( verbose )) && pause "\$args=$(printf %s\\n "${args[@]}")"
-  (( verbose )) && pause "pwd=$PWD"
-  indexopus "${args[@]}"
+#  (( verbose )) && args+=('-v') this should be set right after the else branch above
+  (( verbose )) && printf '[verbose] $args=%s\n' "${args[*]}"
+  (( verbose )) && pause "[verbose] pwd=$PWD"
+  opuspartdur="$(mediaduration -o opus)"
+
+  printline "${bold}  Calling ${white}indexopus ${args[*]} -d $opuspartdur ${tput0}"
+
+  indexopus "${args[@]}" -d "$opuspartdur"
   ec="$?"
   (( ec )) && (( ec == 1 )) && { printf '\nThe indexopus script did not exit cleanly. Investigate. (exit %s)\n\n' "$ec"; exit "$ec"; } # i don't know for sure that the ec from indexopus can\'t be other than 0, 1, 2.
   (( ec == 2 )) && iorm=true # this is something that is part of the m4b2opus integration with indexopus.  iorm *probably* means "indexopus rm" such that the user's said yes to a prompt to remove shit.
@@ -456,7 +466,7 @@ else
 ## This is yet to be implemented in opus.book.4 as above...
   cd "$swd" >/dev/null || { printf 'Failure to return to SWD after indexopus! Investigate. (exit 1)\n'; exit 1; }
 
-  (( verbose )) && printf 'The $(pwd) is: %s\n' "$(pwd)"
+  (( verbose )) && printf '[verbose] The $(pwd) is: %s\n' "$(pwd)"
 
   printline "${bold}  ${white}Checking durations  ${tput0}"
   printf \\n
@@ -483,7 +493,7 @@ else
 #  opusdur="${durations[${opuskey:--1}]#*: }"
   opusdur="${durations[${opuskey:--1}]##* }"
 
-  (( verbose )) && pause "$(printf '[verbose] $sourcedur="%s"\n[verbose] $opusdur="%s"\n' "$sourcedur" "$opusdur")"
+  (( verbose )) && pause "$(printf '[verbose] $sourcedur="%s"\n[verbose]   $opusdur="%s"\n' "$sourcedur" "$opusdur")"
 
 
   opusdursec="$(sex2sec "$opusdur")"
@@ -493,16 +503,21 @@ else
   title=(*\ --\ Audiobook.opus)
   (( "${#title[@]}" == 1 )) && title="${title% -- Audiobook.opus}"
   ioutput="$(tput sitm)$title$(tput ritm) -- Audiobook.opus"
-  (( verbose )) && read -rp "$(printf '[verbose] title: %s\n' "$title")"
+  (( verbose )) && printf '[verbose] title: %s\n' "$title"
 
   if (( opusdursec > 0 )); then
+    printf \\n
     verifydur=$(( (1000 * (sourcedursec - opusdursec)) / opusdursec ))
     verifydur=$(( verifydur < 0 ? -verifydur:verifydur ))
-
-    printf \\n
+    (( verbose )) && printf '[verbose] sourcedursec : %s\n' "$sourcedursec"
+    (( verbose )) && printf '[verbose]   opusdursec : %s\n' "$opusdursec"
+    (( verbose )) && printf '[verbose]    verifydur : %s\n' "$verifydur"
+    (( verbose )) && read -rp "[verbose] Continue..."
 
     if (( verifydur <= 1 )); then  #this is 0.1% difference
-      { (( rmmatch )) || confirm -y "Durations are within 0.1%.\n$(ls *$ext) \n\nRemove starting $ext files?"; } && ! (( save )) && { rm -vf *."$ext"; rmdir "$tmpdir"; }
+      (( verbose )) && printf '\n[verbose] verifydur is ≤ 0.1%% difference: %s\n\n' "$verifydur"
+      (( verbose )) && printf '[verbose] the source file *.$ext to remove is *.%s\n' "$ext"
+      { (( rmmatch )) || confirm -y "Durations are within 0.1%.\n$(ls *$ext) \n\nRemove starting $ext files?"; } && ! (( save )) && { rm -vf *."$ext"; [[ -d "$tmpdir" ]] && rmdir "$tmpdir"; }
       [[ "$sourcedursec" != "$opusdursec" ]] &&
          printf '\n%sDurations don'\''t %sexactly%s match but fuckin'\'' close '\''nuff!%s\n' "$relipsis" "$(tput sitm)" "$(tput ritm)" "$tput0" ||
          printf '%sDurations match!%s\n' "$relipsis" "$tput0"
@@ -511,6 +526,8 @@ else
      (( discord )) && discorddm "mp32opus completed: ${title:-title unavailable}"
      exit
     elif (( rmmatch )) && (( verifydur )); then
+      (( verbose )) && printf '(( rmmatch )) && (( verifydur )) branch: %s %s\n' "$rmmatch" "$verifydur"
+      discordmsg="\nThe source and opus audiobook durations do not match!"
       printf '%s%sThe source and opus audiobook durations do not match!\n' "$bold" "$red"
       printf '%s%s%s will not automatically delete starting and temporary files!\n' "$white" "$tput0" "$0"
       printf '\n\n'
@@ -525,8 +542,8 @@ else
     printf 'The duration of the opus files [in seconds] is zero and would present a divide by zero error. Investigate.\n(exit 1)\n.'
    (( discord )) && discorddm "mp32opus completed: $(printf 'The duration of the opus files [in seconds] is zero and would present a divide by zero error. Investigate.\n(exit 1)\n.')"
     exit 1
-  fi
-fi
+  fi  ## (( opusdursec > 0 ))
+fi  ## quartero4 vs pieces
 
 if [[ -f "$calltmpf" ]]; then
   . "$calltmpf"
@@ -538,5 +555,5 @@ fi
 
 #(( discord )) && apprise "$apprisediscord" -t "$(basename "$0") completed:" -b "${title:-title unavailable}"
 
-(( discord )) && discorddm "mp32opus completed: ${title:-${clifile:-${allfiles[0]:-title unavailable}}}"
+(( discord )) && discorddm "mp32opus completed: ${title:-${clifile:-${allfiles[0]:-title unavailable}}}$discordmsg"
 

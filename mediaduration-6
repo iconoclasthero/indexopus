@@ -13,6 +13,82 @@
 declare -A exts
 declare -A extsplits
 
+usage() {
+cat <<'EOF'
+mediaduration — compute total duration of media files
+
+USAGE:
+  mediaduration [options] [directory | files | extensions]
+
+DESCRIPTION:
+  Scans media files and reports total playback duration per file type.
+  Automatically parallelizes work based on disk type (SSD vs HDD).
+  Supports per-file output, JSON output, and duration formatting options.
+
+SUPPORTED MEDIA TYPES:
+  flac opus mp3 m4a m4b ogg mp4 avi shn wav
+
+OPTIONS:
+  -v, --verbose
+        Print diagnostic and execution details.
+
+  -s, --seconds
+        Output durations as raw seconds instead of HH:MM:SS.
+
+  -d, --decimal
+        Include milliseconds (3 decimal places) in output.
+
+  -l, --list
+        List matching files instead of calculating durations.
+
+  -t, --time, --times
+        Print per-file durations in addition to totals.
+
+  -o, --only, --durations
+        Output only duration values (no labels).
+
+  -j, --json
+        Output results as JSON.
+
+  -c, --color
+        Enable colored JSON output (jq -C).
+
+INPUT MODES (choose ONE):
+  directory
+        Scan media files under the given directory.
+
+  file(s)
+        One or more media files to analyze.
+
+  .ext
+        One or more file extensions (e.g. .flac .mp3).
+
+NOTES:
+  • Mixing directories, files, and extensions is allowed but ambiguous.
+    The script will warn and proceed without guarantees.
+  • Parallelism is auto-tuned based on disk type.
+  • Uses metaflac, exiftool, ffprobe, mediainfo, or mplayer when available.
+  • Filesystems mounted over sshfs are rejected for performance reasons.
+
+EXAMPLES:
+  mediaduration
+        Scan current directory.
+
+  mediaduration /music
+        Scan /music recursively.
+
+  mediaduration .flac .mp3
+        Report totals for FLAC and MP3 files.
+
+  mediaduration -t -d
+        Show per-file durations with milliseconds.
+
+  mediaduration -j --color
+        Output JSON with color.
+
+EOF
+}
+
 checkdev(){
   local ext="${1:-flac}"  ## for now, the only thing we need to split out and run in parallel is flac
                   ## but $extsplits provides for expanding that later, e.g., for opus
@@ -22,7 +98,7 @@ checkdev(){
 
     if [[ ! "$rot" ]]; then
 #      local dir="${clidir:=.}" ## this isn't necessary since we cd into "$clidir"
-      (( ! force )) && [[ "$(findmnt -T . -nr -o FSTYPE)" = fuse.sshfs ]] && { printf '%s is an sshfs mount; run this on the local machine. (exit 1)\n' "$(pwd)"; exit 1; }
+      [[ "$(findmnt -T . -nr -o FSTYPE)" = fuse.sshfs ]] && { printf '%s is an sshfs mount; run this on the local machine. (exit 1)\n' "$(pwd)"; exit 1; }
 
       dev=$(df -P . | awk 'NR==2{print $1}')
 
@@ -67,11 +143,7 @@ checkdev(){
 
 
 durtools(){
-#  command -v exiftool >/dev/null 2>&1 && exiftool=1 && (( verbose )) && printf 'exiftool: %s\n' "$exiftool"
-#  command -v metaflac >/dev/null 2>&1 && metaflac=1 && (( verbose )) && printf 'metaflac: %s\n' "$metaflac"
-#  command -v mplayer >/dev/null 2>&1 && mplayer=1 && (( verbose )) && printf 'mplayer: %s\n' "$mplayer"
-#  command -v shntool >/dev/null 2>&1 && shntool=1 && (( verbose )) && printf 'shntool: %s\n' "$shntool"
-  for tool in exiftool metaflac mplayer shntool; do
+  for tool in exiftool metaflac mplayer shntool ffprobe mediaduration; do
     if command -v "$tool" >/dev/null; then
       (( verbose )) && printf '%s: 1\n' "$tool"
       declare -g "$tool"=1
@@ -146,8 +218,85 @@ sec2sex(){
 }
 
 
+sortfiles () {
+  local f ext
+  for f in "${clifile[@]}"; do
+    ext="${f##*.}"
+    for e in "${mediaexts[@]}"; do
+      [[ $ext = $e ]] && eval "${e}arr+=(\"\$f\")"
+    done
+  done
+}
+
+sortfiles(){
+  local f e ext lc
+  for f in "${clifile[@]}"; do
+    # sanitize and get extension
+    ext="${f##*.}"
+    ext="${ext,,}"                      # lowercase
+    for e in "${mediaexts[@]}"; do
+      if [[ "$ext" = "$e" ]]; then
+        # append to earr (e.g. flacarr, mp3arr)
+        eval "${e}arr+=(\"\$f\")"
+        (( extsplits[$ext]++ ))
+        (( verbose )) &&echo "\$extsplits\$ext=${extsplits[$ext]}"
+        break
+      fi
+    done
+  done
+}
 
 finddur(){
+#  filelist(){
+#    if [[ "$clifile" ]]; then
+#      printf '%s\0' "${clifile[@]}" #| tee -a "$tempfile"
+#    else
+#      find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null | tee -a "$tempfile"
+#    fi
+#  }
+
+filelist(){
+  if (( ${#clifile[@]} )); then
+      (( ${#arr[@]} )) && printf '%s\0' "${arr[@]}"
+  else
+    find . -xdev -type f -print0
+  fi
+}
+
+
+# produce NUL-delimited filenames for xargs -0
+# when clifile is set we print only files for the current $ext (or for all ext groups if called in that context)
+filelist() {
+  # if we have CLI files, print only the ones that match the requested $ext
+  if (( ${#clifile[@]} )); then
+    # if called in a loop with $ext set, print only that ext array
+    if [[ -n "$ext" ]]; then
+      eval "arr=(\"\${${ext}arr[@]}\")"
+      (( ${#arr[@]} )) && printf '%s\0' "${arr[@]}"
+    else
+      # print all ext arrays in mediaexts order
+      local e
+      for e in "${mediaexts[@]}"; do
+        eval "arr=(\"\${${e}arr[@]}\")"
+        (( ${#arr[@]} )) && printf '%s\0' "${arr[@]}"
+      done
+    fi
+    return 0
+  fi
+
+  # fallback: find for this ext (when no CLI files)
+  if [[ -n "$ext" ]]; then
+    find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null
+  else
+    # generic (shouldn't usually happen)
+    find . -xdev -type f -print0 2>/dev/null
+  fi
+}
+
+
+  [[ ! "$ext" && "$file" ]] && ext="${file##*.}"
+  (( verbose )) && { printf '$clifile = %s\n' "$clifile"; printf ' $ext = %s\n' "$ext"; }
+
   local shntotal flactotal aflactotal tflactotal h m s
 #  if [[ "$ext" = "shn" ]]; then
 #    ! (( shntool )) && { printf 'Duration of .shn files : < install shntool >\n'; return; }
@@ -165,21 +314,31 @@ finddur(){
 ##    m=$((shntotal/60%60))
 ##    s=$((shntotal%60))
 ##    printf 'Duration of  .%s files: %02d:%02d:%02d\n' "$ext" "$h" "$m" "$s"
-#    printf 'Duration of  .%s files: %s\n' "$ext" "$(sec2sex "$shntotal")"
-if [[ "$ext" = "shn" ]]; then
-  ! (( shntool )) && { printf 'Duration of .shn files : < install shntool >\n'; return; }
-  shntotal=$(find . -xdev -type f -iname "*.$ext" -print0 |
-    xargs -0 -I{} shntool len -q "{}" |
-    awk 'NR>1 {
-      split($1,t,":");
-      split(t[2],u,".");
-      sum += t[1]*60 + u[1] + ("0." u[2]);
-    }
-    END { printf "%.0f\n", sum }')
+#    printf 'Duration of  .%s files: %s\n' "$ext" "$("$sec2sex" "$shntotal")"
+  if [[ "$ext" = "shn" ]]; then
+    ! (( shntool )) && { printf 'Duration of .shn files : < install shntool >\n'; return; }
+#    shntotal=$(find . -xdev -type f -iname "*.$ext" -print0 |
+#      xargs -0 -I{} shntool len -q "{}" |
+#      awk 'NR>1 {
+#        split($1,t,":");
+#        split(t[2],u,".");
+#        sum += t[1]*60 + u[1] + ("0." u[2]);
+#      }
+#      END { printf "%.0f\n", sum }')
 
-  printf 'Duration of  .%s files: %s\n' "$ext" "$(sec2sex "$shntotal")"
+
+##  shntotal=$(find . -xdev -type f -iname "*.$ext" -print0 |
+  shntotal=$(filelist |
+    xargs -0 shntool len -q |
+    tail -n1 |
+    awk '{ split($1,t,":"); split(t[2],u,".");
+           print t[1]*60 + u[1] + ("0." u[2]) }')
+
+    printf 'Duration of  .%s files: %s\n' "$ext" "$("$sec2sex" "$shntotal")"
 
   elif [[ "$ext" = "flac" ]] && (( exiftool || metaflac )); then
+     printf 'xargs -0 -P"${extsplits[$ext]}=%s" -n1 metaflac --show-total-samples --show-sample-rate 2>/dev/null|\n' "${extsplits[$ext]}"
+
     if ! (( metaflac )); then
 #      while IFS= read -r dur; do
 ##       if [[ "$dur" =~ ^([0-9]+):([0-9]+):([0-9]+) ]]; then
@@ -199,7 +358,8 @@ if [[ "$ext" = "shn" ]]; then
 #      (( verbose )) && printf 'exiftool used for flac\n'
 #      printf 'Duration of .%s files: %02d:%02d:%02d\n' "$ext" "$h" "$m" "$s"
       flactotal=$(
-        find . -xdev -type f -iname '*.flac' -print0 |
+##      find . -xdev -type f -iname '*.flac' -print0 |
+        filelist |
         xargs -0 exiftool -s3 -Duration 2>/dev/null |
         awk '
         function tosec(t,   h, m, s, n, a) {
@@ -217,17 +377,24 @@ if [[ "$ext" = "shn" ]]; then
         END { printf "%.0f\n", sum }
         ')
       (( verbose )) && printf 'exiftool used for flac\n'
-      printf 'Duration of .%s files: %s\n' "$ext" "$(sec2sex "$flactotal")"
+      printf 'Duration of .%s files: %s\n' "$ext" "$("$sec2sex" "$flactotal")"
     else
-      flactotal=$(find . -xdev -type f -iname '*.flac' -print0 |
-      xargs -0 -P"${extsplits[$ext]}" -n1 metaflac --show-total-samples --show-sample-rate 2>/dev/null|
-      awk 'NR%2==1{samp=$1} NR%2==0{rate=$1; sum+=samp/rate} END{printf "%.0f\n", sum}')
+#      echo "right before flactotal assinged"
+      flactotal=$(
+##    find . -xdev -type f -iname '*.flac' -print0 |
+      filelist | tee >(tr '\0' '\n' >> "$tempfile") |
+        xargs -0 -P"${extsplits[$ext]}" -n1 metaflac --show-total-samples --show-sample-rate 2>/dev/null|
+        awk 'NR%2==1{samp=$1} NR%2==0{rate=$1; sum+=samp/rate} END{printf "%.0f\n", sum}')
+#      filelist | hexdump -C >> "$tempfile"
+#      filelist | tee -a "$tempfile"
+#      filelist | tr '\0' '\n'
+#      printf '\nright after flactotal assinged\n'
       (( verbose )) && printf 'metaflac with xargs -P%s used for flac\n' "${extsplits[$ext]}"
 #      h=$((flactotal/3600))
 #      m=$((flactotal/60%60))
 #      s=$((flactotal%60))
 #      printf 'Duration of .%s files: %02d:%02d:%02d\n' "$ext" "$h" "$m" "$s"
-       printf 'Duration of .%s files: %s\n' "$ext" "$(sec2sex "$flactotal")"
+       printf 'Duration of .%s files: %s\n' "$ext" "$("$sec2sex" "$flactotal")"
     fi
 #  else
 #    p="${extsplits[$ext]:-1}"
@@ -238,80 +405,160 @@ if [[ "$ext" = "shn" ]]; then
 ##                       perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
 #                   )
 ##    [[ "${tdurs[0]}" ]] && tdur=$(( 10#${tdurs[0]} + 10#${tdurs[1]} + 10#${tdurs[2]} )) || tdur=0
-#tdur=$(sec2sex "$tdurs")
+#tdur=$("$sec2sex" "$tdurs")
 #    (( verbose )) && printf 'mplayer with xargs -P %s used for %s\n' "$p" "$ext"
 #    [[ "$tdur" -gt 0 ]] && { (( "${#ext}" == 3 )) &&
 #      printf 'Duration of  .%s files: %s\n' "$1" "${tdurs[*]}" ||
 #      printf 'Duration of .%s files: %s\n' "$1" "${tdurs[*]}"; }
 #  fi
 
-else
-  p="${extsplits[$ext]:-1}"
-  tdur=$( find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
-          xargs -0 -P"$p" mplayer -vo dummy -ao dummy -frames 0 -identify 2>/dev/null |
-          perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t += $1) && print $t' |
-          tail -n1 )
+  elif (( 0 == 1 )); then  ## this is the old version that does not offer ffmpeg/mediainfo fallbacks
+    p="${extsplits[$ext]:-1}"
+##  tdur=$( find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
+    tdur=$( filelist |
+            xargs -0 -P"$p" mplayer -vo dummy -ao dummy -frames 0 -identify 2>/dev/null |
+            perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t += $1) && print $t' |
+            tail -n1 )
 
-  tdur=$(sec2sex "$tdur")
+    tdur=$("$sec2sex" "$tdur")
 
-  (( verbose )) && printf 'mplayer with xargs -P %s used for %s\n' "$p" "$ext"
+    (( verbose )) && printf 'mplayer with xargs -P %s used for %s\n' "$p" "$ext"
 
-  [[ -n "$tdur" && "$tdur" != "00:00:00" ]] && {
-    (( ${#ext} == 3 )) &&
-      printf 'Duration of  .%s files: %s\n' "$1" "$tdur" ||
-      printf 'Duration of .%s files: %s\n' "$1" "$tdur"
-  }
-fi
+    [[ -n "$tdur" && "$tdur" != "00:00:00" ]] && {
+      (( ${#ext} == 3 )) &&
+        printf 'Duration of  .%s files: %s\n' "$ext" "$tdur" ||
+        printf 'Duration of .%s files: %s\n' "$ext" "$tdur"
+    }
 
+  else
+    p="${extsplits[$ext]:-1}"
+    tdur=
+
+    if command -v mplayer >/dev/null 2>&1; then
+      # original mplayer logic
+##      tdur=$( find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
+      tdur=$( filelist |
+              xargs -0 -P"$p" mplayer -vo dummy -ao dummy -frames 0 -identify 2>/dev/null |
+              perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t += $1) && print $t' |
+              tail -n1 )
+      (( verbose )) && printf 'mplayer with xargs -P %s used for %s\n' "$p" "$ext"
+
+    elif command -v ffprobe >/dev/null 2>&1; then
+      # ffprobe fallback
+##    tdur=$(find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
+      tdur=$( filelist |
+        xargs -0 -P"$p" -I{} ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{}" 2>/dev/null |
+        awk '{s+=$1} END{print s}')
+      (( verbose )) && printf 'ffprobe with xargs -P %s used for %s\n' "$p" "$ext"
+
+    elif command -v mediainfo >/dev/null 2>&1; then
+      # mediainfo fallback
+##    tdur=$(find . -xdev -type f -iname "*.$ext" -print0 2>/dev/null |
+      tdur=$( filelist |
+        xargs -0 -P"$p" -I{} mediainfo --Inform="General;%Duration%" "{}" 2>/dev/null |
+        awk '{s+=$1/1000} END{print s}')
+      (( verbose )) && printf 'mediainfo with xargs -P %s used for %s\n' "$p" "$ext"
+    fi
+
+    (( verbose )) && printf 'Before "$sec2sex" $tdur = %s\n' "$tdur"
+    tdur=$("$sec2sex" "$tdur")
+    (( verbose )) && printf ' After "$sec2sex" $tdur = %s\n' "$tdur"
+
+    [[ -n "$tdur" && "$tdur" != "00:00:00" ]] && {
+      (( ${#ext} == 3 )) &&
+        printf 'Duration of  .%s files: %s\n' "$ext" "$tdur" ||
+        printf 'Duration of .%s files: %s\n' "$ext" "$tdur"
+      }
+  fi
 }
+##--> finddur() <--###################################################################################
 
 
-. /usr/local/bin/editscript
+
+[[ -r /usr/local/bin/editscript ]] && source /usr/local/bin/editscript
 
 tempfile=$(mktemp)
 durtools
 
 #readarray exts < <(find . -xdev -type f 2>/dev/null | sed -rn 's|.*/[^/]+\.([^/.]+)$|\1|p' | sort -u)
 
-mediaexts=(flac opus mp3 m4a m4b ogg mp4 avi shn vob wav)
+mediaexts=(flac opus mp3 m4a m4b ogg mp4 avi shn mkv vob wav)
 #regex="($(IFS='|'; echo "${mediaexts[*]}"))"
-regex="^\.?($(IFS='|'; echo "${mediaexts[*]}"))$"
+#regex="^\.?($(IFS='|'; echo "${mediaexts[*]}"))$"
+regex="\.?($(IFS='|'; echo "${mediaexts[*]}"))$"
 
 findexpr=()
-for ext in "${mediaexts[@]}"; do
-  findexpr+=( -iname "*.$ext" -o )
+for mediaext in "${mediaexts[@]}"; do
+  findexpr+=( -iname "*.$mediaext" -o )
 done
 #unset 'findexpr[${#findexpr[@]}-1]'  # remove trailing -o
 unset 'findexpr[-1]'  # remove trailing -o
 
 shopt -s nocasematch
 while (( "$#" )); do
+  [[ "$1" = @(-h|--help)             ]] && { usage; exit; }
+  (( verbose )) && printf '$1 = `%s`\n' "$1"
  ##[[ "$1" =~ ^-[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789]{2,}$ ]]
- [[ "$1" =~ ^-[a-zA-Z0-9]{2,}$ ]] && { one="-${1:1:1}" two="-${1:2}" && therest=( "${@:2}" )
+  [[ "$1" =~ ^-[a-zA-Z0-9]{2,}$ ]] && { one="-${1:1:1}" two="-${1:2}" && therest=( "${@:2}" )
                                  set -- "$one" "$two" "${therest[@]}"; }
 #  [[ "$1" =~ (mp3|m4(a|b)|flac|ogg|mp4|avi|shn|wav|opus) ]] && { cliext+=( "$1" ); shift; continue; }
-  [[ "$1" = @(-s|--seconds) ]] && { seconds=1; shift; continue; }
-  [[ "$1" = @(-d|--decimal) ]] && { decimal=1; shift; continue; }
-  [[ "$1" = @(-o|--durations|--only) ]] && { only=1; shift; continue; }
-  [[ "$1" = @(-f|--force) ]] && { force=1; shift; continue; }
-  [[ "$1" =~ $regex ]] && { cliext+=( "${1#.}" ); shift; continue; } ## leave $regex unquoted
-  [[ -d "$1" ]] && { clidir+=( "$1" ); shift; continue; }
+  [[ "$1" = @(-v|--verbose)          ]] && { verbose=1;       shift; continue; }
+  [[ "$1" = @(-s|--seconds)          ]] && { seconds=1;       shift; continue; }
+  [[ "$1" = @(-d|--decimal)          ]] && { decimal=1;       shift; continue; }
+  [[ "$1" = @(-l|--list)             ]] && { list=1;          shift; continue; }
+  [[ "$1" = @(-j|--json)             ]] && { json=1;          shift; continue; }
+  [[ "$1" = @(-c|--color)            ]] && { color='-C';      shift; continue; }
+  [[ "$1" = @(-s|--sec)              ]] && { sec=1;           shift; continue; }
+  [[ "$1" = @(-t|--time@(|s))        ]] && { times=1; list=1; shift; continue; }
+  [[ "$1" = @(-o|--durations|--only) ]] && { only=1;          shift; continue; }
+  [[ -z "$1" ]]                         && {                  shift; continue; }
+  [[ -f "$1" ]]         && { clifile+=( "$1" );               shift; continue; }
+  [[ -d "$1" ]]         && {  clidir+=( "$1" );               shift; continue; }
+  [[ "$1" =~ ^$regex ]] && {  cliext+=( "${1#.}" );           shift; continue; } ## leave $regex unquoted
 # [[ "$1" = "" ]] && { shift; continue; }
-  [[ -z "$1" ]] && { shift; continue; }
   { printf '%s is unrecognized.\n' "$1"; shift;
     { confirm -y 'Proceed with script?' && continue; } || exit 1; }
 done
 shopt -u nocasematch
 
-if ((${#clidir[@]})); then
-  if ((${#clidir[@]} > 1)); then
+(( sec )) && sec2sex=echo || sec2sex=sec2sex
+
+(( "${#clidir[@]}" && multi++ )); (( "${#clifile[@]}" && multi++ )); (( "${#cliext[@]}" && multi++ ))
+
+if (( multi > 1 )); then
+  printf 'There is no guard against the condition of more than one type of search from the cli.\n'
+  printf 'No clue which of these will actually run...\n'
+  printf 'CLI directory: %s\n' "${clidir:+X}"
+  printf 'CLI filename : %s\n' "${clifile:+X}"
+  printf 'CLI extension: %s\n' "${cliext:+X}"
+fi
+
+
+if (( "${#clidir[@]}" )); then
+  if (( "${#clidir[@]}" > 1)); then
     printf '[ERROR] More than one directory specified; only entering the first.\nGot: %s\n' "${clidir[@]}"
   fi
   cd -- "${clidir[0]}" || { printf '[ERROR] Directory not accessible: %s\n' "${clidir[0]}"; exit 1; }
 fi
 
+## the fileness of the cli entry was verified in the flag-processing block; now we just want to verify readibility
+if (( "${#clifile[@]}" )); then
+  : "${clifilecount:=${#clifile[@]}}"
+  (( verbose )) && printf '${#clifile[@]} = %s\n' "$clifilecount"
+  for i in "${!clifile[@]}"; do
+    (( verbose )) && printf '$clifile = %s\n' "${clifile[i]}"
+    [[ "${#clifile[i]}" ]] || { unset 'clifile[i]'; continue; }
+    [[ -r "${clifile[i]}" ]] || { printf '[warn] CLI file argument unreadable; removing %s\n' "${clifile[i]}" >&2; unset 'clifile[i]'; continue; }
+    [[ "${clifile[i]}" =~ $regex ]] || { printf '[warn] CLI file argument in an unsupported file type (not in %s);\nremoving %s\n' "${mediaexts[*]}" "${clifile[i]}" >&2 ; unset 'clifile[i]'; continue; }
+  done
+  clifile=( "${clifile[@]}" )
+  ! (( "${#clifile[@]}" )) && { printf '[error] All CLI file arguments have been removed. (exit 1)\n' >&2; exit 1; }
+fi
 
-if (( "${#cliext[@]}" > 0 )); then
+
+
+if (( "${#cliext[@]}" )); then
+  (( verbose )) && printf '[verbose] in cliext if branch\n'
 #  find -type f -name "*.$1" -print0 2>/dev/null | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
   readarray -t cliext < <(printf %s\\n "${cliext[@],,}"|sort -u)
   (( verbose )) && { printf '${cliext[@]} (%d):\n' "${#cliext[@]}" && printf '  %s\n' "${cliext[@]}"; }
@@ -319,7 +566,93 @@ if (( "${#cliext[@]}" > 0 )); then
   for ext in "${cliext[@]}"; do
     finddur "$ext" >> "$tempfile" &
   done
+elif (( "${#clifile[@]}" )); then
+  (( verbose )) && printf '[verbose] in clifile elif branch\n'
+  sortfiles
+  (( json )) && firstobj=1 && printf '{\n'
+  for ext in "${mediaexts[@]}"; do
+    (( verbose )) && printf 'in clifile for loop: $ext = %s\n' "$ext"
+
+
+    eval "arr=(\"\${${ext}arr[@]}\")"
+    if (( ${#arr[@]} )); then
+      finddur >> "$tempfile" &
+
+      (( times || json )) && {
+          (( json )) && { (( firstobj )) || printf ',\n'
+                     firstobj=0
+                     printf '  "%s": [\n' "$ext"; }
+#        (( json )) && { printf '[\n'; first=1; }
+first=1
+        for f in "${arr[@]}"; do
+          [[ "${f##*.}" = shn ]] && continue
+
+          if command -v mediainfo >/dev/null 2>&1; then
+            dur=$(mediainfo --Inform="General;%Duration%" "$f" 2>/dev/null)
+            dur=${dur:-0}
+            dur=$(awk "BEGIN{print $dur/1000}")
+          elif command -v ffprobe >/dev/null 2>&1; then
+            dur=$(ffprobe -v error -show_entries format=duration \
+                    -of default=noprint_wrappers=1:nokey=1 "$f")
+            dur=${dur:-0}
+          else
+            dur=0
+          fi
+
+          if (( ! json )); then
+            printf '%s  %s\n' "$f" "$(sec2sex "$dur")"
+          else
+            (( first )) || printf ',\n'
+            first=0
+            : "${color:=-M}"
+            jqcmd=( jq "$color" )
+            "${jqcmd[@]}" -n \
+              --arg f "$f" \
+              --arg e "$ext" \
+              --arg d "$dur" \
+              --arg ds "$(sec2sex "$dur")" \
+              '{file:$f,ext:$e,duration:($d|tonumber),dursex:$ds}'
+          fi
+        done
+
+        (( json )) && printf '\n  ]\n'
+      }
+
+      (( list )) && (( ! times )) && printf '%s\n' "${arr[@]}"
+    fi
+  done
+elif (( "${#clifile[@]}" )); then
+  (( verbose )) && printf '[verbose] in clifile elif branch\n'
+  sortfiles
+    for ext in "${mediaexts[@]}"; do
+      (( verbose )) && printf 'in clifile for loop: $ext = %s\n' "$ext"
+      eval "arr=(\"\${${ext}arr[@]}\")"
+      if (( ${#arr[@]} )); then
+        finddur >> "$tempfile" &
+        (( times || json )) && {
+          for f in "${arr[@]}"; do
+            [[ "${f##*.}" = shn ]] && continue  # skip shn
+            if command -v mediainfo >/dev/null 2>&1; then
+              dur=$(mediainfo --Inform="General;%Duration%" "$f" 2>/dev/null)
+              dur=${dur:-0}
+              dur=$(awk "BEGIN{print $dur/1000}")  # convert ms to s
+            elif command -v ffprobe >/dev/null 2>&1; then
+              dur=$(ffprobe -v error -show_entries format=duration \
+                      -of default=noprint_wrappers=1:nokey=1 "$f")
+              dur=${dur:-0}
+            else
+              dur=0
+            fi
+            (( ! json )) && printf '%s  %s\n' "$f" "$("$sec2sex" "$dur")" ||
+
+            printf %s\\n "$(jq -n --arg e "$ext" --arg f "$f" --arg d "$dur" --arg ds "$(sec2sex "$dur")" '{file:$f,ext:$e,duration:$d,dursex:$ds}')"
+             ##output as a json through jq
+          done;  }
+        (( list )) && (( ! times )) && printf '%s\n' "${arr[@]}"
+      fi
+    done
 else
+  (( verbose )) && printf '[verbose] in else branch\n'
 
 #  readarray -t extcount < <(
 #    find . -xdev -type f \( "${findexpr[@]}" \) 2>/dev/null \
@@ -358,10 +691,12 @@ done < <(find . -xdev -type f \( "${findexpr[@]}" \) 2>/dev/null \
 #  for ext in mp3 m4a m4b flac ogg mp4 avi shn wav opus; do
 #    [[ "${exts[@]}" =~ $ext ]] || continue
 
+
   for ext in "${!exts[@]}"; do
     (( verbose )) && printf %s\\n "$ext"
     finddur "$ext" >> "$tempfile" &
   done
+
 fi
 
 (( verbose )) && { readarray -t jobsout < <(jobs -l); printf '[verbose] %s\n' "${jobsout[@]}"; }
@@ -372,15 +707,88 @@ wait
                       printf 'Duration of .%s files: %02d:%02d:%02d\n' "flac" "$h" "$m" "$s" >> "$tempfile"; }
 
 #! (( only )) && printf 'Media durations of %s:\n' "$(realpath .)"
+#(( json )) && firstobj=1 && printf '    {\n'
+
+#(( json )) &&  printf '[\n'
+#(( json )) && { (( firstobj )) || printf ',=\n'; firstobj=0; }
+#(( json )) &&  printf '[\n'
+
+#(( json )) && first=1 && printf '  ,\n  "%s": [\n' "totals"
+#(( json )) && declare -A totalsjson
+#
+## print in the defined order
+#for ext in mp3 m4a m4b ogg mp4 avi shn wav flac opus; do
+# while read -r line; do
+#    if [[ "$line" = "Duration of .$ext"* || "$line" = "Duration of  .$ext"* ]]; then
+#      hhmmss="${line#*: }"; (( ${#hhmmss} == 8 )) && hhmmss=" $hhmmss"
+#      # printf %s\\n "$line"
+#      (( "${#ext}" == 3 )) && ext=" .$ext" || ext=".$ext"
+####        (( json )) && printf %s\\n "$("${jqcmd[@]}" -n --arg e "$ext" --arg f "total" --arg d "$hhmmss" --arg ds "$(sec2sex "$hhmmss")" '{file:$f,ext:$e,duration:$d,dursex:$ds}')"
+##  (( first )) || printf ',\n'
+##  first=0
+##  (( json )) &&  printf '%s\n' "$(jq -n \
+##  --arg ext "${ext#*.}" \
+##  --arg d "${hhmmss// }" \
+##  --arg ds "$(sec2sex "$hhmmss")" \
+##  '{$ext:{ext:$ext,duration:($d|tonumber),dursex:$ds}}')"
+#        totalsjson["$ext"]="$(jq -n \
+#          --arg e "$ext" \
+#          --arg d "${hhmmss// }" \
+#          --arg ds "$(sec2sex "$hhmmss")" \
+#          '{ext:$e,duration:($d|tonumber),dursex:$ds}')"
+#
+#        (( only )) && printf %s\\n "${line#*: }"
+#        (( ! only )) && (( ! json )) && printf 'Duration of %s files: %s\n' "$ext" "$hhmmss"
+#    elif [[ "$line" = "$ext: "* ]]; then
+#      flacsum=$(( flacsum + "${line#* }" ))
+#    fi
+#    [[ "$ext" = "t.flac" ]] && printf 'flactotal: %s\n' "$flacsum"
+##   [[ -n "${durations[$ext]}" ]] && echo "${durations[$ext]}"
+#  done < "$tempfile"
+#done
+#(( json )) && {
+# #printf '"totals": '
+##  printf '{'
+#  first=1
+#  for k in "${!totalsjson[@]}"; do
+#    (( first )) || printf ','\n
+#    first=0
+#    printf '    "%s": %s' "$k" "${totalsjson[$k]}"
+#  done
+#  printf '\n  }\n'
+#}
+#(( json )) && printf '  ]\n}\n'
+#
+#rm "$tempfile"
+#
+#exit
+
+(( json )) && first=1 && printf '  ,\n  "%s": {\n' "totals"
+(( json )) && declare -A totalsjson
 
 # print in the defined order
-for ext in mp3 m4a m4b ogg mp4 avi shn wav flac opus; do
+for ext in mp3 m4a m4b ogg mp4 avi shn vob mkv wav flac opus; do
  while read -r line; do
     if [[ "$line" = "Duration of .$ext"* || "$line" = "Duration of  .$ext"* ]]; then
       hhmmss="${line#*: }"; (( ${#hhmmss} == 8 )) && hhmmss=" $hhmmss"
       # printf %s\\n "$line"
       (( "${#ext}" == 3 )) && ext=" .$ext" || ext=".$ext"
-      printf 'Duration of %s files: %s\n' "$ext" "$hhmmss"
+###        (( json )) && printf %s\\n "$("${jqcmd[@]}" -n --arg e "$ext" --arg f "total" --arg d "$hhmmss" --arg ds "$(sec2sex "$hhmmss")" '{file:$f,ext:$e,duration:$d,dursex:$ds}')"
+#  (( first )) || printf ',\n'
+#  first=0
+#  (( json )) &&  printf '%s\n' "$(jq -n \
+#  --arg ext "${ext#*.}" \
+#  --arg d "${hhmmss// }" \
+#  --arg ds "$(sec2sex "$hhmmss")" \
+#  '{${ext##*.}:{ext:$ext,duration:($d|tonumber),dursex:$ds}}')"
+       (( json )) && totalsjson["${ext##*.}"]="$(jq -n \
+          --arg e "${ext##*.}" \
+          --arg d "${hhmmss// }" \
+          --arg ds "$(sec2sex "$hhmmss")" \
+          '{ext:$e,duration:($d|tonumber),dursex:$ds}')"
+
+        (( only )) && printf %s\\n "${line#*: }"
+        (( ! only )) && (( ! json )) && printf 'Duration of %s files: %s\n' "$ext" "$hhmmss"
     elif [[ "$line" = "$ext: "* ]]; then
       flacsum=$(( flacsum + "${line#* }" ))
     fi
@@ -388,6 +796,23 @@ for ext in mp3 m4a m4b ogg mp4 avi shn wav flac opus; do
 #   [[ -n "${durations[$ext]}" ]] && echo "${durations[$ext]}"
   done < "$tempfile"
 done
+(( json )) && {
+ #printf '"totals": '
+#  printf '{'
+  first=1
+#  for k in "${!totalsjson[@]}"; do
+#    (( first )) || printf ',\n'
+#    first=0
+#    printf '    "%s": %s' "$k" "${totalsjson[$k]}"
+#  done
+first=1
+for k in "${!totalsjson[@]}"; do
+  (( first )) && first=0 || printf ',\n'
+  printf '    "%s": %s' "$k" "${totalsjson[$k]}"
+done
+
+  printf '\n  }\n}\n'
+}
 
 rm "$tempfile"
 

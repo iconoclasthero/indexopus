@@ -4,12 +4,16 @@
 #set -x
 #trap read DEBUG
 
-. ~/.config/indexopus.conf
+source ~/.config/indexopus.conf
+: "${mediaduration:=/usr/local/bin/mediaduration}"
 
 # Invokes breakout function upon INT/^C
 trap '{ breakout -B; exit 1; }' INT
 pidfile="/tmp/.opus.book.pids"
-cache="${cache:-"/cache/"}"
+: "${CACHE:="/cache/"}"
+: "${cache:=$CACHE}"
+
+(( verbose )) && read -rp "CACHE=$CACHE cache=$cache"
 
 # global shopt settings.  nullglob causes unwanted things with ls, so it needs to be reconsidered
 shopt -s extglob nullglob   # as a global option
@@ -196,10 +200,12 @@ progress() {
 
 #  [[ "$opuspresent" ]] && opusdur="$(checkdur opus)"
   if (( "${#opuspresent[@]}" )); then
-    opusdur="$(checkdur opus)"
+#    opusdur="$(checkdur opus)"
+    opusdur="$("$mediaduration" --only opus)"
   elif [[ "$tmpdir" ]]; then
     opusdur="$( cd "$tmpdir" && opuspresent=(*opus);
-                (( "${#opuspresent[@]}" )) && checkdur opus; )"
+#                (( "${#opuspresent[@]}" )) && checkdur opus; )"
+                (( "${#opuspresent[@]}" )) && "$mediaduration" --only opus; )"
   fi
   [[ ! "$bfreq" =~ [[:digit:]]+ ]] && bfreq=12 # flashing frequency (( $(date +%s) % bfreq == 0 )) && .
   [[ ! "$rfreq" =~ [[:digit:]]+ ]] && bfreq=6 # flashing frequency (( $(date +%s) % bfreq == 0 )) && .
@@ -253,10 +259,12 @@ progress() {
       sleep 12
       opuspresent=( *.opus )
       if (( "${#opuspresent[@]}" )); then
-        opusdur="$(checkdur opus)"
+#        opusdur="$(checkdur opus)"
+        opusdur="$("$mediaduration" --only opus)"
       elif [[ "$tmpdir" ]]; then
         opusdur="$( cd "$tmpdir" && opuspresent=(*opus);
-                   (( "${#opuspresent[@]}" )) && checkdur opus; )"
+#                   (( "${#opuspresent[@]}" )) && checkdur opus; )"
+                   (( "${#opuspresent[@]}" )) && "$mediaduration" --only opus; )"
       fi
 #      opusdur="$(mediaduration opus)"
 #      (( "$(date +%s)" % "$rfreq" == 0 )) && $(tput reset); clear -x
@@ -353,12 +361,14 @@ fi
 
 while (( $# > 0 )); do
   [[ "$1" = @(edit|e|-e) ]] && editscript
-  [[ "$1" = --tmp ]] && shift && tmpdir="$1" && shift && continue
-  [[ "$1" = --cache ]] && usecache=1 && shift && continue
-  [[ "$1" = @(-s|--stats) ]] && shift && stats=1 && continue
-  [[ "$1" = "-d" ]] && inputdur="$2" && shift 2 && continue
-  [[ "$1" = @(-h|--help) ]]  && shift && help=true && continue
-  [[ "$1" = @(-f|--force) ]] && shift && overwrite=true && continue  #this doesn't actually change what ffmpeg does yet!
+  [[ "$1" = --tmp           ]] && { tmpdir="$2";   shift 2; continue; }
+  [[ "$1" = --cache         ]] && { usecache=1;    shift;   continue; }
+  [[ "$1" = @(-v|--verbose) ]] && { verbose=1;     shift;   continue; }
+  [[ "$1" = @(-s|--stats)   ]] && { stats=1;       shift;   continue; }
+  [[ "$1" = "-d"            ]] && { inputdur="$2"; shift 2; continue; }
+  [[ "$1" = "-y"            ]] && { rmmatch=1;     shift;   continue; } #unused
+  [[ "$1" = @(-h|--help)    ]] && { help=1;        shift;   continue; }
+  [[ "$1" = @(-f|--force)   ]] && { overwrite=1;   shift;   continue; }  #this doesn't actually change what ffmpeg does yet!
   [[ "$1" = @(-b|--break) ]] && shift && break-m4b2opus=true && trap '{ breakout -B -b m4b2opus; exit 1; }' INT && continue
   [[ -f "$1" ]] && clifile="$1" && file="$clifile" && opusfile="${file%.*}.opus" && continue	 #it's just letting me into the program atm
   { printf '%s is not a recognized cli option.\nContinue with %s?' "$1" "$0"; confirm -Y && shift && continue || exit 1; }
@@ -389,7 +399,7 @@ fi
 
 (( filenum < threads )) && threads="$filenum"
 
-if  [[ "$clifile" ]] && [[ -f "$opusfile" ]] && [[ "$overwrite" != true ]]; then
+if  [[ "$clifile" ]] && [[ -f "$opusfile" ]] && ! (( overwrite )); then
   printf '\n%s%s%s exists!%s\n   %sexit 1\n\n%s' "$relipsis" "$bold" "$opusfile" "$white" "$tput0"
   echo "$line"
   exit 1
@@ -412,14 +422,16 @@ elif [[ "$clifile" ]]; then
 # sample rate is 48 kHz; 24 kHz here is probably wasteful
 
   printf '\n%sDurations:\n%s' "$bold" "$tput0"
-  checkdur "$clifile"
-  checkdur "$opusfile"
+#  checkdur "$clifile"
+#  checkdur "$opusfile"
+  "$mediaduration" --only "$clifile"
+  "$mediaduration" --only "$opusfile"
 
 elif (( filenum > 0 )); then
 #need to add a formal confirm here at some point, but really, who's going to be doing this?
 #ffmpeg cannot overwrite here so probably have to exit if the files aren't deleted... further, we could actully compare the opus files that exist to the ones that are going to be converted...but since im not using find here, that probably donesnt matter.
 
-  if [[ "$overwrite" = true ]]; then
+  if (( overwrite )); then
     printf '\n%s%s invoked with --force|-f flag to overwrite existing .opus files.\n' "$red" "$script"
     printf '\n%sConfirm deletion of existing *.opus files prior to starting conversion!%s\n' "$bold" "$tput0"
     printf '\nIt'\''d be great if there was actually a confirm here... your shit'\''s deleted sucker!\n'

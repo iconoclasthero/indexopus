@@ -32,6 +32,7 @@ gray="$(tput setaf 7)"
 tput0="$(tput sgr0)" #reset tput changes
 bold="$(tput bold)" #bold on
 relipsis="$red..."
+discord=1
 stamp="$(date +%s)"  #sets datecode for all of indexopus - could use info from m4b2opus later
 tmp="/tmp/indexopus-$stamp" #this could change based on info from m4b2opus
 [[ ! "$removetags" ]] &&
@@ -930,6 +931,7 @@ mvopus(){
 
 titleinput(){
   local title
+  (( discord )) && discorddm "indexopus: Attention required! Title entry required."
   title="$(gum input --width="$(( $(tput cols) - $(tput cols)/10 ))" --value="${PWD##*\/}" --header.foreground="11" --header="$(printf '\nNB: Using this rename pattern requires setting a title.\n\nEnter title to use for part files:')")"
   if confirm -y "Use $red$iton$title$tput0 as title for part files?"; then
     printf %s\\n "$title"
@@ -942,6 +944,7 @@ titleinput(){
 
 titleinput(){
   local title
+  (( discord )) && discorddm "indexopus: Attention required! Title entry required."
   title="$(gum input \
     --width="$(( $(tput cols) - $(tput cols)/10 ))" \
     --value="${PWD##*/}" \
@@ -961,6 +964,7 @@ titleinput(){
     if [[ "${BASH_REMATCH[1]}" ]]; then
       t="${BASH_REMATCH[1]}"
     else
+     (( discord )) && discorddm "indexopus: Attention required! Title entry required."
       t="$(gum input \
         --width="$(( $(tput cols) - $(tput cols)/10 ))" \
         --value="${PWD##*/}" \
@@ -1081,11 +1085,12 @@ titleinput(){
       fi
     done
     if [[ "$posstitle" ]]; then
-      renpat="$renpat.1"
+      renpat="$renpat.1" #6.0.1
       printf 'Using rename pattern %s\n' "$renpat"
       t="$posstitle"
 
       regex="([[:digit:]]{1,3})(: ?|\. ?|\ -\ ?|\ ?)((.+)\.opus)"
+      (( discord )) && discorddm "indexopus: Attention needed for rename pattern $renpat"
       read -rp "This is only marginally functional.  There's still no check for padded digits yet."
 
       for i in *.opus; do
@@ -1114,6 +1119,7 @@ titleinput(){
 ## this pattern matches: `001 Author Name - Book Title - Part Name.opus`
     printf '\nNB: Using this rename pattern requires setting a title.\n'
 #    printf 'Use the directory in the format of /path/to/dir/Title[: Subtitle [(Year)]]\nPWD: %s\n\n' "$(pwd)"
+    (( discord )) && discorddm "indexopus: Attention required! Title entry required."
     t="$(gum input --width="$(( $(tput cols) - $(tput cols)/10 ))" --value="${PWD##*\/}" --header="Enter title to use for part files:")"
     confirm -y "Use $red$iton$t$tput0 as title for part files?" || { printf '\nFix directory name and return.\nExiting. (exit 1)\n\n'; exit 1; }
 

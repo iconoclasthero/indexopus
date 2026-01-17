@@ -4,7 +4,7 @@
 . /usr/local/bin/editscript
 . ~/.config/indexopus.conf
 
-tmp=/cache
+tmp="$CACHE"
 mp=tmp
 scriptname=$(realpath "$0")
 ulon=$(tput smul)         # underline on
@@ -19,7 +19,7 @@ shopt -s nullglob extglob dotglob
 #rmmatch=false
 #screened=false
 
-sourcefn -l "$HOME/bin/gits/indexopus/indexopus.lib" -f printline -f confirm
+source <(sourcefn -l "$HOME/bin/gits/indexopus/indexopus.lib" -f printline -f confirm)
 
 
 
@@ -304,7 +304,9 @@ count=1 #cannot change.
 (( verbose )) && printf '[verbose] $totalsec: %s\n' "$totalsec"
 (( verbose )) && pause "[verbose] \$divsec: $divsec"
   printf '\n\n%sSplitting file into %s pieces:\n%s' "$relipsis" "$threads" "$tput0"
-  while (( $count < $((1+$threads)) )); do
+  while (( count <= threads )); do
+    (( threads < 100 )) && printf -v part '%02d' "$count"
+    (( threads > 100 )) && printf -v part '%03d' "$count"
 #(( verbose )) && pause "$(python -c "print(($count-1)*$divsec)")"
     ffmpeg -n \
       -nostdin \
@@ -316,8 +318,9 @@ count=1 #cannot change.
       -i file:"$path" \
       -vn \
      -acodec copy \
-     file:"$tmp/${title%% -- *} -- Part 0$count.$outext"
-    ((count++))
+     file:"$tmp/${title%% -- *} -- Part $part.$outext"
+    (( verbose )) && printf 'count %s -> part %s\n' "$count" "$part"
+    (( count++ ))
   done
 #done
 

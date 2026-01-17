@@ -41,7 +41,7 @@ local    ppidname="`ps --no-heading -o %c -p ${tlpp_ppid}`"
 #     [[ ! -e "$swp" ]] && printf "\n\n%s\n\n" "$swp" && (/usr/bin/nano "$scriptpath") && exit
 #     printf "\n%s is already being edited.\n%s exists; try fg or look in another window.\n" "$scriptpath" "$swp"; exit ; }
 
-. /usr/local/bin/editscript.sh
+[[ -r /usr/local/bin/editscript ]] && source /usr/local/bin/editscript
 
 if ! command -v own &> /dev/null; then
   own(){
