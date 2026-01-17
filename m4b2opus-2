@@ -114,21 +114,24 @@ filecheck(){
 
 #  if [[ "$clipath" ]]; then
 #    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
-  findmnt -T "${clipath:=.}" | grep -q "fuse.sshfs" && fuse=1
+  if (( fusecheck )); then
+    findmnt -T "${clipath:=.}" | grep -q "fuse.sshfs" && fuse=1
 
-(( verbose )) && printf '[verbose] $fuse=%s\n' "$fuse"
+    (( verbose )) && printf '[verbose] $fuse=%s\n' "$fuse"
 
-  if (( fuse )); then
-    (( verbose )) && printf '[verbose] in if (( fuse )) block\n'
-    localclipath="/dev/shm/cache/${clipath##*/}"
-    mkdir -p "$localclipath"
-    [[ ! "$clifilename" ]] && { printf 'On an sshfs mount but no file name specified on cli. Correct and retry. (exit 1)\n'; exit 1; }
-    cp "$clifilename" "$localclipath"
-    clipath="$localclipath"
-    (( verbose )) && printf '[verbose] $localclipath=%s\n' "$localclipath"
-    (( verbose )) && printf '[verbose] $clipath=%s\n' "$clipath"
-    (( verbose )) && printf '[verbose] leaving if (( fuse )) block\n'
+    if (( fuse )); then
+      (( verbose )) && printf '[verbose] in if (( fuse )) block\n'
+      localclipath="/dev/shm/cache/${clipath##*/}"
+      mkdir -p "$localclipath"
+      [[ ! "$clifilename" ]] && { printf 'On an sshfs mount but no file name specified on cli. Correct and retry. (exit 1)\n'; exit 1; }
+      cp "$clifilename" "$localclipath"
+      clipath="$localclipath"
+      (( verbose )) && printf '[verbose] $localclipath=%s\n' "$localclipath"
+      (( verbose )) && printf '[verbose] $clipath=%s\n' "$clipath"
+      (( verbose )) && printf '[verbose] leaving if (( fuse )) block\n'
+    fi
   fi
+
 
   if ! [[ -w . ]]; then
     printf '\n[WARN] The pwd (%s) is not writable;\n  attempting to take ownership.\n\n' "$(pwd)"
@@ -483,6 +486,7 @@ while (( $# > 0 )); do
   [[ "$1" =         "--save" ]] && { args+=("$1"); save=1; shift; continue; }
   [[ "$1" =        "--stats" ]] && { args+=("$1"); stats=1; shift; continue; }
   [[ "$1" =      "--checked" ]] && { checked=1; shift; continue; }
+  [[ "$1" =         "--fuse" ]] && { fusecheck=1; shift; continue; }  ## disable fusecheck (systems local)
   [[ "$1" =   @(--screen|-s) ]] && { screened=1; shift; continue; }
   [[ "$1" = @(-|--)@(ys|yes) ]] && { (( rmmatch=screened=1 )); args+=(--save); shift; continue; }
   [[ "$1" = @(-|--)@(Ys|Yes) ]] && { (( rmmatch=screened=1 )); args+=(-Y); shift; continue; }
