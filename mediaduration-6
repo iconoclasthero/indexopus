@@ -98,7 +98,8 @@ checkdev(){
 
     if [[ ! "$rot" ]]; then
 #      local dir="${clidir:=.}" ## this isn't necessary since we cd into "$clidir"
-      [[ "$(findmnt -T . -nr -o FSTYPE)" = fuse.sshfs ]] && { printf '%s is an sshfs mount; run this on the local machine. (exit 1)\n' "$(pwd)"; exit 1; }
+#      [[ "$(findmnt -T . -nr -o FSTYPE)" = fuse.sshfs ]] && { printf '%s is an sshfs mount; run this on the local machine. (exit 1)\n' "$(pwd)"; exit 1; }
+      (( ! force )) && [[ "$(findmnt -T . -nr -o FSTYPE)" = fuse.sshfs ]] && { printf '%s is an sshfs mount; run this on the local machine. (exit 1)\n' "$(pwd)"; exit 1; }
 
       dev=$(df -P . | awk 'NR==2{print $1}')
 
@@ -511,6 +512,7 @@ while (( "$#" )); do
   [[ "$1" = @(-s|--sec)              ]] && { sec=1;           shift; continue; }
   [[ "$1" = @(-t|--time@(|s))        ]] && { times=1; list=1; shift; continue; }
   [[ "$1" = @(-o|--durations|--only) ]] && { only=1;          shift; continue; }
+  [[ "$1" = @(-f|--force)            ]] && { force=1;         shift; continue; }
   [[ -z "$1" ]]                         && {                  shift; continue; }
   [[ -f "$1" ]]         && { clifile+=( "$1" );               shift; continue; }
   [[ -d "$1" ]]         && {  clidir+=( "$1" );               shift; continue; }
