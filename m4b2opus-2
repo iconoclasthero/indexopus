@@ -411,7 +411,7 @@ noindexsplit(){
 # divsec=$(python3 -c "print($totalsec/4)")
   divsec=$(echo "$totalsec/4" | bc -l)
 
-  (( verbose )) && { printf '[verbose] $totalsec: %s\n'
+  (( verbose )) && { printf '[verbose] $totalsec: %s\n' "$totalsec"
                      pause "$(printf '[verbose] $divsec: %s\n' "$divsec")"; }
 
 ## will need to determine if this is enough checking:
