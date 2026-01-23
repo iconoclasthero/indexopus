@@ -43,27 +43,28 @@ calctime(){
 
   (( verbose )) && pause "findtitle=$findtitle"
 
-duration=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
-hours=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' | tail -n 1)
-minutes=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' | tail -n 1)
-seconds=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' | tail -n 1)
+  duration=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1)
+  hours=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/3600' | tail -n 1)
+  minutes=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t/60%60' | tail -n 1)
+  seconds=$(find -type f -name "$findtitle" -print0 | xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d\n",$t%60' | tail -n 1)
 
-[[ "$hours"   =~ "0*(.*)" ]] &&   hours=${BASH_REMATCH[1]}
-[[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
-[[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
+  [[ "$hours"   =~ "0*(.*)" ]] &&   hours=${BASH_REMATCH[1]}
+  [[ "$minutes" =~ "0*(.*)" ]] && minutes=${BASH_REMATCH[1]}
+  [[ "$seconds" =~ "0*(.*)" ]] && seconds=${BASH_REMATCH[1]}
 
-printf "Duration: %s\n" "$duration"
+  printf "Duration: %s\n" "$duration"
 
-hours="${hours#0}"
-hourmin=$(( hours*60 ))
-minutes="${minutes#0}"
-secmin=$((hourmin+minutes))
-secmin=$((secmin*60))
-seconds="${seconds#0}"
-totalsec=$(( "$seconds" + "$secmin" ))
-divsec=$(python3 -c "print($totalsec/$threads)")
-(( verbose )) && printf 'hours: %s\nminutes: %s\nseconds: %s\ntotalsec: %s\ndivsec: %s\n' "$hours" "$minutes" "$seconds" "$totalsec" "$divsec"
-
+  hours="${hours#0}"
+  hourmin=$(( hours*60 ))
+  minutes="${minutes#0}"
+  secmin=$((hourmin+minutes))
+  secmin=$((secmin*60))
+  seconds="${seconds#0}"
+  totalsec=$(( "$seconds" + "$secmin" ))
+#  divsec=$(python3 -c "print($totalsec/$threads)")
+  divsec=$(echo "($totalsec/$threads)" | bc -l)
+  (( verbose )) && printf 'hours: %s\nminutes: %s\nseconds: %s\ntotalsec: %s\ndivsec: %s\n' \
+                          "$hours" "$minutes" "$seconds" "$totalsec" "$divsec"
 }
 ##--> calctime() <--###################################################################
 
@@ -107,7 +108,8 @@ secmin=$((hourmin+minutes))
 secmin=$((secmin*60))
 seconds="${seconds#0}"
 totalsec=$(( "$seconds" + "$secmin" ))
-divsec=$(python3 -c "print($totalsec/$threads)")
+#divsec=$(python3 -c "print($totalsec/$threads)")
+divsec=$(echo "($totalsec/$threads)" | bc -l)
 (( verbose )) && printf 'hours: %s\nminutes: %s\nseconds: %s\ntotalsec: %s\ndivsec: %s\n' "$hours" "$minutes" "$seconds" "$totalsec" "$divsec" && pause
 
 (( verbose )) && printf 'Leaving function: %s\n' "${FUNCNAME[0]}"
@@ -313,8 +315,8 @@ count=1 #cannot change.
       -hide_banner \
       -stats \
       -v error \
-      -ss $(python3 -c "print(($count-1)*$divsec)") \
-      -to $(python3 -c "print($count*$divsec)") \
+      -ss $(echo "(($count-1)*$divsec)" | bc -l) \
+      -to $(echo "($count*$divsec)" | bc -l) \
       -i file:"$path" \
       -vn \
      -acodec copy \

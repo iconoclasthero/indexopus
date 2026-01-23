@@ -300,7 +300,8 @@ calctime(){
  ##echo "seconds $seconds"
  totalsec=$(( "$seconds" + "$secmin" ))
  ##echo "totalsec $totalsec"
- divsec=$(python3 -c "print($totalsec/4)")
+# divsec=$(python3 -c "print($totalsec/4)")
+ divsec=$(echo "$totalsec/4" | bc -l)
  ##echo "divsec $divsec"
 (( verbose )) && printf totalsec=%s\\n "$totalsec"
 (( verbose )) && printf divsec=%s\\n "$divsec"
@@ -397,6 +398,7 @@ noindexsplit(){
 ## UPDATE: IT DOES! fix: prefix the file name with `file:`
 
   local i n partno convertdir="$2"
+  local count=1 #cannot change
   (( verbose )) && { printf '[verbose] entering %s()\n[verbose] local $m4bin: %s\n' "${FUNCNAME[0]}" "$m4bin"; pause "[verbose] local \$convertdir: $convertdir"; }
 
   printf '%s%sNo index found in %s!\n...%s%sThe item will be spiit into %s parts for efficient ffmpeg conversion.\n...Reindex later with chapter information pulled from the web.\n\n' \
@@ -409,9 +411,9 @@ noindexsplit(){
                        #yes, but it's a fucking wasteful function.
   totalsec=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$1")
 # divsec=$(python3 -c "print($totalsec/4)")
-  divsec=$(echo "$totalsec/4" | bc -l)
+  divsec=$(echo "$totalsec/$threads" | bc -l)
 
-  (( verbose )) && { printf '[verbose] $totalsec: %s\n' "$totalsec"
+  (( verbose )) && { printf '[verbose] $totalsec/$threads: %s/%s\n' "$totalsec" "$threads"
                      pause "$(printf '[verbose] $divsec: %s\n' "$divsec")"; }
 
 ## will need to determine if this is enough checking:
@@ -419,37 +421,37 @@ noindexsplit(){
   [[ "$m4bin" = *\ --\ Audiobook.m4? ]] && partna="${m4bin%% -- *}" || partna="${m4bin}"
   [[ "$partna" = *.m4[ab] ]] && partna="${partna%.m4*}"
 
-  for ((partno=1; partno <= $(( threads)); partno++ )); do
+#  for ((partno=1; partno <= $(( threads)); partno++ )); do
+  while (( count <= threads )); do
+    (( threads < 100 )) && printf -v partno '%02d' "$count"
+    (( threads > 100 )) && printf -v partno '%03d' "$count"
     printf '%s%s: %s' "$relipsis" "$partno" "$tput0"
 
   (( verbose )) && {
-    printf '\n[verbose] -ss $(python3 -c "print(($partno-1)*$divsec)"): $(python3 -c "print(%s*%s)"): %s\n\n[verbose] -to $(python3 -c "print($partno*$divsec)"): -to $(python3 -c "print(%s*%s)"): %s\n\n' \
-           "$partno" \
+    printf '\n[verbose] -ss $(echo "($count-1)*$divsec)"|bc -l): $(echo "((%s-1)*%s|bc -l)"): %s\n\n' \
+           "$count" \
            "$divsec" \
-           "$(python3 -c "print(($partno-1)*$divsec)")" \
-           "$partno" \
+           "$(echo "(($count-1)*$divsec)"|bc -l)"
+    printf '[verbose] -to $(echo "($count*$divsec)"|bc -l): -to $(echo "(%s*%s)|bc -l"): %s\n\n' \
+           "$count" \
            "$divsec" \
-           "$(python3 -c "print($partno*$divsec)")"
+           "$(echo "($count*$divsec)"|bc -l)"
     printf '[verbose] $(pwd): %s\n' "$(pwd)";
-    pause "[verbose] \$convertdir/\$partna -- Part 0\$partno.m4a: $convertdir/$partna -- Part 0$partno.m4a"
+    pause "[verbose] \$convertdir/\$partna -- Part $partno.m4a: $convertdir/$partna -- Part $partno.m4a"
   }
 
 
   (( verbose )) && {
-
 ## this is an idea for a way to have exactly what's assigned to the variables printed:
 ##    expr='$(echo "($partno-1)*$divsec" | bc -l)'
 ##    eval startsec="$expr"
 ##    printf '\n[verbose] -ss %s: %s\n' "$expr" "$startsec"
-    startsec=$(echo "($partno-1)*$divsec" | bc -l)
-    tosec=$(echo "$partno*$divsec" | bc -l)
-    printf '\n[verbose] -ss $(echo "($partno-1)*$divsec" | bc -l): %s\n[verbose] -to $(echo "$partno*$divsec" | bc -l): %s\n\n' "$startsec" "$tosec"
+    startsec=$(echo "($count-1)*$divsec" | bc -l)
+    tosec=$(echo "$count*$divsec" | bc -l)
+    printf '\n[verbose] -ss $(echo "($count-1)*$divsec" | bc -l): %s\n[verbose] -to $(echo "$count*$divsec" | bc -l): %s\n\n' "$startsec" "$tosec"
     printf '[verbose] %s\n' "$(pwd)"
-    pause "[verbose] \$convertdir/\$partna -- Part 0\$partno.m4a: $convertdir/$partna -- Part 0$partno.m4a";
+    pause "[verbose] \$convertdir/\$partna -- Part $partno.m4a: $convertdir/$partna -- Part $partno.m4a";
   }
-
-
-
 
 #[[ "$m4bin" = *:* ]] && { m4bin="${m4bin//:/_}"; mv "$1" "$m4bin"; (( verbose )) && pause "[verbose] \$m4bin: $m4bin"; }
 #[[ "$m4bin" = *:* ]] && { m4bin="${m4bin//:/\\:}"; (( verbose )) && pause "[verbose] \$m4bin: $m4bin"; }
@@ -466,20 +468,22 @@ noindexsplit(){
 #         -acodec copy \
 #         file:"$convertdir/$partna -- Part 0$partno.m4a"
 ##         file:"$convertdir/${m4bin%% -- *} -- Part 0$partno.m4a"
-       ffmpeg -n \
+      ffmpeg -n \
            -nostdin \
            -hide_banner \
            -stats \
            -v error \
-           -ss $(echo "($partno-1)*$divsec" | bc -l) \
-           -to $(echo "$partno*$divsec" | bc -l) \
+           -ss $(echo "($count-1)*$divsec" | bc -l) \
+           -to $(echo "$count*$divsec" | bc -l) \
            -i file:"${m4bin}" \
            -vn \
            -acodec copy \
-           file:"$convertdir/$partna -- Part 0$partno.m4a"
-
-       printf '%s' "$tput0"
+           file:"$convertdir/$partna -- Part $partno.m4a"
+      (( verbose )) && printf 'count %s -> part %s\n' "$count" "$part"
+      (( count++ ))
+      printf '%s' "$tput0"
     done
+
     cd "$convertdir"
     for ((i=1; i<=parts; i++)); do
       printf -v i '%02d\n' "$i"
