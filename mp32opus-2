@@ -10,6 +10,8 @@ export TERM
 source "$HOME/.config/indexopus.conf"
 
 ## assign initial  ##################################################################################
+scriptpath="$(realpath "$0")"
+scriptname="${scriptpath##*\/}"
 tput0="$(tput sgr0)"
 white="$(tput setaf 15)"
 boldred="$(tput bold setaf 9)"
@@ -22,8 +24,8 @@ calltmpf="/tmp/mp32opus-calltmpf-$(date -Im).tmp"  ## temp file to communicate w
 
 
 ## source functions #################################################################################
-source /usr/local/bin/editscript
-source <(sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec -f printline -f confirm)
+[[ -r /usr/local/bin/editscript ]] && source /usr/local/bin/editscript || { printf 'Cannot source /usr/local/bin/editscript\n'; }
+source <(sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec -f printline -f confirm) || { printf 'Cannot source functions from indexopus.lib. Correct and retry. (exit 1)\n'; exit 1; }
 
 
 ## functions ########################################################################################
@@ -310,7 +312,7 @@ extractcover(){
 
 args=(mp32opus)
 while (( $# > 0 )); do
-  [[ "$1" =         "--edit" ]] && editscript && exit
+  [[ "$1" =         "--edit" ]] && { editscript; exit; }
   [[ "$1" =             "-y" ]] && { args+=("$1"); args+=(--save); (( save=rmmatch=1 )); shift; continue; }
   [[ "$1" =             "-Y" ]] && { args+=("$1"); rmmatch=1; shift; continue; }
   [[ "$1" =             "-n" ]] && { args+=("$1"); no=1; unset rmmatch; shift; continue; }
