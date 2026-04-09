@@ -318,7 +318,7 @@ while (( $# > 0 )); do
   [[ "$1" =              "-n" ]] && { args+=("$1"); no=1; unset rmmatch; shift; continue; }
   [[ "$1" =          "--save" ]] && { args+=("$1"); save=1; shift; continue; }
   [[ "$1" =         "--stats" ]] && { args+=("$1"); stats=1; shift; continue; }
-  [[ "$1" =    "--mp32title" ]] && { mp32title="$2"; args+=( "--mp32title" "$2" ); shift 2; continue; }
+  [[ "$1" =     "--mp32title" ]] && { mp32title="$2"; args+=( "--mp32title" "$2" ); shift 2; continue; }
   [[ "$1" = "--force-quarter" ]] && { args+=("$1"); forcequarter=1; shift; continue; }
   [[ "$1" =    @(--screen|-s) ]] && { screened=1; shift; continue; }
   [[ "$1" =  @(-|--)@(ys|yes) ]] && { args+=("-y"); (( save=screened=rmmatch=1 )); args+=(--save); shift; continue; }
@@ -394,7 +394,11 @@ if [[ "$clifile" ]] || (( "${#allfiles[@]}" == 1 )); then
   [[ "$clifile" ]] && args+=( "$clifile" )
   (( verbose )) &&  pause "$(printf '[verbose] mp32opus calling quartero4 %s\n' "${args[*]}")"
   printline "${bold}  Calling ${white}quartero4 ${args[@]}  ${tput0}"
-  quartero4 "${args[@]}"
+  if (( forcequarter )); then
+    quartero4 --force "${args[@]}"
+  else
+    quartero4 "${args[@]}"
+  fi
 #  "${args[@]}"
   ec="$?"
   if (( ec )); then
