@@ -180,7 +180,7 @@ rmyn(){
 while (( $# > 0 )); do
   [[ "$1" = @(--edit|edit|e|nano) ]] && editscript && exit
   [[ "$1" = @(-v|--verbose) ]] && args+=("$1") && shift && verbose=1 && continue
-  [[ "$1" = --force ]] && args+=("$1") && shift && force=1 && continue
+  [[ "$1" = --force@(|-quarter) ]] && args+=("$1") && shift && force=1 && continue
   [[ "$1" = @(-s) ]] && shift && screened=1 && continue
   [[ "$1" = @(|-)@(-ys|-yes) ]] && shift && rmmatch=1 && screened=1 && continue
   [[ "$1" = -y ]] && shift && rmmatch=1 && continue

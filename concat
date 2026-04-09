@@ -1,7 +1,7 @@
 #!/bin/bash
 # nb: the swp file that editscript relies on is provided by nano
 
-. /usr/local/bin/editscript
+[[ -r /usr/local/bin/editscript ]] && source /usr/local/bin/editscript
 
 ext="opus"
 ext="m4b"
@@ -12,14 +12,6 @@ ext="m4b"
 scriptname="$(realpath $0)"
 
 shopt -s extglob
- if [[ "$1" = --ext=@(m4b|m4a|mp3) ]]; then
-   ext="$1"
-   shift
-   ext="${ext#*=}"
-   pause "new extension: $ext"
- fi
-
-title="${1%.*}"
 
 escapepath(){
   for f in ./*."$ext"*; do
@@ -35,15 +27,34 @@ escapepath(){
 }
 
 
+while (( "$#" )); do
+  [[ "$1" = --edit ]] && { editscript; exit; }
+  [[ "$1" =     -y ]] && { overwrite=1; shift; continue; }
+  if [[ "$1" = --ext=@(m4b|m4a|mp3) ]]; then
+    ext="$1" ext="${ext#*=}"
+    shift
+    pause "new extension: $ext"
+  elif [[ "$1" = --ext=flac ]]; then
+    ext="$1" ext="${ext#*=}"
+    shift
+    flac=1
+  fi
+done
+
+title="${1%.*}"
+
 [[ "$title" =~ \."$ext"$ ]] && title="${title%.$ext}"
 
 ## Process substitution (<(escapepath)) creates a named pipe like /dev/fd/63, which ffmpeg treats as a normal input — no file: needed or allowed there.
 
 if [[ "$ext" == "flac" ]]; then
   ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(escapepath) file:"$title.$ext"
-elif [[ "$2" == "-y" ]]; then
+elif (( overwrite )); then
   ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -y -i <(escapepath) -acodec copy file:"$title.$ext"
 else
   ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -thread_queue_size 1024 -i <(escapepath) -acodec copy file:"$title.$ext"
 fi
 
+exit
+
+# ffmpeg -nostdin -hide_banner -stats -f concat -safe 0 -i <(for f in ./*."$ext"; do echo "file '$PWD/$f'"; done) -acodec copy "$title.$ext"

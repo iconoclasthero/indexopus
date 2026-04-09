@@ -312,17 +312,18 @@ extractcover(){
 
 args=(mp32opus)
 while (( $# > 0 )); do
-  [[ "$1" =         "--edit" ]] && { editscript; exit; }
-  [[ "$1" =             "-y" ]] && { args+=("$1"); args+=(--save); (( save=rmmatch=1 )); shift; continue; }
-  [[ "$1" =             "-Y" ]] && { args+=("$1"); rmmatch=1; shift; continue; }
-  [[ "$1" =             "-n" ]] && { args+=("$1"); no=1; unset rmmatch; shift; continue; }
-  [[ "$1" =         "--save" ]] && { args+=("$1"); save=1; shift; continue; }
-  [[ "$1" =        "--stats" ]] && { args+=("$1"); stats=1; shift; continue; }
-  [[ "$1" =   @(--screen|-s) ]] && { screened=1; shift; continue; }
-  [[ "$1" = @(-|--)@(ys|yes) ]] && { args+=("-y"); (( save=screened=rmmatch=1 )); args+=(--save); shift; continue; }
-  [[ "$1" = @(-|--)@(Ys|Yes) ]] && { args+=("-Y"); (( screened=rmmatch=1 )); shift; continue; }
-  [[ "$1" =  @(-v|--verbose) ]] && { args+=("$1"); verbose=1; shift; continue; }
-  [[ "$1" =  @(-D|--discord) ]] && { args+=("$1"); unset discord; . ~/.config/discord-local.conf; shift; continue; }
+  [[ "$1" =          "--edit" ]] && { editscript; exit; }
+  [[ "$1" =              "-y" ]] && { args+=("$1"); args+=(--save); (( save=rmmatch=1 )); shift; continue; }
+  [[ "$1" =              "-Y" ]] && { args+=("$1"); rmmatch=1; shift; continue; }
+  [[ "$1" =              "-n" ]] && { args+=("$1"); no=1; unset rmmatch; shift; continue; }
+  [[ "$1" =          "--save" ]] && { args+=("$1"); save=1; shift; continue; }
+  [[ "$1" =         "--stats" ]] && { args+=("$1"); stats=1; shift; continue; }
+  [[ "$1" = "--force-quarter" ]] && { args+=("$1"); forcequarter=1; shift; continue; }
+  [[ "$1" =    @(--screen|-s) ]] && { screened=1; shift; continue; }
+  [[ "$1" =  @(-|--)@(ys|yes) ]] && { args+=("-y"); (( save=screened=rmmatch=1 )); args+=(--save); shift; continue; }
+  [[ "$1" =  @(-|--)@(Ys|Yes) ]] && { args+=("-Y"); (( screened=rmmatch=1 )); shift; continue; }
+  [[ "$1" =   @(-v|--verbose) ]] && { args+=("$1"); verbose=1; shift; continue; }
+  [[ "$1" =   @(-D|--discord) ]] && { args+=("$1"); unset discord; . ~/.config/discord-local.conf; shift; continue; }
   [[ -d "$1" ]] && { clipath="$1"; clidir=$(realpath "$1"); args+=("$clidir"); shift; continue; }
   [[ -f "$1" ]] && { clipath="$1"; clifile=$(realpath "$1"); args+=("$clifile"); shift; continue; }
   { printf '"%s" is unrecognized.\n' "$1"; shift; confirm -y 'Proceed with script?' || exit 1; }
