@@ -59,7 +59,7 @@ filecheck(){
 
 (( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
   [[ -d "$clifilepath" ]] && clidir="$clifilepath" && cd "$clidir" && unset clifilepath
-  [[ -f "$clifilepath" ]] && { clifile="$(basename "$clifilepath")"; clidir="$(dirname "$clifilepath")"; cd "$clidir" || exit 1; } ## add an || unset clifilepath here?
+  [[ -f "$clifilepath" ]] && { clifile="$(basename "$clifilepath")"; clidir="$(dirname "$clifilepath")"; cd "$clidir" || return 1; } ## add an || unset clifilepath here?
   [[ -f "$clifile" ]] && cliext="${clifile##*.}"
 (( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
 (( verbose )) && echo "[verbose] \$clipath: ${clipath:-null}"
@@ -83,10 +83,10 @@ filecheck(){
       if ! sudo -n chown -R "$USER":"${group:-$USER}" .; then
         (( verbose )) && printf '[WARN] The `sudo -n chown -R "%s":"%s" .` command failed!\n' "$USER" "${group:-$USER}"
         (( discord )) && discorddm "mp32opus: Attention required! confirm \`sudo chown \"$USER\" .\`"
-        sudo chown -R "$USER":"${group:-$USER}" . || { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; }
+        sudo chown -R "$USER":"${group:-$USER}" . || { printf '[ERROR] Cannot take ownership of %s.\n' "$clipath"; return 1; }
       fi
     fi
-    ! [[ -w . ]] && { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; } || printf '\nOwnership of pwd granted to %s.\n' "$USER"
+    ! [[ -w . ]] && { printf '[ERROR] Cannot take ownership of %s.\n' "$clipath"; return 1; } || printf '\nOwnership of pwd granted to %s.\n' "$USER"
   fi
 
 (( verbose )) && echo "Need to implement an own warn step here step here; continue..."
@@ -177,8 +177,7 @@ set +H  ## turns set histexpand off to prevent !}" below from throwing errors in
                         printf ' %s\n' "${allmp3[@]:-No .mp3 files found!}"
                         printf '\n%s' "$white"; }
 
-filecheck "${clipath:-""}"
-(( "$?" )) && { printf 'The files failed filecheck()!\nInvestigate (exit 1)\n.'; exit 1; }
+! filecheck "${clipath:-""}" && { printf 'The files failed filecheck()!\nInvestigate (exit 1)\n.'; exit 1; }
 
 printline "$bold  Welcome to ${0##*\/}  $tput0"
 printf \\n
