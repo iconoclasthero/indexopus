@@ -229,7 +229,9 @@ else
   fi
 fi
 
-! (( force )) && [[ "$(mediainfo "$path"|grep Menu)" =~ ^Menu ]] && printf '%s has an index!\nexit 1\n' "$path" && exit 1
+#! (( force )) && [[ "$(mediainfo "$path"|grep Menu)" =~ ^Menu ]] && printf '%s has an index!\nexit 1\n' "$path" && exit 1
+#! (( force )) && mediainfo "$path"|grep -Eq ^Menu && { printf '%s has an index!\nexit 1\n' "$path"; exit 1; }
+! (( force )) && (( $(ffprobe -i "$path" -show_chapters -loglevel error | grep -c '^\[CHAPTER\]') > 1 )) && { printf '%s has an index!\nexit 1\n' "$path"; exit 1; }
 
 startfile="$(basename "$path")"
 startdir="$(dirname "$path")"
