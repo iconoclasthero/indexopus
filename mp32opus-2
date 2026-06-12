@@ -66,6 +66,10 @@ filecheck(){
 (( verbose )) && echo "[verbose] \$clidir: ${clidir:-null}"
 (( verbose )) && echo "[verbose] \$clifile: ${clifile:-null}"
 
+  ! (( force )) && [[ -f "$clifile" ]] &&
+    (( $(ffprobe -v error -show_chapters "$clifile" | grep -c '^\[CHAPTER\]$') > 1 )) &&
+    { printf '%s has an index!\nexit 1\n' "$clifile"; exit 1 }
+
   if ! [[ -w . ]]; then
     printf '\n[WARN] The pwd\n(%s)\n is not writable; attempting to take ownership.\n\n' "$(pwd)"
 
