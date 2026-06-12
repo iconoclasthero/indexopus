@@ -30,108 +30,6 @@ source <(sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec -f printline -f con
 
 ## functions ########################################################################################
 
-##there's another filecheck() below
-filecheck(){
-(( verbose )) && printf '[verbose] Entering filecheck().\n'
-  local clifilepath clifilename clifiledir clipath mvoutput mvec  ## not sure what to do here.  need to see the scope of these variables.
-  if [[ ! "$1" ]]; then
-    allfiles=(*mp3)
-   (( "${#allfiles[@]}" != 1 )) && { printf '${#allfiles[@]} != 1\n'; exit 1; }
-   set -- "$allfiles"
-  fi
-
-  [[ -e "$1" ]] && clifilepath="$(realpath "$1")"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
-  echo "\$clifilepath is $clifilepath"
-
-
-(( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
-  [[ -d "$clifilepath" ]] && clipath="${clifilepath%/}" && cd "$clipath" && unset clifilepath
-  [[ -f "$clifilepath" ]] && clipath="${clifilepath%/*}" && cd "$clipath" && clifilepath="${clifilepath##*/}" ## add an || unset clifilepath here?
-(( verbose )) && echo "[verbose] \$clifilepath: ${clifilepath:-null}"
-(( verbose )) && echo "[verbose] \$clipath: ${clipath:-null}"
-
-#  if [[ "$clipath" ]]; then
-#    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
-
-  if ! [[ -w . ]]; then
-    printf '\n[WARN] The pwd\n(%s)\n is not writable; attempting to take ownership.\n\n' "$(pwd)"
-
-    (( verbose )) && echo "[verbose] $(type own) $(which own)"
-
-    (( rmmatch )) && { own --force .; :; } || own .
-
-    if ! [[ -w . ]]; then
-      (( verbose )) && printf '\n[WARN] The `own .` command failed\n\nTrying `sudo chown $USER .`\n\n' &&
-      eza -glaa .
-      if ! sudo -n chown -R "$USER":"${group:-$USER}" .; then
-        (( verbose )) && printf '[WARN] The `sudo -n chown -R "%s":"%s" .` command failed!\n' "$USER" "${group:-$USER}"
-        (( discord )) && discorddm "mp32opus: Attention required! confirm \`sudo chown \"$USER\" .\`"
-        sudo chown -R "$USER":"${group:-$USER}" . || { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; }
-      fi
-    fi
-    ! [[ -w . ]] && { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; } || printf '\nOwnership of pwd granted to %s.\n' "$USER"
-  fi
-
-##  [[ "$clifilename" = *\ --\ Audiobook.m4b ]] && [[ -f "$1" ]] && m4bin="$1" && return 0
-#  [[ "$clifilename" = *\ --\ Audiobook.m4b ]] && [[ -f "$clifilename" ]] && { m4bin="$clifilename"; return 0; }
-#
-### at this point the pwd should either be the swd or it should be the local "$clipath" from the cd "$clipath" above.
-#(( verbose )) && read -rp "[verbose] \$(pwd): $(pwd)"
-#
-#  [[ "$clifilename" ]] && files=("$clifilename") || files=(*.m4[ba])
-#
-#(( verbose )) && read -rp "[verbose] \${files[@]}: $(printf %s\\n "${files[@]}")"
-#
-#    if (( "${#files[@]}" == 1 )); then
-#
-#      # to handle the case where there's an unindexed m4a or a misnamed m4b,
-#      # for simplicity sake, just rename to m4b
-#      # probably want to change it back at the end, but it is going to get deleted anyway
-#      if [[ "${files[0]}" = *.m4a ]]; then
-#        startm4a="${files[0]}"
-#        startfile="$startm4a"
-#        files[0]="${files[0]%.m4a}.m4b"
-#        mv "$startm4a" "${files[0]}"
-#        (( "$?" )) && { printf 'The starting file was an m4a which could not be renamed to m4b:\n mv %s %s\nInvestigate. (return 1)' "${startm4a@Q}" "${files[0]@Q}"; return 1; }
-#      fi
-#
-#      if [[ "${files[0]}" = *\ --\ Audiobook.m4b ]]; then
-#        m4bin="${files[0]}"
-#      elif [[ "${files[0]}" = *.m4b ]]; then
-#        m4bin="${files[0]}"
-###        startfile="${files[0]}"
-###   is there any reason I need to do this?
-###   could I make this conditional on ! (( save ))?
-###        m4bin="${files[0]/.m4b/ -- Audiobook.m4b}"
-###        mvoutput="$(mv "${files[0]}" "$m4bin" 2>&1)"
-#        mvec="$?"
-#        if (( mvec > 0 )); then
-#          if [[ "$mvoutput" = "mv: cannot move "*": Permission denied" ]]; then
-#            own && mv "${files[0]}" "$m4bin" || { printf 'Unable to gain write permission for %s. exit 1\n\n' "${files[@]}"; exit 1; }
-#          else
-#            printf 'Unknown error renaming %s. exit 1\n\n' "${files[@]}"
-#            exit 1
-#          fi
-#        fi
-#      else
-#        printf 'The file passed to the script was not an *m4[a|b]:\n %s\n.  This cannot be allowed to stand!\n\nInvestigate. (return 1)\n' "$1"
-#        return 1
-#      fi
-#    else
-#      printf 'No single m4b/m4a input file found or specified, please check and retry...\n\n'
-#      eza -laa --no-user
-#      printf '\n(exit 1)\n\n'
-#      exit 1
-#    fi
-
-(( verbose )) && { printf '[verbose] Leaving filecheck():\n'; [[ "$clipath" || "$clifilepath" ]] && pause "          \$clipath/\$clifilepath: $clipath/$clifilepath"; }
-#  fi
-return 0
-}
-##--> filecheck() <--#################################################################################
-
-
-
 filecheck(){
 (( verbose )) && printf '[verbose] Entering %s().\n' "$FUNCNAME"
   local clifilepath clipath clidir clifile mvoutput mvec writable unwritable ## not sure what to do here.  need to see the scope of these variables.
@@ -151,11 +49,8 @@ filecheck(){
     done
   fi
 
-
 ## This is more than a little problematic:
-
 #  (( "${#allfiles[@]}" )) && for i in "${allfiles[@]}"; do own "$i"; done
-
 
   [[ -e "$1" ]] && clifilepath="$(realpath "$1")"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
 
@@ -170,9 +65,6 @@ filecheck(){
 (( verbose )) && echo "[verbose] \$clipath: ${clipath:-null}"
 (( verbose )) && echo "[verbose] \$clidir: ${clidir:-null}"
 (( verbose )) && echo "[verbose] \$clifile: ${clifile:-null}"
-
-#  if [[ "$clipath" ]]; then
-#    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
 
   if ! [[ -w . ]]; then
     printf '\n[WARN] The pwd\n(%s)\n is not writable; attempting to take ownership.\n\n' "$(pwd)"
@@ -193,71 +85,12 @@ filecheck(){
     ! [[ -w . ]] && { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; } || printf '\nOwnership of pwd granted to %s.\n' "$USER"
   fi
 
-
-#  [[ ! -w "$clifile" ]] && {
-#    (( discord )) && discorddm "mp32opus notification: ${clifile:-${allfiles[0]:-title unavailable}} not writeable.";
-#    printf 'mp32opus notification: %s not writeable.\n' "${clifile:-${allfiles[0]:-title unavailable}}"; }
-
- (( verbose )) && echo "Need to implement an own warn step here step here; continue..."
-
-
-
-##  [[ "$clifilename" = *\ --\ Audiobook.m4b ]] && [[ -f "$1" ]] && m4bin="$1" && return 0
-#  [[ "$clifilename" = *\ --\ Audiobook.m4b ]] && [[ -f "$clifilename" ]] && { m4bin="$clifilename"; return 0; }
-#
-### at this point the pwd should either be the swd or it should be the local "$clipath" from the cd "$clipath" above.
-#(( verbose )) && read -rp "[verbose] \$(pwd): $(pwd)"
-#
-#  [[ "$clifilename" ]] && files=("$clifilename") || files=(*.m4[ba])
-#
-#(( verbose )) && read -rp "[verbose] \${files[@]}: $(printf %s\\n "${files[@]}")"
-#
-#    if (( "${#files[@]}" == 1 )); then
-#
-#      # to handle the case where there's an unindexed m4a or a misnamed m4b,
-#      # for simplicity sake, just rename to m4b
-#      # probably want to change it back at the end, but it is going to get deleted anyway
-#      if [[ "${files[0]}" = *.m4a ]]; then
-#        startm4a="${files[0]}"
-#        startfile="$startm4a"
-#        files[0]="${files[0]%.m4a}.m4b"
-#        mv "$startm4a" "${files[0]}"
-#        (( "$?" )) && { printf 'The starting file was an m4a which could not be renamed to m4b:\n mv %s %s\nInvestigate. (return 1)' "${startm4a@Q}" "${files[0]@Q}"; return 1; }
-#      fi
-#
-#      if [[ "${files[0]}" = *\ --\ Audiobook.m4b ]]; then
-#        m4bin="${files[0]}"
-#      elif [[ "${files[0]}" = *.m4b ]]; then
-#        m4bin="${files[0]}"
-###        startfile="${files[0]}"
-###   is there any reason I need to do this?
-###   could I make this conditional on ! (( save ))?
-###        m4bin="${files[0]/.m4b/ -- Audiobook.m4b}"
-###        mvoutput="$(mv "${files[0]}" "$m4bin" 2>&1)"
-#        mvec="$?"
-#        if (( mvec > 0 )); then
-#          if [[ "$mvoutput" = "mv: cannot move "*": Permission denied" ]]; then
-#            own && mv "${files[0]}" "$m4bin" || { printf 'Unable to gain write permission for %s. exit 1\n\n' "${files[@]}"; exit 1; }
-#          else
-#            printf 'Unknown error renaming %s. exit 1\n\n' "${files[@]}"
-#            exit 1
-#          fi
-#        fi
-#      else
-#        printf 'The file passed to the script was not an *m4[a|b]:\n %s\n.  This cannot be allowed to stand!\n\nInvestigate. (return 1)\n' "$1"
-#        return 1
-#      fi
-#    else
-#      printf 'No single m4b/m4a input file found or specified, please check and retry...\n\n'
-#      eza -laa --no-user
-#      printf '\n(exit 1)\n\n'
-#      exit 1
-#    fi
+( verbose )) && echo "Need to implement an own warn step here step here; continue..."
 
   printf 'Leaving %s()\n' "$FUNCNAME"
-(( verbose )) && { printf '[verbose] Leaving filecheck():\n'; [[ "$clidir" || "$clifile" ]] && pause "          \$clidir/\$clifile: $clidir/$clifile"; }
+  (( verbose )) && { printf '[verbose] Leaving filecheck():\n'; [[ "$clidir" || "$clifile" ]] && pause "          \$clidir/\$clifile: $clidir/$clifile"; }
 #  fi
-return 0
+  return 0
 }
 ##--> filecheck() <--#################################################################################
 

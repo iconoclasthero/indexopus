@@ -229,29 +229,6 @@ else
   fi
 fi
 
-## i don't think i need to be doing this at all.  there's really no reason to rename the souce file
-#if [[ "$path" != *\ --\ Audiobook.@(mp3|m4@(a|b)|wav) ]]
-#  then
-##    path="$ckbook"
-#    printf '\n%s%sFile is not in the format of <title> -- Audiobook.@(mp3|m4a|m4b)!\n%s\n' "$red" "$bold" "$tput0"
-#      ckbookfile="${ckbook%.*}"; ckbookext="${ckbook##*.}"
-##      [[ "$ckbookfile" =~ \. ]] && n_ckbookfile="${ckbookfile//./_}"
-##      if (( rmmatch )) || confirm "Rename $path to ${ckbook%.*} -- Audiobook.${ckbook##*.}? (y/n) "
-##      n_ckbook="${n_ckbookfile:-$ckbookfile} -- Audiobook.$ckbookext"
-#      n_ckbook="$ckbookfile -- Audiobook.$ckbookext"
-#      if (( rmmatch )) || { printf 'Rename\n %s \nto\n %s\n' \
-#                                "$path" \
-#                                "$n_ckbook";
-#                          confirm -y; }
-#        then
-#          mv "$ckbook" "$n_ckbook"
-#        else
-#          printf "No file name given or filename invalid...\n"
-#          printf "File must be in the format of \"* -- Audiobook.@(mp3|m4?|wav)\n"
-#          exit
-#      fi
-#fi
-
 ! (( force )) && [[ "$(mediainfo "$path"|grep Menu)" =~ ^Menu ]] && printf '%s has an index!\nexit 1\n' "$path" && exit 1
 
 startfile="$(basename "$path")"

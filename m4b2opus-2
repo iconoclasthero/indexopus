@@ -338,6 +338,7 @@ m4bsplit(){
       read _ _ chapter
 
       chapter="${chapter//\//\\}"  # Escape slashes in chapter titles
+      [[ -z "$chapter" ]] && printf -v chapter "Chapter %0${max_digits}d" "$n"
       partnum=$(printf "%0${max_digits}d" "$n")
 
       if (( ${#chapter} > 200 )); then
@@ -667,7 +668,7 @@ fi
 #if ! [[ $(mediainfo "$m4bin"|grep Menu\ \#) =~ ^Menu ]]; then  #process unindexed m4b files
 #if ! [[ $(mediainfo "$m4bin"|grep Menu\ \#) =~ ^Menu ]] && ! [[ $(mediainfo "$m4bin"|grep Menu\ For) =~ ^Menu\ For ]]; then  #process unindexed m4b files
 #if ! mediainfo "$m4bin"|\grep -Eq ^Menu\ For\|^Menu\ \#; then
-if (( $(ffprobe -i "$m4bin" -show_chapters -loglevel error | grep -c '\[CHAPTER\]') < 2 )); then
+if (( $(ffprobe -i "$m4bin" -show_chapters -loglevel error | grep -c '^\[CHAPTER\]') < 2 )); then
 (( verbose )) && pause "[verbose] calling \`noindexsplit $m4bin $convertdir\`"
   noindexsplit "$m4bin" "$convertdir"
 else
