@@ -85,7 +85,7 @@ filecheck(){
     ! [[ -w . ]] && { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; } || printf '\nOwnership of pwd granted to %s.\n' "$USER"
   fi
 
-( verbose )) && echo "Need to implement an own warn step here step here; continue..."
+(( verbose )) && echo "Need to implement an own warn step here step here; continue..."
 
   printf 'Leaving %s()\n' "$FUNCNAME"
   (( verbose )) && { printf '[verbose] Leaving filecheck():\n'; [[ "$clidir" || "$clifile" ]] && pause "          \$clidir/\$clifile: $clidir/$clifile"; }
