@@ -177,7 +177,7 @@ set +H  ## turns set histexpand off to prevent !}" below from throwing errors in
                         printf ' %s\n' "${allmp3[@]:-No .mp3 files found!}"
                         printf '\n%s' "$white"; }
 
-! filecheck "${clipath:-""}" && { printf 'The files failed filecheck()!\nInvestigate (exit 1)\n.'; exit 1; }
+! filecheck "${clipath:-""}" && { printf 'The files failed the filecheck function!\nInvestigate (exit 1)\n.'; exit 1; }
 
 printline "$bold  Welcome to ${0##*\/}  $tput0"
 printf \\n
