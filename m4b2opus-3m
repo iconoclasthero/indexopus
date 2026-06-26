@@ -651,9 +651,6 @@ m4bindur="$("$mediaduration" --only "$m4bin" | sed $'s/\e\\[[0-9;]*m//g')"
 
 printf '\n%sStarting .m4b file: %s%s%s\n' "$bold" "$red" "$m4bin" "$tput0"
 printf '%sStarting duration :%s' "$bold" "$tput0"
-
-(( sleepon )) && { printf 'Sleeping for %s per cli flag...' "$sleepdur"; sleep "$sleepdur"; }
-
 printf ' %s%s%s\n' "$boldred" "$m4bindur" "$tput0"
 [[ "$m4bin" = *\ --\ Audiobook.m4b ]] && title="${m4bin% -- *}" || title="${m4bin%.m4b}"
 ititle="$iton$title$itoff"
@@ -667,6 +664,8 @@ if [[ ! -d "$convertdir" ]]; then
   mkdir -p "$convertdir" ||
   { printf '%s[ERROR]%s Could not create "%s"; please investigate.\n(exit 1)\n%s' "$boldred" "$white" "$convertdir" "$tput0"; exit 1; }
 fi
+
+(( sleepon )) && { printf 'Sleeping for %s per cli flag...' "$sleepdur"; sleep "$sleepdur"; }
 
 ### CODE REVIEW STOPPED Tue Jan 14 08:30:49 AM EST 2025
 
