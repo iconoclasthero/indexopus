@@ -499,6 +499,17 @@ noindexsplit(){
 }
 ##--> noindexsplit() <--###########################################################################
 
+sleepfn(){
+  if [[ "$1" =~ (([0-9]+)(m|h)?) ]]; then
+    [[ "${BASH_REMATCH[3}" ]] && sleepdur="${BASH_REMATCH[1]}"
+    [[ ! "${BASH_REMATCH[3]}" ]] && sleepdur="${BASH_REMATCH[1]}m"
+    sleepon=1
+    args+=( "--sleep" "$sleepdur" )
+  else
+    return 1
+  fi
+} ## sleepfn()
+
 ##--> Main Code <--################################################################################
 ##--> m4b2opus <--#################################################################################
 
@@ -528,6 +539,7 @@ while (( $# > 0 )); do
   [[ -f "$1" || -d "$1" ]] && { clifile="$(realpath "$1")"; args+=("$clifile"); shift; continue; }
 ## maybe the clifle="$1" if --checked is set?  is that even something that can be done? yes, but it requires a lot more processing in the event that checked is after clifile.  maybe that doesn't matter since the user should not be calling --checked.
 ## the question becomes, what happens if i'm calling m4bin from a different directory?  i guess filecheck() should be changing directory and providing a valid $m4bin regardless?
+  [[ "$1" = "--sleep" ]] && { [[ "$2" =~ [0-9]+(m|h)? ]] && { sleepfn "$2" && shift 2; }; continue; }
   [[ "$1" = "" ]] && { shift; continue; }
   { printf '%s is unrecognized.\n' "$1"; shift;
     { confirm -y 'Proceed with script?' && continue; } || exit 1; }
