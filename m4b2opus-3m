@@ -665,7 +665,7 @@ if [[ ! -d "$convertdir" ]]; then
   { printf '%s[ERROR]%s Could not create "%s"; please investigate.\n(exit 1)\n%s' "$boldred" "$white" "$convertdir" "$tput0"; exit 1; }
 fi
 
-(( sleepon )) && { printf 'Sleeping for %s per cli flag...' "$sleepdur"; sleep "$sleepdur"; }
+(( sleepon )) && { printf '\nSleeping for %s%s%s per cli flag...' "$boldred" "$sleepdur" "$tput0"; sleep "$sleepdur"; }
 
 ### CODE REVIEW STOPPED Tue Jan 14 08:30:49 AM EST 2025
 
