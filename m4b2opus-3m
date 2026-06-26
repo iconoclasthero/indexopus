@@ -509,7 +509,33 @@ noindexsplit(){
 ##--> noindexsplit() <--###########################################################################
 
 sleepfn(){
-  if [[ "$1" =~ (([0-9]+)(m|h)?) ]]; then
+  if [[ "$1" = "--countdown" ]] && [[ "$sleepdur" ]]; then
+    # Extract the numeric value from the duration string
+    local count="${sleepdur%[mh]}"
+    local unit="${sleepdur##*[0-9]}"
+
+    # Convert hours to minutes for the loop if necessary
+    [[ "$unit" == "h" ]] && (( count *= 60 ))
+    # Strip the trailing 'm' to get the raw number of minutes
+    local remaining_seconds=$(( count * 60 ))
+
+    while [ $remaining_seconds -gt 0 ]; do
+      # Calculate display minutes and seconds remaining
+      local display_m=$(( remaining_seconds / 60 ))
+      local display_s=$(( remaining_seconds % 60 ))
+
+      printf "\rTime remaining: %02d:%02d (Press any key to skip)... " "$display_m" "$display_s"
+
+      # Wait 1 second for a keypress. -n 1 reads 1 char, -t 1 times out in 1 sec.
+      if read -r -s -n 1 -t 1; then
+        printf "\nSkipped!\n"
+        return 0
+      fi
+
+      ((remaining_seconds--))
+    done
+    printf "\nCountdown finished!\n"
+  elif [[ "$1" =~ (([0-9]+)(m|h)?) ]]; then
     [[ "${BASH_REMATCH[3]}" ]] && sleepdur="${BASH_REMATCH[1]}"
     [[ ! "${BASH_REMATCH[3]}" ]] && sleepdur="${BASH_REMATCH[1]}m"
     sleepon=1
@@ -665,7 +691,7 @@ if [[ ! -d "$convertdir" ]]; then
   { printf '%s[ERROR]%s Could not create "%s"; please investigate.\n(exit 1)\n%s' "$boldred" "$white" "$convertdir" "$tput0"; exit 1; }
 fi
 
-(( sleepon )) && { printf '\nSleeping for %s%s%s per cli flag...' "$boldred" "$sleepdur" "$tput0"; sleep "$sleepdur"; }
+(( sleepon )) && { printf '\nSleeping for %s%s%s per cli flag...\n' "$boldred" "$sleepdur" "$tput0"; sleep "$sleepdur"; }
 
 ### CODE REVIEW STOPPED Tue Jan 14 08:30:49 AM EST 2025
 
