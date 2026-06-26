@@ -207,6 +207,10 @@ filecheck(){
             exit 1
           fi
         fi
+      elif [[ "${files[0]}" = *.mp3 ]]; then
+        printf 'WARNING, YOU APPARENTLY HAVE AN INDEXED .mp3 FILE. PROCESSING THESE FILES IS EXPERIMENTAL!\n'
+        mp3=1
+        m4bin="${files[0]}"
       else
         printf 'The file passed to the script was not an *m4[a|b]:\n %s\n.  This cannot be allowed to stand!\n\nInvestigate. (return 1)\n' "$1"
         return 1
@@ -320,7 +324,7 @@ calctime(){
 m4bsplit(){
 ## Original code from: http://crunchbang.org/forums/viewtopic.php?id=38748#p414992
 ## m4bronto
-  local bpath outputdir START first start end partnum n chapter max_digits
+  local bpath outputdir START first start end partnum n chapter max_digits outfile
   outputdir="$2"
   START=1
   bpath="$(basename "$(pwd)")"
@@ -345,7 +349,12 @@ m4bsplit(){
         chapter="${chapter:0:200}…"  # Truncate chapter title to 100 characters
       fi
 
-      local outfile="$outputdir/$title -- Part $partnum: $chapter.m4a"
+      if (( mp3 )); then
+        outfile="$outputdir/$title -- Part $partnum: $chapter.mp3"
+      else
+        outfile="$outputdir/$title -- Part $partnum: $chapter.m4a"
+      fi
+
       printf '%sCreating %s\n' "$relipsis" "$outfile"
 
       ffmpeg -n \
@@ -672,9 +681,15 @@ if (( $(ffprobe -i "$m4bin" -show_chapters -loglevel error | grep -c '^\[CHAPTER
 else
   m4bsplit "$m4bin" "$convertdir"
   cd "$convertdir"
-  (( $(ls *m4a|wc -l) > 99 )) && for i in *\ --\ Part\ ??\:\ *.m4a; do mv "$i" "${i/Part /Part 0}"; done
+  if (( mp3 )); then
+    (( $(ls *mp3|wc -l) > 99 )) && for i in *\ --\ Part\ ??\:\ *.mp3; do mv "$i" "${i/Part /Part 0}"; done
+  else
+    (( $(ls *m4a|wc -l) > 99 )) && for i in *\ --\ Part\ ??\:\ *.m4a; do mv "$i" "${i/Part /Part 0}"; done
+  fi
   regexexp='.*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\ |\.]'
-  for m4afile in *m4a; do
+  partext='m4a'
+  (( mp3 )) && partext='mp3'
+  for m4afile in *"$partext"; do
     [[ "$m4afile" =~ .*\ --\ Part\ [[:digit:]]{2}:\ Chapter\ [[:digit:]][\.\ ] ]] &&
       mv "$m4afile" "${m4afile/Chapter /Chapter 0}"
   done
