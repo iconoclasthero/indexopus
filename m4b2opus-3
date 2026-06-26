@@ -208,6 +208,7 @@ filecheck(){
           fi
         fi
       elif [[ "${files[0]}" = *.mp3 ]]; then
+        printf 'WARNING, YOU APPARENTLY HAVE AN INDEXED .mp3 FILE. PROCESSING THESE FILES IS EXPERIMENTAL!\n'
         mp3=1
         m4bin="${files[0]}"
       else
