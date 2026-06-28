@@ -115,22 +115,6 @@ filecheck(){
 (( verbose )) && printf '[verbose] $clifilename: %s\n' "${clifilename:-null}"
 (( verbose )) && printf '[verbose] $clipath: %s\n' "${clipath:-null}"
 
-#  if [[ "$clipath" ]]; then
-#    [[ -d "$clipath" && ! -w "$clipath" ]] && { own "$clipath" || { printf 'Cannot take ownership of %s. Investigate. (exit 1)' "$clipath"; exit 1; }; }
-#  findmnt -T "${clipath:=.}" | grep -q "fuse.sshfs" && fuse=1
-#
-#(( verbose )) && printf '[verbose] $fuse=%s\n' "$fuse"
-#
-#  if (( fuse )); then
-#    (( verbose )) && printf '[verbose] in if (( fuse )) block\n'
-#    localclipath="$CACHE/${clipath##*/}"
-#    mkdir -p "$localclipath"
-#    [[ ! "$clifilename" ]] && { printf 'On an sshfs mount but no file name specified on cli. Correct and retry. (exit 1)\n'; exit 1; }
-#    cp "$clifilename" "$localclipath"
-#    clipath="$localclipath"
-#    (( verbose )) && printf '[verbose] $localclipath=%s\n' "$localclipath"
-#    (( verbose )) && printf '[verbose] $clipath=%s\n' "$clipath"
-#    (( verbose )) && printf '[verbose] leaving if (( fuse )) block\n'
   if (( fusecheck )); then
     findmnt -T "${clipath:=.}" | grep -q "fuse.sshfs" && fuse=1
 
@@ -210,6 +194,7 @@ filecheck(){
       elif [[ "${files[0]}" = *.mp3 ]]; then
         printf 'WARNING, YOU APPARENTLY HAVE AN INDEXED .mp3 FILE. PROCESSING THESE FILES IS EXPERIMENTAL!\n'
         mp3=1
+        args+=( "--mp3" )  ## must pass mp3=1 to screend version.
         m4bin="${files[0]}"
       else
         printf 'The file passed to the script was not an *m4[a|b]:\n %s\n.  This cannot be allowed to stand!\n\nInvestigate. (return 1)\n' "$1"
@@ -564,6 +549,7 @@ while (( $# > 0 )); do
   [[ "$1" =        "--stats" ]] && { args+=("$1"); stats=1; shift; continue; }
   [[ "$1" =      "--checked" ]] && { checked=1; shift; continue; }
   [[ "$1" =         "--fuse" ]] && { fusecheck=1; shift; continue; }  ## disable fusecheck (systems local)
+  [[ "$1" =          "--mp3" ]] && { mp3=1; shift; continue; }
   [[ "$1" =   @(--screen|-s) ]] && { screened=1; shift; continue; }
   [[ "$1" = @(-|--)@(ys|yes) ]] && { (( rmmatch=screened=1 )); args+=(--save); shift; continue; }
   [[ "$1" = @(-|--)@(Ys|Yes) ]] && { (( rmmatch=screened=1 )); args+=(-Y); shift; continue; }
@@ -614,6 +600,7 @@ fi
 (( verbose )) && printf '[verbose] Status of $stats: %s\n' "$stats"
 (( verbose )) && printf '[verbose] Status of $no: %s\n' "$no"
 (( verbose )) && printf '[verbose] Status of $m4bin: %s\n' "$m4bin"
+(( verbose )) && printf '[verbose] Status of $mp3: %s\n' "$mp3"
 (( verbose )) && printf '[verbose] Result of pwd: %s\n' "$(pwd)"
 (( verbose )) && pause "[verbose] Contents of \$clifile: ${clifile:-null}"
 
@@ -668,17 +655,27 @@ fi
 
 (( stats )) && mediainfo "$m4bin"
 
-m4bindur="$("$mediaduration" --only "$m4bin" | sed $'s/\e\\[[0-9;]*m//g')"
+## mediaduration needs to be called with verbose=0 because otherwise it will run in verbose
+## causing the check for a valid duration to fail
+m4bindur="$(verbose=0 "$mediaduration" --only "$m4bin" | sed $'s/\e\\[[0-9;]*m//g')"
 (( verbose )) && pause "[verbose] \$m4bindur: ${m4bindur:-null}"
 
 ! [[ "$m4bindur" =~ ^[0-9]{2,3}\:[0-9]{2}\:[0-9]{2}$ ]] &&
      { printf 'The m4b input duration ($m4bindur) is not correct: %s\nInvestigate. (exit 1)\n\n' "$m4bindur";
        exit 1; }
 
-printf '\n%sStarting .m4b file: %s%s%s\n' "$bold" "$red" "$m4bin" "$tput0"
-printf '%sStarting duration :%s' "$bold" "$tput0"
-printf ' %s%s%s\n' "$boldred" "$m4bindur" "$tput0"
-[[ "$m4bin" = *\ --\ Audiobook.m4b ]] && title="${m4bin% -- *}" || title="${m4bin%.m4b}"
+if (( mp3 )); then
+  printf '\n%sStarting indexed .mp3 file: %s%s%s\n' "$bold" "$red" "$m4bin" "$tput0"
+  printf '%sStarting duration :%s' "$bold" "$tput0"
+  printf ' %s%s%s\n' "$boldred" "$m4bindur" "$tput0"
+  [[ "$m4bin" = *\ --\ Audiobook.mp3 ]] && title="${m4bin% -- *}" || title="${m4bin%.mp3}"
+else
+  printf '\n%sStarting .m4b file: %s%s%s\n' "$bold" "$red" "$m4bin" "$tput0"
+  printf '%sStarting duration :%s' "$bold" "$tput0"
+  printf ' %s%s%s\n' "$boldred" "$m4bindur" "$tput0"
+  [[ "$m4bin" = *\ --\ Audiobook.m4b ]] && title="${m4bin% -- *}" || title="${m4bin%.m4b}"
+fi
+
 ititle="$iton$title$itoff"
 swd="$(pwd)"
 convertdir="$CACHE/m4b2opus-$title"

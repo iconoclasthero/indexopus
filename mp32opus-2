@@ -68,7 +68,7 @@ filecheck(){
 
   ! (( force )) && [[ -f "$clifile" ]] &&
   (( $(ffprobe -v error -show_chapters "$clifile" | grep -c '^\[CHAPTER\]$') > 1 )) &&
-  { printf '%s has an index!\n' "$clifile"; return 1; }
+  { printf '%s has an index!\n' "$clifile"; indexed=1; return 2; }
 
   if ! [[ -w . ]]; then
     printf '\n[WARN] The pwd\n(%s)\n is not writable; attempting to take ownership.\n\n' "$(pwd)"
@@ -177,7 +177,17 @@ set +H  ## turns set histexpand off to prevent !}" below from throwing errors in
                         printf ' %s\n' "${allmp3[@]:-No .mp3 files found!}"
                         printf '\n%s' "$white"; }
 
-! filecheck "${clipath:-""}" && { printf 'The files failed the filecheck function!\nInvestigate (exit 1)\n.'; exit 1; }
+if ! filecheck "${clipath:-""}"; then
+  if (( indexed )); then
+    (( screened )) && args+=( "-s" )
+    printf 'The .mp3 file has an index, calling m4b2opus %s\n' "${args[*]:1}"
+    exec m4b2opus "${args[@]:1}"
+    exit "$?"
+  else
+    printf 'The files failed the filecheck function!\nInvestigate (exit 1)\n.'
+    exit 1
+  fi
+fi
 
 printline "$bold  Welcome to ${0##*\/}  $tput0"
 printf \\n
