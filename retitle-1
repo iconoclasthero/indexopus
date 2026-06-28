@@ -1,0 +1,97 @@
+#!/bin/bash
+
+set -euo pipefail
+
+shopt -s nullglob
+
+files=( *.mp3 *.m4a *.m4b )
+
+(( ${#files[@]} == 0 )) && {
+  echo "No supported files found."
+  exit 1
+}
+
+########################################
+# extract title from file
+########################################
+get_title() {
+  ffprobe -v quiet \
+    -show_entries format_tags=title \
+    -of default=nk=1:nw=1 \
+    "$1" 2>/dev/null
+}
+
+########################################
+# step 1: collect titles
+########################################
+titles=()
+missing=0
+
+for f in "${files[@]}"; do
+  t="$(get_title "$f")"
+
+  if [[ -z "$t" ]]; then
+    missing=1
+  fi
+
+  titles+=( "$t" )
+done
+
+########################################
+# step 2: check if already normalized
+########################################
+first="${titles[0]}"
+
+all_same=1
+for t in "${titles[@]}"; do
+  [[ "$t" != "$first" ]] && all_same=0
+done
+
+########################################
+# early exit if clean
+########################################
+if (( all_same && !missing )); then
+  echo "Preflight: titles already normalized → skipping."
+  exit 0
+fi
+
+########################################
+# step 3: get canonical title
+########################################
+title="$(gum input \
+  --value="${PWD##*/}" \
+  --header "Enter canonical title for all files:" )"
+
+[[ -z "$title" ]] && {
+  echo "No title provided."
+  exit 1
+}
+
+########################################
+# step 4: apply via ffmpeg
+########################################
+for f in "${files[@]}"; do
+  ext="${f##*.}"
+  tmp="${f%.*}.tmp.${ext}"
+
+  ffmpeg -y -i "$f" \
+    -c copy \
+    -metadata title="$title" \
+    "$tmp" >/dev/null 2>&1
+
+  mv "$tmp" "$f"
+done
+
+########################################
+# step 5: verify
+########################################
+for f in "${files[@]}"; do
+  t="$(get_title "$f")"
+  if [[ "$t" != "$title" ]]; then
+    echo "Verification failed on: $f"
+    exit 1
+  fi
+done
+
+echo "Preflight complete: all files normalized."
+exit 0
