@@ -1428,16 +1428,6 @@ if [[ -f ./"$output" ]] && [[ "$rmmatch" != true ]]; then
   fi
 fi
 
-
-#[[ "$opuspartdur" ]] && duration="$opuspartdur" ||
-##also changing what its using for part digits here to just straight fuckin' parts:
-##           duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
-#           duration=$(find . -type f \( -iname "$title -- Part *: *.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
-#           xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
-#           perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
-#           tail -n 1)
-
-
 if [[ "$opuspartdur" ]]; then
   duration="$opuspartdur"
 else
@@ -1448,12 +1438,22 @@ else
   fi
 
 (( verbose )) && pause "findtitle=$findtitle"
-#also changing what its using for part digits here to just straight fuckin' parts:
-#           duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
-           duration=$(find . -type f \( -iname "$findtitle -- Part *: *.opus" -o -iname "$findtitle -- Part ???:*.opus" \) -print0 |
-           xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
-           perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
-           tail -n 1)
+##also changing what its using for part digits here to just straight fuckin' parts:
+##           duration=$(find . -type f \( -iname "$title -- Part ??:*.opus" -o -iname "$title -- Part ???:*.opus" \) -print0 |
+#           duration=$(find . -type f \( -iname "$findtitle -- Part *: *.opus" -o -iname "$findtitle -- Part ???:*.opus" \) -print0 |
+#           xargs -0 mplayer -vo dummy -ao dummy -identify 2>/dev/null |
+#           perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' |
+#           tail -n 1)
+
+## Mon Jul  6 08:03:55 PM EDT 2026
+## can delete the above comented section
+## 1. unclear about 2nd -o -iname; looks like it's a hangover from the change above and can be removed
+## 2. using -print0 and readarray -d '' because it allows for issues with filenames to be handled better
+## the -d '' is what accepts the null-delmited list from `find ... -print0`
+
+           readarray -d '' -t durarray < <(find . -type f \( -iname "$findtitle -- Part *: *.opus" -o -iname "$findtitle -- Part ???:*.opus" \) -print0)
+           duration="$(mediaduration -o "${durarray[@]}")"
+           unset durarray
 fi
 
 
@@ -1582,7 +1582,7 @@ if [[ -f "$output" ]] && eval command -v mediainfo &> /dev/null; then
   outdur="$(echo "$outdur" | perl -nle '/([0-9\.]+)/ && ($t += $1) && printf "%02d:%02d:%02d\n", $t/3600000, ($t/60000)%60, ($t/1000)%60')"
 
   data=( "${bold}Duration(s):${tput0}"
-         "${red}${bold} $duration ${tput0}${ititle} -- Part .*opus $tput0"
+         "${red}${bold} $duration ${tput0}${ititle} -- Part *.opus $tput0"
          "${red}${bold} $outdur ${tput0}${ititle} -- Audiobook.opus $tput0")
 
   # Print the aligned data using column, right justifying durations

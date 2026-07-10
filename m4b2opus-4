@@ -106,7 +106,7 @@ fnrmr(){
 ##--> fnrmr() <--###################################################################################
 
 filecheck(){
-(( verbose )) && printf '[verbose] Entering filecheck().\n'
+(( verbose )) && printf '[verbose] Entering filecheck function.\n'
   ## not sure what to do here.  need to see the scope of these variables:
   local clifilename clipath startm4a mvoutput mvec
   ## is this failing with -t?:
@@ -162,61 +162,69 @@ filecheck(){
 
 (( verbose )) && read -rp "[verbose] \${files[@]}: $(printf %s\\n "${files[@]}")"
 
-    if (( "${#files[@]}" == 1 )); then
+  if (( "${#files[@]}" == 1 )); then
 
-      # to handle the case where there's an unindexed m4a or a misnamed m4b,
-      # for simplicity sake, just rename to m4b
-      # probably want to change it back at the end, but it is going to get deleted anyway
-      if [[ "${files[0]}" = *.m4a ]]; then
-        startm4a="${files[0]}"
-        startfile="$startm4a"
-        files[0]="${files[0]%.m4a}.m4b"
-        mv "$startm4a" "${files[0]}"
-        (( "$?" )) && { printf 'The starting file was an m4a which could not be renamed to m4b:\n mv %s %s\nInvestigate. (return 1)' "${startm4a@Q}" "${files[0]@Q}"; return 1; }
-      fi
-
-      if [[ "${files[0]}" = *\ --\ Audiobook.m4b ]]; then
-        m4bin="${files[0]}"
-      elif [[ "${files[0]}" = *.m4b ]]; then
-        m4bin="${files[0]}"
-        mvec="$?"
-        if (( mvec > 0 )); then
-          if [[ "$mvoutput" = "mv: cannot move "*": Permission denied" ]]; then
-            own && mv "${files[0]}" "$m4bin" || { printf 'Unable to gain write permission for %s. exit 1\n\n' "${files[@]}"; exit 1; }
-          else
-            printf 'Unknown error renaming %s. exit 1\n\n' "${files[@]}"
-            exit 1
-          fi
-        fi
-      elif [[ "${files[0]}" = *.mp3 ]]; then
-        printf 'WARNING, YOU APPARENTLY HAVE AN INDEXED .mp3 FILE. PROCESSING THESE FILES IS EXPERIMENTAL!\n'
-        mp3=1
-        m4bin="${files[0]}"
-      else
-        printf 'The file passed to the script was not an *.m4[a|b] or *.mp3:\n %s\n \nInvestigate. (return 1)\n' "$1"
-        return 1
-      fi
-    else
-      printf 'No single m4b/m4a input file found or specified, please check and retry...\n\n'
-      eza -laa --no-user
-      printf '\n(exit 1)\n\n'
-      exit 1
+    # to handle the case where there's an unindexed m4a or a misnamed m4b,
+    # for simplicity sake, just rename to m4b
+    # probably want to change it back at the end, but it is going to get deleted anyway
+    if [[ "${files[0]}" = *.m4a ]]; then
+      startm4a="${files[0]}"
+      startfile="$startm4a"
+      files[0]="${files[0]%.m4a}.m4b"
+      mv "$startm4a" "${files[0]}"
+      (( "$?" )) && { printf 'The starting file was an m4a which could not be renamed to m4b:\n mv %s %s\nInvestigate. (return 1)' "${startm4a@Q}" "${files[0]@Q}"; return 1; }
     fi
 
-(( verbose )) && { printf '[verbose] Leaving filecheck():\n'; printf '          pwd: %s\n' "$(pwd)"; pause "          \$m4bin: $m4bin"; }
-#  fi
-return 0
+    if [[ "${files[0]}" = *\ --\ Audiobook.m4b ]]; then
+      m4bin="${files[0]}"
+    elif [[ "${files[0]}" = *.m4b ]]; then
+      m4bin="${files[0]}"
+      mvec="$?"
+      if (( mvec > 0 )); then
+        if [[ "$mvoutput" = "mv: cannot move "*": Permission denied" ]]; then
+          own && mv "${files[0]}" "$m4bin" || { printf 'Unable to gain write permission for %s. exit 1\n\n' "${files[@]}"; exit 1; }
+        else
+          printf 'Unknown error renaming %s. exit 1\n\n' "${files[@]}"
+          exit 1
+        fi
+      fi
+    elif [[ "${files[0]}" = *.mp3 ]]; then
+      printf 'WARNING, YOU APPARENTLY HAVE AN INDEXED .mp3 FILE. PROCESSING THESE FILES IS EXPERIMENTAL!\n'
+      mp3=1
+      args+=( "--mp3" )
+      m4bin="${files[0]}"
+    else
+      printf 'The file passed to the script was not an *.m4[a|b] or *.mp3:\n %s\n \nInvestigate. (return 1)\n' "$1"
+      return 1
+    fi
+  else
+    printf 'No single m4b/m4a input file found or specified, please check and retry...\n\n'
+    eza -laa --no-user
+    printf '\n(exit 1)\n\n'
+    exit 1
+  fi
+
+  if [[ "${files[0]}" = *\[* || "${files[0]}" = *\]* ]]; then
+    printf 'There may be an issue with file names which contain []\n'
+    read "Press any key to continue..."
+  fi
+
+(( verbose )) && { printf '[verbose] Leaving filecheck function:\n'; printf '          pwd: %s\n' "$(pwd)"; pause "          \$m4bin: $m4bin"; }
+  return 0
 }
 ##--> filecheck() <--#################################################################################
 
 m4bsplit(){
-## Original code from: http://crunchbang.org/forums/viewtopic.php?id=38748#p414992
-## m4bronto
-  local bpath outputdir START first start end partnum n chapter max_digits outfile
+## Original code from: http://crunchbang.org/forums/viewtopic.php?id=38748#p414992 @ m4bronto
+## some notes: a lot of this |wc -l stuff is to account for the number of bytes of utf-8 "characters"
+## e.g., the "…" and anything else that's lurking. if it doesn't work later, it's probably something to do with that
+## or not properly accounting for all the possible UTF-8 stuff lurking in the title or chapter name
+
+  local bpath outputdir START first start end partnum n chapter max_digits outfile outfilename outfilenames maxname
+  local localtitle="$title"
   outputdir="$2"
   START=1
   bpath="$(basename "$(pwd)")"
-#  ffmpeg -i file:"$1" 2> "/tmp/.tmp$stamp"
   ffprobe -i file:"$1" 2> "/tmp/.tmp$stamp"
 
   chapters=$(grep -cE 'Chapter #[[:digit:]]:[[:digit:]]{1,3}: start' "/tmp/.tmp$stamp")
@@ -229,18 +237,82 @@ m4bsplit(){
       read  # discard the Metadata line
       read _ _ chapter
 
-      chapter="${chapter//\//\\}"  # Escape slashes in chapter titles
+      chapter="${chapter//\//\\}"  # Escape slashes in chapter localtitles
+      [[ -z "$chapter" ]] && printf -v chapter "Chapter %0${max_digits}d" "$n"
+      partnum=$(printf "%0${max_digits}d" "$n")
+      outfilename="$localtitle -- Part $partnum: $chapter.ext"
+      outfilenames+=( "$outfilename" )
+      (( n++ ))
+    fi
+  done < "/tmp/.tmp$stamp"
+
+  fixedchars=" -- Part $partnum: .ext"
+  fixedchars="${#fixedchars}"
+  for i in "${outfilenames[@]}"; do
+      bytes="$( printf %s "$i" |wc -c )"
+    if (( bytes > 255 )); then
+      (( bytes > maxname )) && maxname="$bytes"
+      chapterchar=$(( "$bytes" - fixedchars - "${#localtitle}" ))
+      (( chapterchar > maxchapter )) && maxchapter="$chapterchar"
+    fi
+  done
+
+  if (( maxname )); then
+    localtitlebytes="$( printf '%s…' "$localtitle" |wc -c)"
+    ## '%s…' accounts for an elipse for the localtitle
+    overchars=$(( localtitlebytes + maxchapter + fixedchars - 255 ))
+    minlocaltitle=25
+
+    titlecut="$overchars"
+#echo "overchars: $overchars"
+#echo "titlecut: $titlecut"
+#echo "localtitlebytes $localtitlebytes"
+    maxtitlecut=$(( localtitlebytes - minlocaltitle ))
+    (( maxtitlecut < 0 )) && maxtitlecut=0
+#echo "maxtitlecut: $maxtitlecut"
+    (( titlecut > maxtitlecut )) && titlecut="$maxtitlecut"
+#echo "titlecut: $titlecut"
+    localtitle="${localtitle:0:${#localtitle}-titlecut}"
+
+    (( titlecut )) && localtitle+="…"
+
+    chapterlimit=$(( 255 - fixedchars - "$( printf '%s' "$localtitle" | wc -c )" ))
+#read -rp "chapterlimit: $chapterlimit"
+    ## remved the '%s…' in the printf above so that it doesn't strip out the last 3 characters and replace with elipse.
+    ## seems to work
+    ## also fixed chars must be ASCII, not UTF-8
+    ## there's still some char/byte mismatch in localtitle
+  fi
+
+
+  n="$START"
+  while read -r first _ _ start _ end; do
+    if [[ "$first" == "Chapter" ]]; then
+      read  # discard the Metadata line
+      read _ _ chapter
+
+      chapter="${chapter//\//\\}"  # Escape slashes in chapter localtitles
       [[ -z "$chapter" ]] && printf -v chapter "Chapter %0${max_digits}d" "$n"
       partnum=$(printf "%0${max_digits}d" "$n")
 
-      if (( ${#chapter} > 200 )); then
-        chapter="${chapter:0:200}…"  # Truncate chapter title to 100 characters
+#      if (( chapterlimit && $(printf %s chapter|wc -c) > chapterlimit )); then
+#        limitwithelipse=$((chapterlimit - $(printf …|wc -c)))
+#        chapter="${chapter:0:limitwithelipse}…"  # Truncate chapter localtitle to chapterlimit characters
+#      fi                                         # but this slices by bytes not characters...
+
+      ## A safer version is to trim by characters until the byte count fits:
+      ## chapterlimit is a byte budget, not a character count
+      if (( chapterlimit && $(printf '%s' "$chapter" | wc -c) > chapterlimit )); then
+        while (( $(printf '%s…' "$chapter" | wc -c) > chapterlimit )); do
+          chapter="${chapter%?}"
+        done
+        chapter+="…"
       fi
 
       if (( mp3 )); then
-        outfile="$outputdir/$title -- Part $partnum: $chapter.mp3"
+        outfile="$outputdir/$localtitle -- Part $partnum: $chapter.mp3"
       else
-        outfile="$outputdir/$title -- Part $partnum: $chapter.m4a"
+        outfile="$outputdir/$localtitle -- Part $partnum: $chapter.m4a"
       fi
 
       printf '%sCreating %s\n' "$relipsis" "$outfile"
@@ -437,8 +509,10 @@ while (( $# > 0 )); do
   [[ "$1" =        "--leave" ]] && { args+=("$1"); leave=1; shift; continue; }
   [[ "$1" =         "--save" ]] && { args+=("$1"); save=1; shift; continue; }
   [[ "$1" =        "--stats" ]] && { args+=("$1"); stats=1; shift; continue; }
+  [[ "$1" =          "--mp3" ]] && { args+=("$1"); mp3=1; shift; continue; }
   [[ "$1" =      "--checked" ]] && { checked=1; shift; continue; }
   [[ "$1" =         "--fuse" ]] && { fusecheck=1; shift; continue; }  ## disable fusecheck (systems local)
+  [[ "$1" =  "--ignoreindex" ]] && { ignoreindex=1; shift; continue;}
   [[ "$1" =   @(--screen|-s) ]] && { screened=1; shift; continue; }
   [[ "$1" = @(-|--)@(ys|yes) ]] && { (( rmmatch=screened=1 )); args+=(--save); shift; continue; }
   [[ "$1" = @(-|--)@(Ys|Yes) ]] && { (( rmmatch=screened=1 )); args+=(-Y); shift; continue; }
@@ -448,7 +522,7 @@ while (( $# > 0 )); do
   [[ -f "$1" || -d "$1" ]] && (( checked )) && { clifile="$1"; args+=("$clifile"); shift; continue; }
   [[ -f "$1" || -d "$1" ]] && { clifile="$(realpath "$1")"; args+=("$clifile"); shift; continue; }
 ## maybe the clifle="$1" if --checked is set?  is that even something that can be done? yes, but it requires a lot more processing in the event that checked is after clifile.  maybe that doesn't matter since the user should not be calling --checked.
-## the question becomes, what happens if i'm calling m4bin from a different directory?  i guess filecheck() should be changing directory and providing a valid $m4bin regardless?
+## the question becomes, what happens if i'm calling m4bin from a different directory?  i guess filecheck function should be changing directory and providing a valid $m4bin regardless?
   [[ "$1" = "--sleep" ]] && { [[ "$2" =~ [0-9]+(m|h)? ]] && { sleepfn "$2" && shift 2; }; continue; }
   [[ "$1" = "" ]] && { shift; continue; }
   { printf '%s is unrecognized.\n' "$1"; shift;
@@ -477,7 +551,7 @@ else
        done
     args+=("$m4bin")  ##this is primarily for when it's screened.
   else
-    printf 'The files failed filecheck()!\nInvestigate (exit 1)\n.'
+    printf 'The files failed filecheck function!\nInvestigate (exit 1)\n.'
     exit 1
   fi
 fi
@@ -506,7 +580,7 @@ if (( screened )); then
     printf 'Contents of ${args[@]} after removing -v and compacting: %s\n' "${args[@]}"
   fi
 
-## this method is probably not ideal...  if m4b2opus is called from screen then using either "$STY" or any of the flags for calling to screen  are not ideal...  what we want is to not call screen recursively (so don't put them in the args) but to not rerun filecheck() unnecessarily
+## this method is probably not ideal...  if m4b2opus is called from screen then using either "$STY" or any of the flags for calling to screen  are not ideal...  what we want is to not call screen recursively (so don't put them in the args) but to not rerun filecheck function unnecessarily
 ## using the --checked flag and $checked flag variable seem to accomplish this.
 #  for i in "${!args[@]}"; do
 #    [[ "${args[i]}" = @(@(-s|--screen)|@(-|--)@(ys|yes|Ys|Yes)) ]] && unset 'args[i]'
@@ -556,6 +630,9 @@ elif [[ "$m4bin" = *.m4a ]]; then
   m4binext="m4a"
 elif [[ "$m4bin" = *.mp3 ]]; then
   m4binext="mp3"
+#  ! (( mp3 )) && mp3=1
+## this is a valid saftey check here as it does catch the issue, but filecheck should be adding this to args[]
+## for screened to use...
 else
   printf 'Error in assigning m4binext from %s.\nInvestigate.\n(exit 1)' "$m4bin"
   exit 1
@@ -588,7 +665,7 @@ fi
 #if ! [[ $(mediainfo "$m4bin"|grep Menu\ \#) =~ ^Menu ]]; then  #process unindexed m4b files
 #if ! [[ $(mediainfo "$m4bin"|grep Menu\ \#) =~ ^Menu ]] && ! [[ $(mediainfo "$m4bin"|grep Menu\ For) =~ ^Menu\ For ]]; then  #process unindexed m4b files
 #if ! mediainfo "$m4bin"|\grep -Eq ^Menu\ For\|^Menu\ \#; then
-if (( $(ffprobe -i "$m4bin" -show_chapters -loglevel error | grep -c '^\[CHAPTER\]') < 2 )); then
+if (( ignoreindex || $(ffprobe -i "$m4bin" -show_chapters -loglevel error | grep -c '^\[CHAPTER\]') < 2 )); then
 (( verbose )) && pause "[verbose] calling \`noindexsplit $m4bin $convertdir\`"
   noindexsplit "$m4bin" "$convertdir"
 else
