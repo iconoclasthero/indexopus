@@ -575,7 +575,7 @@ if (( screened )); then
   if (( verbose )) && confirm -y "$0 was called to screen with verbose on.\nThis may result in stops in the script while in screen.\nTurn verbose off?"; then
     printf \\n\\n
     for i in "${!args[@]}"; do
-      [[ "${args[i]}" = '-v' ]] && unset 'args[i]'
+      [[ "${args[i]}" = '-v' || "${args[i]}" = '--verbose' ]] && unset 'args[i]'
     done
     args=("${args[@]}")       ## compact array done below
     printf 'Contents of ${args[@]} after removing -v and compacting: %s\n' "${args[@]}"
