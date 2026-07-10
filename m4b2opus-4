@@ -561,6 +561,7 @@ fi
 (( verbose )) && printf '[verbose] Status of $save: %s\n' "$save"
 (( verbose )) && printf '[verbose] Status of $screened: %s\n' "$screened"
 (( verbose )) && printf '[verbose] Status of $stats: %s\n' "$stats"
+(( verbose )) && printf '[verbose] Status of $mp3: %s\n' "$mp3"
 (( verbose )) && printf '[verbose] Status of $no: %s\n' "$no"
 (( verbose )) && printf '[verbose] Status of $m4bin: %s\n' "$m4bin"
 (( verbose )) && printf '[verbose] Result of pwd: %s\n' "$(pwd)"
