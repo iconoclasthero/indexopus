@@ -32,6 +32,8 @@ source <(sourcefn -l /usr/local/bin/indexopus.lib -f sex2sec -f printline -f con
 
 filecheck(){
 (( verbose )) && printf '[verbose] Entering %s().\n' "$FUNCNAME"
+(( verbose )) && printf '[verbose] $1: %s\n' "$1"
+(( verbose )) && printf '[verbose] ${allfiles[@]}:\n%s\n' "$(printf '  %s\n' "${allfiles[@]}")"
   local clifilepath clipath clidir clifile mvoutput mvec writable unwritable ## not sure what to do here.  need to see the scope of these variables.
   if [[ ! "$1" ]]; then
     until (( writable )); do
@@ -51,7 +53,7 @@ filecheck(){
 
 ## This is more than a little problematic:
 #  (( "${#allfiles[@]}" )) && for i in "${allfiles[@]}"; do own "$i"; done
-
+(( verbose )) && printf '[verbose] $1: %s\n' "$1"
   [[ -e "$1" ]] && clifilepath="$(realpath "$1")"  #if a filename is passed via the cli.  this doesn't work anymore now with -t??
 
 (( verbose )) && echo "[verbose] \$clifilepath is $clifilepath"
