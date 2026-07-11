@@ -658,7 +658,8 @@ swd="$(pwd)"
 
 ## probably here to remove \'s for ffmpeg but not sure:
 convertdir="$(mktemp --directory --tmpdir="$CACHE" "m4b2opus-${title//\'}-XXXXXX")" ||
-  { printf 'Failed to create temporary directory for %s. Investigate\n(exit 1)\n\n' "$0"; exit 1; }
+  { printf '[Error] Failed to create temporary directory for %s in %s. Investigate\n(exit 1)\n\n' "$title" "$0"
+    exit 1; }
 (( verbose )) && pause "[verbose] \$convertdir: $convertdir"
 
 #(( sleepon )) && { printf '\nSleeping for %s%s%s per cli flag...\n' "$boldred" "$sleepdur" "$tput0"; sleep "$sleepdur"; }
