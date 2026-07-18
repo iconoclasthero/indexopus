@@ -204,11 +204,6 @@ filecheck(){
     exit 1
   fi
 
-  if [[ "${files[0]}" = *\[* || "${files[0]}" = *\]* ]]; then
-    printf 'There may be an issue with file names which contain []\n'
-    read "Press any key to continue..."
-  fi
-
 (( verbose )) && { printf '[verbose] Leaving filecheck function:\n'; printf '          pwd: %s\n' "$(pwd)"; pause "          \$m4bin: $m4bin"; }
   return 0
 }

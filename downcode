@@ -167,21 +167,48 @@ for i in *flac; do
   # fi
   fi
 
-  if (( Hz != 48000 )) && (( Hz != 41000 )); then
+#  if (( Hz != 48000 )) && (( Hz != 44100 )); then
+#    printf 'The sample rate is %s Hz.\n' "$Hz"
+#    if (( Hz > 48000 )) && ! "${changerate:=false}" ; then
+#      if yn "Do you want to set the sample rate to 48000 Hz?"; then
+#        Hz=48000
+#        changerate=true
+#      else
+#        printf 'Please investigate. (exit 1)'
+#        exit 1
+#      fi
+#    elif (( Hz > 48000 )) && "${changerate:=false}"; then
+#      Hz=48000
+#    fi
+#  fi
+
+
+  ## This change will let the script pick a multiple of 44.1 or 48 kHz
+  ## instead of forcing everything to 48 kHz regardless.
+  # Check if the rate isn't already a base consumer standard
+  if (( Hz != 48000 )) && (( Hz != 44100 )); then
     printf 'The sample rate is %s Hz.\n' "$Hz"
-    if (( Hz > 48000 )) && ! "${changerate:=false}" ; then
-      if yn "Do you want to set the sample rate to 48000 Hz?"; then
-        Hz=48000
-        changerate=true
+
+    # Dynamically determine the target based on mathematical family
+    if (( Hz % 48000 == 0 )); then
+      targetHz=48000
+    else
+      # Fallback for multiples of 44.1 kHz and non-standard rates (e.g. old 32kHz or weird audio)
+      targetHz=44100
+    fi
+
+    if (( Hz > targetHz )) && ! "${changerate:=false}" ; then
+      if yn "Do you want to set the sample rate to $targetHz Hz?"; then
+        Hz="$targetHz"
+        changerate=true # Set the flag so the rest of the loop skips prompting
       else
-        printf 'Please investigate. (exit 1)'
-        exit 1
+        printf 'User abord. (exit 130)\n'
+        exit 130
       fi
-    elif (( Hz > 48000 )) && "${changerate:=false}"; then
-      Hz=48000
+    elif (( Hz > targetHz )) && "${changerate:=false}"; then
+      Hz="$targetHz"
     fi
   fi
-
 
   if [[ "$i" = *.24.flac ]]; then
     flac24="$i"
