@@ -46,18 +46,19 @@ elif ! command -v ffprobe &> /dev/null; then
 fi
 
 # check for flacs first
-printf 'Current directory is %s\nChecking for flacs and permissions...\n' "$(pwd)"
+printf '\nCurrent directory is:\n %s%s%s\n\n' "$boldred" "$(pwd)" "$tput0"
+printf 'Checking for flacs and permissions...\n\n'
 flacs=(*flac)
 [[ "$flacs" = '*flac' ]] && { printf '\n[%sERROR%s] %sNo flacs in the present working directory!%s\nPlease check and try again.\n(exit 1)\n' "$boldred" "$tput0" "$bold" "$tput0"; exit 1; }
 
 # check if pwd is sshfs mount
 findmnt -T . | grep -q "fuse.sshfs" && unset SUDO && fuse=true
 if "${fuse:=false}"; then
-  printf 'On an sshfsmount.\n'
+  printf '%sOn an sshfsmount!%s\n\n' "$boldred" "$tput0"
   touchout="$(touch boobs 2>&1)"; fusetouch="$?"
   ! (( fusetouch )) && rm boobs
 else
-  printf 'Not on an sshfsmount.\n'
+  (( verbose )) && printf 'Not on an sshfsmount.\n\n'
 fi
 
 # check for directory permissions
@@ -188,21 +189,28 @@ for i in *flac; do
   # Check if the rate isn't already a base consumer standard
   if (( Hz != 48000 )) && (( Hz != 44100 )); then
     printf 'The sample rate is %s Hz.\n' "$Hz"
+    # Fallback for multiples of 44.1 kHz and non-standard rates (e.g. old 32kHz or weird audio)
+    targetHz=44100
 
     # Dynamically determine the target based on mathematical family
     if (( Hz % 48000 == 0 )); then
       targetHz=48000
+      printf 'The file sample rate is a multiple of 48 kHz...\n'
+    elif (( Hz % 44100 == 0 )); then
+      printf 'The file sample rate is a multiple of 44.1 kHz...\n'
     else
-      # Fallback for multiples of 44.1 kHz and non-standard rates (e.g. old 32kHz or weird audio)
-      targetHz=44100
+      printf '%s[%swarn%s%s]%s The file sample rate (%s) is %sNOT%s a multiple of 48 or 44.1 kHz!\n' \
+        "$bold" "$red" "$tput0" "$bold" "$tput0" "$Hz" "$boldred" "$tput0"
+      printf 'Will use %s as the fallback sample rate if you choose to proceed.\n' "$targetHz"
     fi
 
     if (( Hz > targetHz )) && ! "${changerate:=false}" ; then
+      printf \\n
       if yn "Do you want to set the sample rate to $targetHz Hz?"; then
         Hz="$targetHz"
         changerate=true # Set the flag so the rest of the loop skips prompting
       else
-        printf 'User abord. (exit 130)\n'
+        printf '\nUser aborted. (exit 130)%s\n\n' "$tput0"
         exit 130
       fi
     elif (( Hz > targetHz )) && "${changerate:=false}"; then
