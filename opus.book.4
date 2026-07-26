@@ -343,8 +343,10 @@ done
 ## SET UP opus.book.4 TEMP DIRECTORY
 
 stamp="$(date +%s)"
-tmp="${tmpdir:-"/tmp/opus.book.4-$stamp"}"
-pidfile="$tmp/opus.book.pids"
+tmpd="${tmpdir:-"/tmp/opus.book.4-$stamp"}"
+tmp="${tmpd/opus.book.4-$stamp}"
+mkdir "$tmpd"
+pidfile="$tmpd/opus.book.pids"
 
 if [[ "$clifile" && ! -f "$clifile" && "$clifile" != $mediaext ]] || (( "${#mediafiles[@]}" == 0 ))  #Do not quote $mediaext as it contains a wildcard
   then
