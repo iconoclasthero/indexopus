@@ -9,7 +9,6 @@ source ~/.config/indexopus.conf
 
 # Invokes breakout function upon INT/^C
 trap '{ breakout -B; exit 1; }' INT
-pidfile="/tmp/.opus.book.pids"
 : "${CACHE:="/cache/"}"
 : "${cache:=$CACHE}"
 
@@ -34,9 +33,10 @@ red="$(tput setaf 1)"
 relipsis="$red..."
 tput0="$(tput sgr0)"
 
-
-stamp="$(date +%s)"
-tmp="/tmp/opus.book.4-$stamp"
+## moving this to below the flag processing block:
+# stamp="$(date +%s)"
+# tmp="/tmp/opus.book.4-$stamp"
+# pidfile="$tmp/opus.book.pids"
 
 ## load functions #############################################################################
 ## editscript()
@@ -177,8 +177,6 @@ breakout(){
 
   while IFS= read -r pid
    do
-#     [[ "$pid" = *"$script"* ]] || [[ "$pid" = *ffmpeg* ]] &&
-#       pidarray+=( "$(echo "${pid% pts*}" |tee -a "$pidfile")" )
       [[ "$other" && "$pid" = *"$other"* ]] || [[ "$pid" = *"$script"* ]] || [[ "$pid" = *ffmpeg* ]] && echo "${pid% pts*}" >> "$pidfile"
       (( array )) && [[ "$pid" = *ffmpeg* ]] && pidarray+=( "${pid% pts*}" )
   done< <(ps --tty $(tty) Sf)
@@ -278,38 +276,6 @@ progress() {
 ##--> progress() <--###########################################################################
 
 
-#while [[ "${indur%:*}" != "${opusdur%:*}" ]] &&
-#  (( $(sex2sec "$opusdur") + 20 < $(sex2sec "$indur") ));
-#  if [[ "$first_call" != false ]]; then
-#    printf 'Duration of %s files : %s\n' "$startext" "$indur"
-#    first_call=false
-#  else
-#    if [[ "$opuspresent" != true ]]; then
-#      ck4files=( *opus )
-#      [[ "$ck4files" ]] && opusdur="$(mediaduration opus)" && opuspresent="true"
-#    else
-#      opusdur="$(mediaduration opus)"
-#    fi
-#    tput cuu1 # Move cursor up one more line
-#    tput el   # Clear the current line
-#    tput cuu1 # Move cursor up one more line
-#    tput el   # Clear the current line
-#  fi
-#  printf 'Duration of .opus files: %s\n' "$opusdur"
-#  [[ "$opusdur" ]] &&
-#  progress_bar_sexagesimal "$opusdur" "$indur"
-#  echo
-#  \sleep 10s
-#done ; }
-#
-
-
-###--> progress() <--#########################################################################
-
-
-
-
-
 ###--> Main Code <--###########################################################################
 ###--> opus.book.4 <--#########################################################################
 
@@ -374,6 +340,11 @@ while (( $# > 0 )); do
   { printf '%s is not a recognized cli option.\nContinue with %s?' "$1" "$0"; confirm -Y && shift && continue || exit 1; }
 done
 
+## SET UP opus.book.4 TEMP DIRECTORY
+
+stamp="$(date +%s)"
+tmp="${tmpdir:-"/tmp/opus.book.4-$stamp"}"
+pidfile="$tmp/opus.book.pids"
 
 if [[ "$clifile" && ! -f "$clifile" && "$clifile" != $mediaext ]] || (( "${#mediafiles[@]}" == 0 ))  #Do not quote $mediaext as it contains a wildcard
   then
@@ -382,7 +353,7 @@ if [[ "$clifile" && ! -f "$clifile" && "$clifile" != $mediaext ]] || (( "${#medi
   exit 1
 fi
 
-rm /tmp/mytmpfile .opus.book.pids "$pidfile" 2>/dev/null  	# clean any old files that will be in the way
+rm "$pidfile" 2>/dev/null  	# clean any old files that will be in the way
 ## this doesn't need to be done a second time:
 #startext=( ${mediaext} ); startext="${startext##*.}"		# define what the starting extension is in dir
 ## when there can't be more than one ext in the directory from the chech above.  just define startext as:
@@ -505,7 +476,7 @@ fi
 
 (( stats )) && stats
 
-rm /tmp/mytmpfile "$tmp" .opus.book.pids "$pidfile" 2>/dev/null
+rm "$tmp" "$pidfile" 2>/dev/null
 echo
 printline "$bold  Exiting (0) $white $script  $tput0"
 echo
