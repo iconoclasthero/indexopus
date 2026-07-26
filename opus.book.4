@@ -344,7 +344,7 @@ done
 
 stamp="$(date +%s)"
 tmpd="${tmpdir:-"/tmp/opus.book.4-$stamp"}"
-tmp="${tmpd/opus.book.4-$stamp}"
+tmp="$tmpd/opus.book.4-$stamp"
 mkdir "$tmpd"
 pidfile="$tmpd/opus.book.pids"
 
