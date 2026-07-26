@@ -341,10 +341,8 @@ while (( $# > 0 )); do
 done
 
 ## SET UP opus.book.4 TEMP DIRECTORY
-read -rp "tmpdir $tmpdir"
 stamp="$(date +%s)"
 tmpd="${tmpdir:-/tmp/opus.book.4-$stamp}"
-read -rp "tmpd $tmpd"
 tmp="$tmpd/opus.book.4-$stamp"
 mkdir "$tmpd"
 pidfile="$tmpd/opus.book.pids"
