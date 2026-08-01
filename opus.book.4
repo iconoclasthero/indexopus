@@ -21,6 +21,7 @@ shopt -s extglob nullglob   # as a global option
 scriptpath="$(realpath $0)"
 script="${scriptpath##*\/}"
 
+(( "$THREADS" )) && threads="$THREADS" # allow for env override
 [[ ! "$threads" ]] && threads=4 # number of parallel threads
 bfreq=12 # flashing frequency (( $(date +%s) % bfreq == 0 )) && ...
 rfreq=45 # tput reset frequency...  ca. period...
@@ -326,7 +327,7 @@ fi
 
 
 while (( $# > 0 )); do
-  [[ "$1" = @(edit|e|-e) ]] && editscript
+  [[ "$1" = @(--edit|-e)    ]] && editscript
   [[ "$1" = --tmp           ]] && { tmpdir="$2";   shift 2; continue; }
   [[ "$1" = --cache         ]] && { usecache=1;    shift;   continue; }
   [[ "$1" = @(-v|--verbose) ]] && { verbose=1;     shift;   continue; }
