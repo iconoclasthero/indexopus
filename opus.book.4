@@ -4,6 +4,45 @@
 #set -x
 #trap read DEBUG
 
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  ffmpegopus(){
+    local opusfile    #filtercomplex="compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0"
+#
+#    filtercomplex="compand=attacks=0:decays=0.12:"
+#    filtercomplex+="points=-70/-900|-40/-90|-35/-37|"
+#    filtercomplex+="-21/-18|1/-1|20/-1:"
+#    filtercomplex+="soft-knee=0.03:gain=1.00:volume=-90,"
+#    filtercomplex+="firequalizer=gain_entry='"
+#    filtercomplex+="entry(0,-99);entry(140,0);entry(1000,0);"
+#    filtercomplex+="entry(8000,1);entry(10500,4);entry(12000,5);"
+#    filtercomplex+="entry(14500,-4);entry(19000,-20)',"
+#    filtercomplex+="volume=1.0"
+
+    filtercomplex="compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1: \
+                   soft-knee=0.03:gain=1.00:volume=-90,
+                   firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1); \
+                   entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0"
+
+while [[ "$filtercomplex" = *\ \ * ]]; do filtercomplex="${filtercomplex//  /}"; done
+#read -rp "$filtercomplex"
+
+  [[ ! "$2" ]] && opusfile="${1%.*}.opus"
+  : "${opusfile:=$2}"
+    ffmpeg -n \
+      -nostdin \
+      -hide_banner \
+      -loglevel debug \
+      -stats \
+      -i file:"$1" \
+      -c:a libopus \
+      -b:a 17k \
+      -filter_complex "$filtercomplex" \
+      -frame_duration:a 60 \
+      file:"$opusfile" 2>&1 #| sed -n '/Parsed_/p; /size=/p'
+  }
+  return
+fi
+
 source ~/.config/indexopus.conf
 : "${mediaduration:=/usr/local/bin/mediaduration}"
 
