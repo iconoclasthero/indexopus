@@ -1499,12 +1499,12 @@ ffout="$(ffmpeg -n \
            -stats \
            -f concat \
            -safe 0 \
-           -thread_queue_size 1024 \
            -i file:"$tmp/opusfiles" \
+           -thread_queue_size 1024 \
            -acodec copy \
-           file:"$tmp/$output" \
+           file:"$tmp/$output") \
          |& tail -n1 )"
-
+#read -rp "\$tmp=$tmp; \$output=$output; $(ls -la "$tmp/opusfiles"); \$ffout $ffout" </dev/tty
 #ffout="$(printf %s|tail -n2|head -n1)"
 #ffout="$(printf %s|tail -n2|head -n1)"
 
