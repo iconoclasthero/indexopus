@@ -135,17 +135,17 @@ filecheck(){
     fi
   fi
 
-  if ! [[ -w . ]]; then
+  if ! [[ -w "$PWD" ]]; then
     printf '\n[WARN] The pwd (%s) is not writable;\n  attempting to take ownership.\n\n' "$(pwd)"
     (( verbose )) && pause "$(type own) $(which own)"
-    (( rmmatch )) && { own --force .; :; } || own .
-    if ! [[ -w . ]]; then
-      (( verbose )) && printf '\n[WARN] The `own .` command failed\n\nTrying `sudo chown $USER .`\n\n' &&
-      eza -glaa .
-      if ! sudo -n chown -R "$USER":"${group:-$USER}" .; then
-        (( verbose )) && printf '[WARN] The `sudo -n chown -R "%s":"%s" .` command failed!\n' "$USER" "${group:-$USER}"
-        (( discord )) && discorddm "m4b2opus: Attention required! confirm \`sudo chown \"$USER\" .\`"
-        sudo chown -R "$USER":"${group:-$USER}" . || { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; }
+    (( rmmatch )) && { own --force "$PWD"; :; } || own "$PWD"
+    if ! [[ -w "$PWD" ]]; then
+      (( verbose )) && printf '\n[WARN] The `own "$PWD"` command failed\n\nTrying `sudo chown $USER "$PWD"`\n\n' &&
+      eza -glaa "$PWD"
+      if ! sudo -n chown -R "$USER":"${group:-$USER}" "$PWD"; then
+        (( verbose )) && printf '[WARN] The `sudo -n chown -R "%s":"%s" "$PWD"` command failed!\n' "$USER" "${group:-$USER}"
+        (( discord )) && discorddm "m4b2opus: Attention required! confirm \`sudo chown \"$USER\" $PWD\`"
+        sudo chown -R "$USER":"${group:-$USER}" "$PWD" || { printf '[ERROR] Cannot take ownership of %s. Investigate. (exit 1)\n' "$clipath"; exit 1; }
       fi
     fi
     ! [[ -w . ]] &&

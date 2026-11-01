@@ -65,7 +65,7 @@ script="${scriptpath##*\/}"
 bfreq=12 # flashing frequency (( $(date +%s) % bfreq == 0 )) && ...
 rfreq=45 # tput reset frequency...  ca. period...
 sexpattern='^([0-9]|[0-9][0-9]|[0-9][0-9][0-9]):([0-5]?[0-9]):([0-5]?[0-9])$'   # RegEx pattern to match a sexagesimal:
-mediaext="*.@(flac|mp3|MP3|wav|m4?|ogg|MP4|mp4|wma)"   #DO NOT INCLUDE OPUS FILES IN THIS
+mediaext="*.@(flac|mp3|MP3|wav|m4?|ogg|MP4|mp4|wma|mka)"   #DO NOT INCLUDE OPUS FILES IN THIS
 filtercomplex="compand=attacks=0:decays=0.12:points=-70/-900|-40/-90|-35/-37|-21/-18|1/-1|20/-1:soft-knee=0.03:gain=1.00:volume=-90, firequalizer=gain_entry='entry(0,-99);entry(140,0);entry(1000,0);entry(8000,1);entry(10500,4);entry(12000,5);entry(14500,-4);entry(19000,-20)', volume=1.0"
 
 bold="$(tput bold)"
