@@ -1492,37 +1492,34 @@ dirsize="$((dirsize/1024))"  #convert bytes to KiB  ## changed to 1024 2025-05-1
 
 #[[ "$overwrite" != false ]] && ffout="$(ffmpeg -nostdin -hide_banner -v error -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
 #[[ "$overwrite" != false ]] &&
-ffout="$(ffmpeg -n \
-           -nostdin \
-           -hide_banner \
-           -v info \
-           -stats \
-           -f concat \
-           -safe 0 \
-           -thread_queue_size 1024 \
-           -i file:"$tmp/opusfiles" \
-           -acodec copy \
-           file:"$tmp/$output" \
-         |& tail -n1 )"
 
-(( verbose == 2 )) &&
-         ffmpeg -n \
-           -nostdin \
-           -hide_banner \
-           -v info \
-           -stats \
-           -f concat \
-           -safe 0 \
-           -i file:"$tmp/opusfiles" \
-           -acodec copy \
-           file:"$tmp/$output"
+## Tue Nov  3 08:44:21 AM EST 2026
+## removed `-thread_queue_size 1024` from the ffmpeg concat command
+## It's probably not needed unless errors start popping up, e.g.,
+## `"Thread message queue blocking..."`
+## consider also `max_muxing_queue_size` for e.g.,
+## '"Too many packets buffered for output stream..."`
+## capture all of the ffmpeg output for verbose output, grab it's tail for the existing "$ffout" var usage:
+
+allffout="$(ffmpeg -n \
+              -nostdin \
+              -hide_banner \
+              -v info \
+              -stats \
+              -f concat \
+              -safe 0 \
+              -i file:"$tmp/opusfiles" \
+              -acodec copy \
+              file:"$tmp/$output" \
+            |& tail -n1 )"
+
+ffout="$(tail -n1 <<< "$allffout")"
 
 #read -rp "\$tmp=$tmp; \$output=$output; $(ls -la "$tmp/opusfiles"); \$ffout $ffout" </dev/tty
 #ffout="$(printf %s|tail -n2|head -n1)"
 #ffout="$(printf %s|tail -n2|head -n1)"
 
-(( verbose )) && printf '  $tmp: %s\n$ffout: %s\n' "$tmp" "$ffout"
-(( verbose == 2 )) && { [[ -f "$tmp/opusfiles" ]] && cat "$tmp/opusfiles" || printf 'no file found at %s/opusfiles' "$tmp"; }
+(( verbose )) && printf '$allffout: %s\n' "$allffout"
 (( verbose == 2 )) && confirm -y "\n${red}Continue?$tput0"
 
 if [[ "$ffout" =~ $'\r' ]]; then declare -p ffout; ffout="${ffout#*$'\r'}"; fi
