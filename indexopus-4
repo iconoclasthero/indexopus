@@ -1481,17 +1481,6 @@ printf '\n\n%sConcatenating %s -- Part ??: *.opus...%s\n\n' "$relipsis" "$ititle
 dirsize="$(du -csb *Part*opus|tail -n1)"
 dirsize="${dirsize%%$'\t'*}" #remove everything after first tab stop
 dirsize="$((dirsize/1024))"  #convert bytes to KiB  ## changed to 1024 2025-05-15
-#printf %sPart\ files\:\\n%s  "$red" "$tput0"
-#printf '%ssize   %s: %sKiB\n%stime   %s: %s\n' \
-#       "$red" \
-#       "$tput0" \
-#       "$dirsize" \
-#       "$red" \
-#       "$tput0" \
-#       "$duration"
-
-#[[ "$overwrite" != false ]] && ffout="$(ffmpeg -nostdin -hide_banner -v error -stats -f concat -safe 0 -thread_queue_size 1024 -i "$tmp/opusfiles" -n -acodec copy "$tmp/$output" |& tail -n1 )"
-#[[ "$overwrite" != false ]] &&
 
 ## Tue Nov  3 08:44:21 AM EST 2026
 ## removed `-thread_queue_size 1024` from the ffmpeg concat command
