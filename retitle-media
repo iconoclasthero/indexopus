@@ -1,0 +1,40 @@
+#!/bin/bash
+[[ -f /usr/local/bin/editscript ]] && . /usr/local/bin/editscript
+
+f="$1"
+[[ -z "$f" || ! -f "$1" ]] && { echo "Usage: $0 filename.flac|mp3"; exit 1; }
+
+# verify extension
+ext="${f##*.}"
+ext="${ext,,}"  # lowercase
+[[ "$ext" != "flac" && "$ext" != "mp3" ]] && { echo "Unsupported file type: $f"; exit 1; }
+
+# strip path and extension
+base="${f##*/}"
+base="${base%.*}"
+read -rp "base='$base'"
+
+# parse filename: format 1 or 2
+if [[ "$base" =~ ^[0-9]{2}-[0-9]{2,3}\ -\ (.+)\ --\ (.+)$ ]]; then
+    artist="${BASH_REMATCH[1]}"
+    title="${BASH_REMATCH[2]}"
+elif [[ "$base" =~ ^(.+)\ --\ [0-9]{2}-[0-9]{2}\ -\ (.+)$ ]]; then
+    artist="${BASH_REMATCH[1]}"
+    title="${BASH_REMATCH[2]}"
+else
+    echo "Unrecognized format: $f"
+    exit 1
+fi
+
+echo "Updating: $f -> TITLE='$title' | ARTIST='$artist'"
+
+case "$ext" in
+    flac)
+        metaflac --remove-tag=TITLE --remove-tag=ARTIST \
+                 --set-tag="TITLE=$title" --set-tag="ARTIST=$artist" "$f"
+        ;;
+    mp3)
+        mid3v2 --delete-all-tags "$f"  # optional: clean old tags
+        mid3v2 -t "$title" -a "$artist" "$f"
+        ;;
+esac

@@ -1,0 +1,112 @@
+#!/bin/bash
+
+shopt -s nullglob
+
+tmp=$(mktemp -d /tmp/indexaudio-XXXXXX)
+
+inext="m4a"
+outext="m4b"
+output="out.$outext"
+
+audiofiles="$tmp/audiofiles"
+meta="$tmp/meta.txt"
+
+t=0
+declare -a rawindex
+
+########################################
+# build concat list + timestamps
+########################################
+: > "$audiofiles"
+
+for f in *."$inext"; do
+  echo "file '$PWD/$f'" >> "$audiofiles"
+
+  # duration (seconds.float)
+  d=$(ffprobe -v error -show_entries format=duration \
+      -of default=nk=1:nw=1 "$f")
+
+  # timestamp BEFORE adding this file
+  ts=$(perl -e '
+    $t=$ARGV[0];
+    printf "%02d:%02d:%06.3f\n",
+      int($t/3600),
+      int($t/60)%60,
+      $t%60;
+  ' "$t")
+
+  # chapter name = filename (cleaned)
+  name="${f%.*}"
+
+  rawindex+=( "$ts" "$name" )
+
+  t=$(echo "$t + $d" | bc)
+done
+
+########################################
+# concat
+########################################
+ffmpeg -nostdin -hide_banner -v error -stats \
+  -f concat -safe 0 \
+  -i "$audiofiles" \
+  -c copy \
+  "$tmp/out.$outext" || exit 1
+
+########################################
+# build ffmetadata
+########################################
+: > "$meta"
+echo ";FFMETADATA1" >> "$meta"
+
+idx=0
+while (( idx < ${#rawindex[@]} )); do
+  ts="${rawindex[idx]}"
+  name="${rawindex[idx+1]}"
+
+  ms_start=$(perl -e '
+    ($h,$m,$s)=split(/:/,$ARGV[0]);
+    printf "%d\n", ($h*3600+$m*60+$s)*1000;
+  ' "$ts")
+
+  next_idx=$((idx+2))
+  if (( next_idx < ${#rawindex[@]} )); then
+    ts2="${rawindex[next_idx]}"
+    ms_end=$(perl -e '
+      ($h,$m,$s)=split(/:/,$ARGV[0]);
+      printf "%d\n", ($h*3600+$m*60+$s)*1000;
+    ' "$ts2")
+  else
+    ms_end=999999999
+  fi
+
+  {
+    echo "[CHAPTER]"
+    echo "TIMEBASE=1/1000"
+    echo "START=$ms_start"
+    echo "END=$ms_end"
+    echo "title=$name"
+  } >> "$meta"
+
+  ((idx+=2))
+done
+
+########################################
+# inject chapters
+########################################
+ffmpeg -nostdin -hide_banner -v error \
+  -i "$tmp/out.$outext" \
+  -i "$meta" \
+  -map_metadata 1 \
+  -map_chapters 1 \
+  -c copy \
+  "$output" || exit 1
+
+########################################
+# verify
+########################################
+echo
+echo "Output:"
+ffprobe -v error -show_chapters "$output"
+
+echo
+echo "Done → $output"
