@@ -1502,23 +1502,21 @@ allffout="$(ffmpeg -n \
               file:"$tmp/$output" \
             2>&1 )"
 
-ffout="$(tail -n1 <<< "$allffout")"
+## eliminate the fork to tail by capturing everything after the last new line
+## and BASH strips all terminal new lines:
 
-if (( ffouttest )); then
-  printf '$ffout from tail: %s\n' "$ffout"
-  ffoutpe="${allffout##*$'\n'}"
-  printf '$ffout from PE: %s\n' "$ffoutpe"
-  confirm -y "\n${red}Continue?$tput0"
-fi
-
-#read -rp "\$tmp=$tmp; \$output=$output; $(ls -la "$tmp/opusfiles"); \$ffout $ffout" </dev/tty
-#ffout="$(printf %s|tail -n2|head -n1)"
-#ffout="$(printf %s|tail -n2|head -n1)"
+#ffout="$(tail -n1 <<< "$allffout")"
+ffout="${allffout##*$'\n'}"
 
 (( verbose )) && printf '$allffout: %s\n' "$allffout"
 (( verbose == 2 )) && confirm -y "\n${red}Continue?$tput0"
 
-if [[ "$ffout" =~ $'\r' ]]; then declare -p ffout; ffout="${ffout#*$'\r'}"; fi
+## Tue Nov  3 09:44:12 AM EST 2026
+## 1. remove the regex for \r anywhere (ligheten)
+## 2. replace with regular [[ for \r anywhere (exact same function)
+## 3. use PE to remove all `\r`
+# if [[ "$ffout" =~ $'\r' ]]; then declare -p ffout; ffout="${ffout#*$'\r'}"; fi
+if [[ "$ffout" = *$'\r'* ]]; then declare -p ffout; ffout="${ffout//$'\r'}"; fi
 
 ffsize=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^size=/) {print $(1+i)} }' <<< "$ffout" | sed 's/size=//')
 ffsize="${ffsize%KiB}"
