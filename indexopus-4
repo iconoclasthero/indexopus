@@ -1504,6 +1504,20 @@ ffout="$(ffmpeg -n \
            -acodec copy \
            file:"$tmp/$output" \
          |& tail -n1 )"
+
+(( verbose == 2 )) &&
+         ffmpeg -n \
+           -nostdin \
+           -hide_banner \
+           -v info \
+           -stats \
+           -f concat \
+           -safe 0 \
+           -thread_queue_size 1024 \
+           -i file:"$tmp/opusfiles" \
+           -acodec copy \
+           file:"$tmp/$output"
+
 #read -rp "\$tmp=$tmp; \$output=$output; $(ls -la "$tmp/opusfiles"); \$ffout $ffout" </dev/tty
 #ffout="$(printf %s|tail -n2|head -n1)"
 #ffout="$(printf %s|tail -n2|head -n1)"
