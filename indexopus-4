@@ -1509,12 +1509,12 @@ ffout="$(ffmpeg -n \
          ffmpeg -n \
            -nostdin \
            -hide_banner \
+           -thread_queue_size 1024 \
            -v info \
            -stats \
            -f concat \
            -safe 0 \
            -i file:"$tmp/opusfiles" \
-           -thread_queue_size 1024 \
            -acodec copy \
            file:"$tmp/$output"
 
