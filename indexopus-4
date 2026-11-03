@@ -1508,6 +1508,9 @@ ffout="$(ffmpeg -n \
 #ffout="$(printf %s|tail -n2|head -n1)"
 #ffout="$(printf %s|tail -n2|head -n1)"
 
+(( verbose )) && printf 'ffout: %s\n' "$ffout"
+(( verbose == 2 )) && confirm -y "\n${red}Continue?$tput0"
+
 if [[ "$ffout" =~ $'\r' ]]; then declare -p ffout; ffout="${ffout#*$'\r'}"; fi
 
 ffsize=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^size=/) {print $(1+i)} }' <<< "$ffout" | sed 's/size=//')
