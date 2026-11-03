@@ -1509,7 +1509,6 @@ ffout="$(ffmpeg -n \
          ffmpeg -n \
            -nostdin \
            -hide_banner \
-           -thread_queue_size 1024 \
            -v info \
            -stats \
            -f concat \
