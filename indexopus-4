@@ -1502,51 +1502,59 @@ allffout="$(ffmpeg -n \
               file:"$tmp/$output" \
             2>&1 )"
 
-## eliminate the fork to tail by capturing everything after the last new line
-## and BASH strips all terminal new lines:
-
-#ffout="$(tail -n1 <<< "$allffout")"
-ffout="${allffout##*$'\n'}"
-
-(( verbose )) && printf '$allffout: %s\n' "$allffout"
-(( verbose == 2 )) && confirm -y "\n${red}Continue?$tput0"
+ffoutec="$?"
 
 ## Tue Nov  3 09:44:12 AM EST 2026
-## 1. remove the regex for \r anywhere (ligheten)
-## 2. replace with regular [[ for \r anywhere (exact same function)
-## 3. use PE to remove all `\r`
-# if [[ "$ffout" =~ $'\r' ]]; then declare -p ffout; ffout="${ffout#*$'\r'}"; fi
-if [[ "$ffout" = *$'\r'* ]]; then declare -p ffout; ffout="${ffout//$'\r'}"; fi
+## All of this shit is unnecessary since it's not being seen or used and isn't really informative:
 
-ffsize=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^size=/) {print $(1+i)} }' <<< "$ffout" | sed 's/size=//')
-ffsize="${ffsize%KiB}"
-fftime=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^time=/) {print $i} }' <<< "$ffout" | sed 's/time=//')
-ffbitrate=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^bitrate=/) {print $(i+1)} }' <<< "$ffout" | sed 's/bitrate=//')
-ffspeed=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^speed=/) {print $i} }' <<< "$ffout" | sed 's/speed=//')
+  if (( stats )) || [[ "$rmmatch" != true ]]; then
+    ## Tue Nov  3 09:44:12 AM EST 2026
+    ## eliminate the fork to tail by capturing everything after the last new line
+    ## and BASH strips all terminal new lines:
 
-labelwidth=12
-valuewidth=15
-totalwidth=$((labelwidth + valuewidth + 5))
+    #ffout="$(tail -n1 <<< "$allffout")"
+    ffout="${allffout##*$'\n'}"
 
-printf "\n%-${totalwidth}s    | %-${totalwidth}s\n" "${red}Concatenated file${tput0}:" "${red}Part files${tput0}:"
+    (( verbose )) && printf '$allffout: %s\n' "$allffout"
+    (( verbose == 2 )) && confirm -y "\n${red}Continue?$tput0"
 
-printf "%-${labelwidth}s %-${valuewidth}s | %-${labelwidth}s %s\n" \
-  "${red}size   ${tput0}:" "$ffsize KiB" "${red}size${tput0}:" "${dirsize} KiB"
+    ## Tue Nov  3 09:44:12 AM EST 2026
+    ## 1. remove the regex for \r anywhere (ligheten)
+    ## 2. replace with regular [[ for \r anywhere (exact same function)
+    ## 3. use PE to remove all `\r`
+    # if [[ "$ffout" =~ $'\r' ]]; then declare -p ffout; ffout="${ffout#*$'\r'}"; fi
+    if [[ "$ffout" = *$'\r'* ]]; then declare -p ffout; ffout="${ffout//$'\r'}"; fi
 
-printf "%-${labelwidth}s %-${valuewidth}s | %-${labelwidth}s %s\n" \
-  "${red}time   ${tput0}:" "$fftime" "${red}time${tput0}:" "$duration"
+    ffsize=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^size=/) {print $(1+i)} }' <<< "$ffout" | sed 's/size=//')
+    ffsize="${ffsize%KiB}"
+    fftime=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^time=/) {print $i} }' <<< "$ffout" | sed 's/time=//')
+    ffbitrate=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^bitrate=/) {print $(i+1)} }' <<< "$ffout" | sed 's/bitrate=//')
+    ffspeed=$(awk '{for(i=1;i<=NF;i++) if ($i ~ /^speed=/) {print $i} }' <<< "$ffout" | sed 's/speed=//')
 
-printf "%-${labelwidth}s %-${valuewidth}s |\n" \
-  "${red}bitrate${tput0}:" "$ffbitrate"
+    labelwidth=12
+    valuewidth=15
+    totalwidth=$((labelwidth + valuewidth + 5))
 
-printf "%-${labelwidth}s %-${valuewidth}s |\n" \
- "${red}speed  ${tput0}:" "$ffspeed"
+    printf "\n%-${totalwidth}s    | %-${totalwidth}s\n" "${red}Concatenated file${tput0}:" "${red}Part files${tput0}:"
 
-# adding the "${ffsize:=0}" here is cheating since it shouldn't be but it's to see what's going on in the code
-printf '\n%sSize reduction%s: %s KiB / %s%%\n' "$red" "$tput0" "$(( dirsize - ffsize ))" "$(( ( 100*dirsize - 100 * ${ffsize:=0} ) / dirsize ))"
+    printf "%-${labelwidth}s %-${valuewidth}s | %-${labelwidth}s %s\n" \
+      "${red}size   ${tput0}:" "$ffsize KiB" "${red}size${tput0}:" "${dirsize} KiB"
 
-if [[ "$overwrite" != false ]] && [[ "$?" != 0 ]]; then
-  printf "\nffmpeg failed to concatinate; exit 1\n\n" && exit 1
+    printf "%-${labelwidth}s %-${valuewidth}s | %-${labelwidth}s %s\n" \
+      "${red}time   ${tput0}:" "$fftime" "${red}time${tput0}:" "$duration"
+
+    printf "%-${labelwidth}s %-${valuewidth}s |\n" \
+      "${red}bitrate${tput0}:" "$ffbitrate"
+
+    printf "%-${labelwidth}s %-${valuewidth}s |\n" \
+     "${red}speed  ${tput0}:" "$ffspeed"
+
+    # adding the "${ffsize:=0}" here is cheating since it shouldn't be but it's to see what's going on in the code
+    printf '\n%sSize reduction%s: %s KiB / %s%%\n' "$red" "$tput0" "$(( dirsize - ffsize ))" "$(( ( 100*dirsize - 100 * ${ffsize:=0} ) / dirsize ))"
+  fi
+
+if [[ "$overwrite" != false ]] && (( ffoutec )); then
+  printf "\nffmpeg failed to concatinate; exit %s\n\n" "$ffoutec" && exit "$ffoutec"
 fi
 
 if [[ ! -f "$tmp/$output" ]]; then
