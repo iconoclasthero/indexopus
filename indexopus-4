@@ -1508,7 +1508,8 @@ ffout="$(ffmpeg -n \
 #ffout="$(printf %s|tail -n2|head -n1)"
 #ffout="$(printf %s|tail -n2|head -n1)"
 
-(( verbose )) && printf 'ffout: %s\n' "$ffout"
+(( verbose )) && printf '  $tmp: %s\n$ffout: %s\n' "$tmp" "$ffout"
+(( verbose == 2 )) && { [[ -f "$tmp/opusfiles" ]] && cat "$tmp/opusfiles" || printf 'no file found at %s/opusfiles' "$tmp"; }
 (( verbose == 2 )) && confirm -y "\n${red}Continue?$tput0"
 
 if [[ "$ffout" =~ $'\r' ]]; then declare -p ffout; ffout="${ffout#*$'\r'}"; fi
