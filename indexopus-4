@@ -1513,8 +1513,8 @@ ffout="$(ffmpeg -n \
            -stats \
            -f concat \
            -safe 0 \
-           -thread_queue_size 1024 \
            -i file:"$tmp/opusfiles" \
+           -thread_queue_size 1024 \
            -acodec copy \
            file:"$tmp/$output"
 
