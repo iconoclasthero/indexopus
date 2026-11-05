@@ -31,7 +31,7 @@ while [[ "$filtercomplex" = *\ \ * ]]; do filtercomplex="${filtercomplex//  /}";
     ffmpeg -n \
       -nostdin \
       -hide_banner \
-      -loglevel debug \
+      -loglevel "${LOGLEVEL:-info}" \
       -stats \
       -i file:"$1" \
       -c:a libopus \
