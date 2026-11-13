@@ -499,7 +499,7 @@ args=(m4b2opus)
 while (( $# > 0 )); do
   [[ "$1" =           --edit ]] && { editscript; exit; }
   [[ "$1" =             "-y" ]] && { (( rmmatch=save=1 )); args+=(--save); shift; continue; }
-  [[ "$1" =             "-Y" ]] && { args+=("$1"); rmmatch=1; shift; continue; }
+  [[ "$1" =          @(|-)-Y ]] && { args+=("$1"); rmmatch=1; shift; continue; }
   [[ "$1" =             "-n" ]] && { args+=("$1"); no=1; shift; continue; }
   [[ "$1" =        "--leave" ]] && { args+=("$1"); leave=1; shift; continue; }
   [[ "$1" =         "--save" ]] && { args+=("$1"); save=1; shift; continue; }
