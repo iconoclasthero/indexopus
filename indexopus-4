@@ -20,8 +20,8 @@ shopt -s extglob nullglob dotglob
 scriptpath=$(realpath "$0")
 scriptname="${scriptpath##*\/}"
 confpath="$HOME/.config/indexopus.conf"
-. "$confpath"                                 #this needs to move.
-. "$HOME/bin/gits/indexopus/indexopus.lib"
+source "$confpath"                                 #this needs to move.
+source "$HOME/bin/gits/indexopus/indexopus.lib"
 ulon="$(tput smul)"  #underline on
 uloff="$(tput rmul)" #underline off
 iton="$(tput sitm)" #italics on

@@ -477,6 +477,9 @@ filelist() {
 
 
 
+scriptpath=$(realpath "$0")
+scriptname="${scriptpath##*\/}"
+
 [[ -r /usr/local/bin/editscript ]] && source /usr/local/bin/editscript
 
 tempfile=$(mktemp)
