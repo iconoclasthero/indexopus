@@ -496,9 +496,12 @@ done
 #unset 'findexpr[${#findexpr[@]}-1]'  # remove trailing -o
 unset 'findexpr[-1]'  # remove trailing -o
 
-shopt -s nocasematch
+## Sat Nov 14 07:05:17 AM EST 2026
+## removing nocasematch as it's probably just for the extension matching which was addressed with "${1,,}"
+#shopt -s nocasematch
 while (( "$#" )); do
   [[ "$1" = @(-h|--help)             ]] && { usage; exit; }
+  [[ "$1" = @(-e|--edit)             ]] && { editscript; exit; }
   (( verbose )) && printf '$1 = `%s`\n' "$1"
  ##[[ "$1" =~ ^-[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789]{2,}$ ]]
   [[ "$1" =~ ^-[a-zA-Z0-9]{2,}$ ]] && { one="-${1:1:1}" two="-${1:2}" && therest=( "${@:2}" )
@@ -522,7 +525,7 @@ while (( "$#" )); do
   { printf '%s is unrecognized.\n' "$1"; shift;
     { confirm -y 'Proceed with script?' && continue; } || exit 1; }
 done
-shopt -u nocasematch
+#shopt -u nocasematch
 
 (( sec )) && sec2sex=echo || sec2sex=sec2sex
 
