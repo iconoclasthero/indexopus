@@ -517,7 +517,7 @@ while (( "$#" )); do
   [[ -z "$1" ]]                         && {                  shift; continue; }
   [[ -f "$1" ]]         && { clifile+=( "$1" );               shift; continue; }
   [[ -d "$1" ]]         && {  clidir+=( "$1" );               shift; continue; }
-  [[ "$1" =~ ^$regex ]] && {  cliext+=( "${1#.}" );           shift; continue; } ## leave $regex unquoted
+  [[ "${1,,}" =~ ^$regex ]] && {  cliext+=( "${1#.}" );       shift; continue; } ## leave $regex unquoted
 # [[ "$1" = "" ]] && { shift; continue; }
   { printf '%s is unrecognized.\n' "$1"; shift;
     { confirm -y 'Proceed with script?' && continue; } || exit 1; }
@@ -552,7 +552,7 @@ if (( "${#clifile[@]}" )); then
     (( verbose )) && printf '$clifile = %s\n' "${clifile[i]}"
     [[ "${#clifile[i]}" ]] || { unset 'clifile[i]'; continue; }
     [[ -r "${clifile[i]}" ]] || { printf '[warn] CLI file argument unreadable; removing %s\n' "${clifile[i]}" >&2; unset 'clifile[i]'; continue; }
-    [[ "${clifile[i]}" =~ $regex ]] || { printf '[warn] CLI file argument in an unsupported file type (not in %s);\nremoving %s\n' "${mediaexts[*]}" "${clifile[i]}" >&2 ; unset 'clifile[i]'; continue; }
+    [[ "${clifile[i],,}" =~ $regex ]] || { printf '[warn] CLI file argument in an unsupported file type (not in %s);\nremoving %s\n' "${mediaexts[*]}" "${clifile[i]}" >&2 ; unset 'clifile[i]'; continue; }
   done
   clifile=( "${clifile[@]}" )
   ! (( "${#clifile[@]}" )) && { printf '[error] All CLI file arguments have been removed. (exit 1)\n' >&2; exit 1; }
