@@ -1,5 +1,9 @@
 #!/bin/bash
-# nb: the swp file that editscript relies on is provided by nano
+## YES=1 skips first question
+## YES=2 forces rmr at the end
+## test=1 tests 24-bit flac
+## test=2 tests 16-bit flac
+
 export TERM
 red="$(tput setaf 9)"
 bold="$(tput bold)"
@@ -17,7 +21,7 @@ yn(){
   local yn
   while true; do
     printf '%s (y/n) ' "$1"
-    read yn </dev/tty
+    read -r yn </dev/tty
       case $yn in
         [yY] ) return 0 ;;  # Success (true)
         [nN] ) return 1 ;;  # Failure (false)
@@ -26,17 +30,53 @@ yn(){
   done
 }
 
-[[ "$1" = @(--edit|e|-e) ]] && editscript
+help(){
+  cat <<'EOF'
+Usage: downcode [OPTIONS]
 
-#if ! command -v mediainfo &> /dev/null; then
-#  unset mi
-#  if ! command -v ffprobe &> /dev/null; then
-#    echo "mediainfo and ffprobe could not be found. Please install one to continue."
-#    exit 1
-#  fi
-#else
-#    mi=1
-#fi
+Options:
+  --edit       Open downcode in the script editor and exit.
+
+  -y, --yes    Skip the initial confirmation before reducing the sample rate.
+               Retain the final confirmation before removing 24-bit backups.
+
+  -Y, --YES    Skip both confirmations:
+               - Initial confirmation before reducing the sample rate.
+               - Final confirmation before removing 24-bit backups
+                 (rmr --force).
+
+  -t, --test   Test the original 24-bit FLAC files before downcoding
+               (flac -wt, with ffmpeg fallback).
+
+  -T, --TEST   Test both the original 24-bit and resulting 16-bit FLAC files.
+
+  -h, --help   Display this help and exit.
+EOF
+}
+
+while (( "$#" )); do
+  [[ "$1" =            '--edit' ]] && { shift; editscript; exit "$?"; }
+  [[ "$1" =            '--help' ]] && { shift; help; exit "$?"; }
+  [[ "$1" =         @(-y|--yes) ]] && { YES=1; shift; continue; }
+  [[ "$1" =         @(-Y|--YES) ]] && { YES=2; shift; continue; }
+  [[ "$1" =        @(-t|--test) ]] && { test=1; shift; continue; }
+  [[ "$1" =        @(-T|--TEST) ]] && { test=2; shift; continue; }
+
+  printf 'Passed option `%s` unrecognized; removing and continuing.\n' "$1"
+  shift
+done
+
+if (( YES > 1 )); then
+  printf 'Option `-Y|--YES` selected; both the initial confirmation of reducing sample rate and final removal of 24-bit backups will be skipped (rmr --force)\n'
+elif (( YES )); then
+  printf 'Option `-y|--yes` selected; the initial confirmation of reducing sample rate will be skipped.\n'
+fi
+
+if (( test > 1 )); then
+  printf 'Option `-T|--TEST` selected; both the starting 24-bit and the downcoded 16-bit flacs will be checked.\n'
+elif (( test )); then
+  printf 'Option `-t|--test` selected; the starting 24-bit flacs will be checked (flac -wt with ffmpeg fallback).\n'
+fi
 
 if command -v mediainfo &> /dev/null; then
   mi=1
@@ -65,12 +105,14 @@ fi
 #pause "$fusetouch $fuse $PWD"
 (( fusetouch )) || [[ "$fuse" != true && ! -w "$PWD" ]] &&
   if yn "$(printf '\nThe pwd %s is not writable.\nWould you like to "own" this directory?' "$(pwd)")"; then
-    ownout=( "$(own 2>&1|tee /dev/tty; ec="$?")" )
+    ownout=( "$(own 2>&1|tee /dev/tty; echo "$?")" )
+    ec="${ownout[-1]}"
+    unset 'ownout[-1]'
     if (( ec )); then
       printf '\n[%sERROR%s] own returned an error:\n'  "$boldred" "$tput0"
       printf '%s\n' "${ownout[@]}"
-      printf '\nFix permissions!\n(exit 1)\n\n'
-      exit 1
+      printf '\nFix permissions!\n(exit %s)\n\n' "$ec"
+      exit "$ec"
     else
       printf %s\\n "${ownout[@]}"
     fi
@@ -105,8 +147,13 @@ done
 #    printf \\nFix\ permissions\!\\n && exit 1
 #  fi
 
+hr(){
+    printf -- '%*s\n' "${1:-$COLUMNS}" | tr ' ' "${2:-#}"
+}
+
+
 for i in *flac; do
-  if (( "$mi" )); then
+  if (( mi )); then
 #    bits=$(mediainfo --Output='Audio;%BitDepth%' "$i")
 #    Hz=$(mediainfo --Output='Audio;%SamplingRate%' "$i")
 
@@ -168,20 +215,26 @@ for i in *flac; do
   # fi
   fi
 
-#  if (( Hz != 48000 )) && (( Hz != 44100 )); then
-#    printf 'The sample rate is %s Hz.\n' "$Hz"
-#    if (( Hz > 48000 )) && ! "${changerate:=false}" ; then
-#      if yn "Do you want to set the sample rate to 48000 Hz?"; then
-#        Hz=48000
-#        changerate=true
-#      else
-#        printf 'Please investigate. (exit 1)'
-#        exit 1
-#      fi
-#    elif (( Hz > 48000 )) && "${changerate:=false}"; then
-#      Hz=48000
-#    fi
-#  fi
+
+  if (( test )); then
+    hr
+    printf ' — Testing flac file —\n'
+    printf ' — Testing with flac -wt — \n'
+    if ! flac -tw "$i" 2> >(grep -vE '^(flac [0-9]|Copyright \(C\)|flac comes with|welcome to redistribute|certain conditions|^$|Type `flac)'); then
+      printf ' — ffmpeg decode — \n'
+      if ffmpeg -nostdin -v error -stats -i "$i" -f null -; then
+        printf '\n\n[WARN] ⚠️ File `%s` \n       failed `flac -t` but passed ffmpeg decode.\n\n' "$i"
+      else
+        printf '[ERROR] ⛔ File `%s` failed `flac -t` and ffmpeg decode.' "$i"
+        if ! yn "Continue with downcode? "; then
+          printf '(exit 130)\n'
+          exit 130
+        fi
+      fi
+    fi
+    printf 'Done testing %s\n' "$i"
+    hr
+  fi
 
 
   ## This change will let the script pick a multiple of 44.1 or 48 kHz
@@ -206,7 +259,7 @@ for i in *flac; do
 
     if (( Hz > targetHz )) && ! "${changerate:=false}" ; then
       printf \\n
-      if yn "Do you want to set the sample rate to $targetHz Hz?"; then
+      if (( YES )) || yn "Do you want to set the sample rate to $targetHz Hz?"; then
         Hz="$targetHz"
         changerate=true # Set the flag so the rest of the loop skips prompting
       else
@@ -228,12 +281,16 @@ for i in *flac; do
   fi
 
   ffmpeg -n \
+    -v error \
+    -stats \
     -hide_banner \
     -nostdin \
     -i file:"$flac24" \
     -af aresample=osf=s16:dither_method=triangular_hp \
     -ar "$Hz" \
     file:"$flac16"
+
+
 
 
 #  if [[ "$i" = *".24."* ]]
@@ -260,8 +317,55 @@ for i in *flac; do
 #      file:"$flac16"
 #  fi
 
+  if (( test == 2 )); then
+    hr
+    printf ' — Testing downcoded flac file —\n'
+    printf ' — Testing with flac -wt — \n'
+    if ! flac -tw "$flac16" 2> >(grep -vE '^(flac [0-9]|Copyright \(C\)|flac comes with|welcome to redistribute|certain conditions|^$|Type `flac)'); then
+      printf ' — ffmpeg decode — \n'
+      if ffmpeg -nostdin -v error -stats -i "$i" -f null -; then
+        printf '\n\n[WARN] ⚠️ File `%s` \n       failed `flac -t` but passed ffmpeg decode.\n\n' "$flac16"
+      else
+        printf '[ERROR] ⛔ File `%s` failed `flac -t` and ffmpeg decode.' "$flac16"
+        if ! yn "Continue with downcode? "; then
+          printf '(exit 130)\n'
+          exit 130
+        fi
+      fi
+    fi
+    printf 'Done testing %s\n' "$i"
+    hr
+  fi
+
+
 done
 
 mkdir "24-bit"
 mv *.24.flac "24-bit"
-rmr 24-bit </dev/tty
+flac16s=( *.flac )
+flac24s=( ./24-bit/*.24.flac )
+flac16d=$(mediaduration "${flac16s[@]}")
+flac24d=$(mediaduration "${flac24s[@]}")
+flac24n=( "${flac24s[@]#./24-bit\/}" )
+flac24n=( "${flac24n[@]//.24}" )
+
+if [[ "${flac16s[*]}" != "${flac24n[*]}" ]]; then
+  printf '\n[WARN] ---- ⚠️ File arrays DO NOT MATCH! ----\n\n'
+  printf '%s\n%s\n' "${flac16s[*]}" "${flacs24[*]}"
+
+else
+  printf '\n\nFile arrays match...\n'
+fi
+
+if [[ "$flac16d" != "$flac24d" ]]; then
+  printf '\n[WARN] ---- ⚠️ FLAC times DO NOT MATCH! ----\n'
+  printf '%s != %s\n\n' "$flac16d" "$flac24d"
+else
+  printf 'Durations match... %s\n' "$flac16d"
+fi
+
+(( YES == 2 )) && rmrarr=( '--force' )
+rmrarr+=( './24-bit' )
+rmr "${rmrarr[@]}" </dev/tty
+
+printf 'exit %s\n' "$?"
