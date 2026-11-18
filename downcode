@@ -55,13 +55,13 @@ EOF
 }
 
 while (( "$#" )); do
-  [[ "$1" =            '--edit' ]] && { shift; editscript; exit "$?"; }
-  [[ "$1" =            '--help' ]] && { shift; help; exit "$?"; }
-  [[ "$1" =         @(-y|--yes) ]] && { YES=1; shift; continue; }
-  [[ "$1" =         @(-Y|--YES) ]] && { YES=2; shift; continue; }
-  [[ "$1" =        @(-t|--test) ]] && { test=1; shift; continue; }
-  [[ "$1" =        @(-T|--TEST) ]] && { test=2; shift; continue; }
-
+  [[ "$1" =            '--edit' ]] && { editscript;    shift; exit "$?"; }
+  [[ "$1" =            '--help' ]] && { help;          shift; exit "$?"; }
+  [[ "$1" =         @(-y|--yes) ]] && { YES=1;         shift; continue; }
+  [[ "$1" =         @(-Y|--YES) ]] && { YES=2;         shift; continue; }
+  [[ "$1" =        @(-t|--test) ]] && { test=1;        shift; continue; }
+  [[ "$1" =        @(-T|--TEST) ]] && { test=2;        shift; continue; }
+  [[ "$1" =            @(|-)-TY ]] && { test=2; YES=2; shift; continue; }
   printf 'Passed option `%s` unrecognized; removing and continuing.\n' "$1"
   shift
 done
@@ -140,13 +140,6 @@ for i in "${flacs[@]}"; do
     fi
 done
 
-
-#  if [[ "$fuse" != true && ! -w "$i" || ! -w "$PWD" ]] && yn "$(printf '\nDirectory or files are not writable.\nWould you like to "own" this directory?')"; then
-#    own #|| printf '\nown returned an error.\nFix permissions!\n' && exit 1
-#  else
-#    printf \\nFix\ permissions\!\\n && exit 1
-#  fi
-
 hr(){
     printf -- '%*s\n' "${1:-$COLUMNS}" | tr ' ' "${2:-#}"
 }
@@ -154,27 +147,9 @@ hr(){
 
 for i in *flac; do
   if (( mi )); then
-#    bits=$(mediainfo --Output='Audio;%BitDepth%' "$i")
-#    Hz=$(mediainfo --Output='Audio;%SamplingRate%' "$i")
-
     readarray -t bitsHz < <(mediainfo --Output="Audio;%BitDepth%\n%SamplingRate%" "$i")
 
  else
-#    bits=$(ffprobe \
-#             -v error \
-#             -select_streams a:0 \
-#             -show_entries stream=bits_per_raw_sample \
-#             -of default=noprint_wrappers=1:nokey=1 \
-#             file:"$i" \
-#          )
-#    Hz=$(ffprobe \
-#           -v error \
-#           -select_streams a:0 \
-#           -show_entries stream=sample_rate \
-#           -of default=noprint_wrappers=1:nokey=1 \
-#           file:"$i" \
-#        )
-
     readarray -t bitsHz < <(ffprobe \
                               -v error \
                               -select_streams a:0 \
@@ -186,16 +161,20 @@ for i in *flac; do
 
   bits="${bitsHz[0]}"
   Hz="${bitsHz[1]}"
+  kHz=$(( Hz / 1000 ))
+  kHzr=$(( Hz % 1000 ))
+  kHzr="${kHzr%%0*}"
+  kHzfloat="$kHz"
+  (( kHzr )) && kHzfloat="$kHz.$kHzr"
 
-#  if (( bits <= 16 )) || (( Hz < 48000 )); then
-  if (( bits <= 16 )) || (( Hz < 44100 )); then
+## Wed Nov 18 10:21:47 AM EST 2026
+## why was this change made?
+# if (( bits <= 16 )) || (( Hz < 48000 )); then
+#  if (( bits <= 16 )) || (( Hz < 44100 )); then
+  if (( bits <= 16 )) && (( Hz == 44100 || Hz == 48000 )); then
   # over=true
   # (( Hz == 48000 )) && yn "File is $bits/$Hz, continue with processing?" && over=false
   # if "$over"; then
-      kHz=$(( Hz / 1000 ))
-      kHzr=$(( Hz % 1000 ))
-      kHzr="${kHzr%%0*}"
-      [[ "$kHzr" ]] && kHz="$kHz.$kHzr"
       printf '%s%sThe file, %s%s%s%s, %s%sdoes not appear to be above 16/48 bits/kHz:%s\n Bit rate   : %s bits\n Sample rate: %s kHz\n%s%sPlease investigate. (exit 1)\n\n%s' \
        "$bold" \
        "$red" \
@@ -207,12 +186,43 @@ for i in *flac; do
        "$red" \
        "$tput0" \
        "$bits" \
-       "$kHz" \
+       "${kHzfloat}" \
        "$bold" \
        "$red" \
        "$tput0"
-      exit 1
+      (( files16bits++ ))
   # fi
+  elif (( bits <= 16 )) && (( Hz > 48000 )); then
+    printf '%s%s[ERROR] The file, %s%s%s%s, %s%s is 16 bits but over 48 kHz:%s\n Bit rate   : %s bits\n Sample rate: %s kHz\n%s%sPlease investigate. (exit 1)\n\n%s' \
+      "$bold" \
+      "$red" \
+      "$tput0" \
+      "$bold" \
+      "$i" \
+      "$tput0" \
+      "$bold" \
+      "$red" \
+      "$tput0" \
+      "$bits" \
+      "${kHzfloat}" \
+      "$bold" \
+      "$red" \
+      "$tput0"
+    printf '        This configuration is not supposed to turn up in the wild! Additional coding will need to be done to address!\n'
+    exit 1
+  else
+    (( files24bits++ ))
+  fi
+
+  if (( files16bits )) && (( files24bits )); then
+    printf '[ERROR] A mix of %s 24-bit and %s 16-bit flacs found in %s. Investigate. (exit 1)\n'
+    exit 1
+  elif (( files16bits )); then
+    printf '[ERROR] Only %s 16-bit flacs found in %s. Investigate. (exit 1)\n'
+    exit 1
+  elif !(( files24bits )); then
+    printf '[ERROR] No flacs over 16-bit were found in %s. Investigate. (exit 1)\n'
+    exit 1
   fi
 
 
@@ -225,6 +235,8 @@ for i in *flac; do
       if ffmpeg -nostdin -v error -stats -i "$i" -f null -; then
         printf '\n\n[WARN] ⚠️ File `%s` \n       failed `flac -t` but passed ffmpeg decode.\n\n' "$i"
       else
+        ## turn of final removal on error
+        YES=0
         printf '[ERROR] ⛔ File `%s` failed `flac -t` and ffmpeg decode.' "$i"
         if ! yn "Continue with downcode? "; then
           printf '(exit 130)\n'
@@ -290,41 +302,24 @@ for i in *flac; do
     -ar "$Hz" \
     file:"$flac16"
 
-
-
-
-#  if [[ "$i" = *".24."* ]]
-#    then
-#      flac24="$i"
-#      flac16="${flac24/.24.flac/.flac}"
-#      ffmpeg -n \
-#        -hide_banner \
-#        -nostdin \
-#        -i file:"$flac24" \
-#        -af aresample=osf=s16:dither_method=triangular_hp \
-#        -ar "$Hz" \
-#        file:"$flac16"
-#  else
-#    flac16="$i"
-#    flac24="${i/.flac/.24.flac}"
-#    mv "$i" "$flac24"
-#    ffmpeg -n \
-#      -hide_banner \
-#      -nostdin \
-#      -i file:"$flac24" \
-#      -af aresample=osf=s16:dither_method=triangular_hp \
-#      -ar "$Hz" \
-#      file:"$flac16"
-#  fi
+    ecffmpeg="$?"
+    if (( ecffmpeg )); then
+      (( YES )) && printf '\n\n[WARN] ⚠️  Automatic removal of 24-bit flacs disabled!\n\n'
+      printf '\n\n[WARN] ⚠️  File `%s` \n       ffmpeg resample/downcode reported an error.\n' "$flac16"
+      YES=0
+    fi
 
   if (( test == 2 )); then
     hr
     printf ' — Testing downcoded flac file —\n'
     printf ' — Testing with flac -wt — \n'
     if ! flac -tw "$flac16" 2> >(grep -vE '^(flac [0-9]|Copyright \(C\)|flac comes with|welcome to redistribute|certain conditions|^$|Type `flac)'); then
+      ## turn off automatic final rmr:
+      (( YES )) && printf '\n[WARN] Automatic removal of 24-bit flacs disabled!\n\n'
+      YES=0
       printf ' — ffmpeg decode — \n'
       if ffmpeg -nostdin -v error -stats -i "$i" -f null -; then
-        printf '\n\n[WARN] ⚠️ File `%s` \n       failed `flac -t` but passed ffmpeg decode.\n\n' "$flac16"
+        printf '\n\n[WARN] ⚠️ File `%s` \n       failed `flac -t` but passed ffmpeg decode.\n' "$flac16"
       else
         printf '[ERROR] ⛔ File `%s` failed `flac -t` and ffmpeg decode.' "$flac16"
         if ! yn "Continue with downcode? "; then
@@ -336,8 +331,6 @@ for i in *flac; do
     printf 'Done testing %s\n' "$i"
     hr
   fi
-
-
 done
 
 mkdir "24-bit"
@@ -352,7 +345,8 @@ flac24n=( "${flac24n[@]//.24}" )
 if [[ "${flac16s[*]}" != "${flac24n[*]}" ]]; then
   printf '\n[WARN] ---- ⚠️ File arrays DO NOT MATCH! ----\n\n'
   printf '%s\n%s\n' "${flac16s[*]}" "${flacs24[*]}"
-
+  (( YES )) && printf '[WARN] Automatic removal of 24-bit flacs disabled!\n\n'
+  YES=0
 else
   printf '\n\nFile arrays match...\n'
 fi
@@ -360,6 +354,8 @@ fi
 if [[ "$flac16d" != "$flac24d" ]]; then
   printf '\n[WARN] ---- ⚠️ FLAC times DO NOT MATCH! ----\n'
   printf '%s != %s\n\n' "$flac16d" "$flac24d"
+  (( YES )) && printf '[WARN] Automatic removal of 24-bit flacs disabled!\n\n'
+  YES=0
 else
   printf 'Durations match... %s\n' "$flac16d"
 fi
@@ -368,4 +364,8 @@ fi
 rmrarr+=( './24-bit' )
 rmr "${rmrarr[@]}" </dev/tty
 
-printf 'exit %s\n' "$?"
+ec="$?"
+(( ecffmpeg )) && ec="$?"
+printf 'exit %s\n' "$ec"
+exit "$ec"
+
