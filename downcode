@@ -213,6 +213,7 @@ for i in *flac; do
   else
     (( files24bits++ ))
   fi
+done
 
   if (( files16bits )) && (( files24bits )); then
     printf '[ERROR] A mix of %s 24-bit and %s 16-bit flacs found in %s. Investigate. (exit 1)\n'
@@ -225,7 +226,7 @@ for i in *flac; do
     exit 1
   fi
 
-
+for i in *flac; do
   if (( test )); then
     hr
     printf ' — Testing flac file —\n'
