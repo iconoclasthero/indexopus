@@ -301,6 +301,7 @@ for i in *flac; do
     -i file:"$flac24" \
     -af aresample=osf=s16:dither_method=triangular_hp \
     -ar "$Hz" \
+    -c:a flac -compression_level 12 \
     file:"$flac16"
 
     ecffmpeg="$?"
