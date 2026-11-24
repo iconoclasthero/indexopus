@@ -6,6 +6,7 @@
 
 export TERM
 red="$(tput setaf 9)"
+green="$(tput setaf 2)"
 bold="$(tput bold)"
 boldred="$(tput setaf 9 bold)"
 tput0="$(tput sgr0)"
@@ -358,7 +359,7 @@ if [[ "$flac16d" != "$flac24d" ]]; then
   (( YES )) && printf '[WARN] Automatic removal of 24-bit flacs disabled!\n\n'
   YES=0
 else
-  printf 'Durations match... %s\n' "$flac16d"
+  printf '%sDurations match... %s%s\n' "$green" "$flac16d" "$tput0"
 fi
 
 (( YES == 2 )) && rmrarr=( '--force' )
