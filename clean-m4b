@@ -1,0 +1,66 @@
+#!/usr/bin/bash
+
+for cmd in mp4edit mp4dump; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    printf 'Missing dependency: %s\n' "$cmd" >&2
+    exit 1
+  fi
+done
+
+if (( $# == 0 )); then
+  printf 'Usage: %s file.m4b [...]\n' "${0##*/}" >&2
+  exit 1
+fi
+
+for src in "$@"; do
+  if [[ ! -f "$src" ]]; then
+    printf 'Not found: %s\n' "$src" >&2
+    continue
+  fi
+
+  if [[ "$src" != *.m4b ]]; then
+    printf 'Skipping non-M4B: %s\n' "$src" >&2
+    continue
+  fi
+
+  out="${src%.m4b}-clean.m4b"
+  tmp="${out}.tmp.$$"
+
+  if [[ -e "$out" ]]; then
+    printf 'Output already exists: %s\n' "$out" >&2
+    continue
+  fi
+
+  printf 'Cleaning: %s\n' "$src"
+
+  if ! mp4edit \
+    --remove 'moov/trak[0]/tref' \
+    --remove 'moov/trak[1]' \
+    --remove 'moov/udta/meta/ilst/covr' \
+    "$src" "$tmp"; then
+    printf 'EDIT FAILED: %s\n' "$src" >&2
+    rm -f -- "$tmp"
+    continue
+  fi
+
+  dump=$(mp4dump "$tmp")
+  if [[ $? -ne 0 ]]; then
+    printf 'INSPECTION FAILED: %s\n' "$tmp" >&2
+    rm -f -- "$tmp"
+    continue
+  fi
+
+  tracks=$(grep -Ec '^[[:space:]]*\[trak\]' <<< "$dump")
+
+  if (( tracks != 1 )) ||
+     ! grep -Fq '[chpl]' <<< "$dump" ||
+     grep -Fq '[covr]' <<< "$dump" ||
+     grep -Fq '[tref]' <<< "$dump"; then
+    printf 'VERIFICATION FAILED: %s\n' "$tmp" >&2
+    rm -f -- "$tmp"
+    continue
+  fi
+
+  mv -- "$tmp" "$out"
+  printf 'Created: %s\n' "$out"
+done
