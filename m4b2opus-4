@@ -320,7 +320,7 @@ m4bsplit(){
       fi
 
       printf '%sCreating %s\n' "$relipsis" "$outfile"
-
+      (( verbose )) && printf '\n[verbose] ffmpeg ... -ss %s -to %s ...\n\n' "${start%?}" "$end"
       ffmpeg -n \
              -nostdin \
              -hide_banner \
